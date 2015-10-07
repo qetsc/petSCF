@@ -989,9 +989,7 @@ def mindo3AIJ(qmol,spfilter,maxiter,scfthresh,maxnnz=[0],bandwidth=[0],maxdist=1
         F2    = getF2AIJ(atoms, D, Ddiag, maxdist=maxdist, B=B)
         stage = pt.getStage(stagename='F0+F1+F2', oldstage=stage)
         F     = F0+F1+F2
-        stage = pt.getStage(stagename='Trace', oldstage=stage)
-        Eel   = 0.5*pt.getTraceProductAIJslow(D,F0+F)
-        Print("Eel            = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Eel*const.ev2kcal,Eel,Eel*const.ev2hartree))
+
 
         if debug:
             F1CSR    = getF1CSR(atoms, basis, DCSR)
@@ -1004,12 +1002,13 @@ def mindo3AIJ(qmol,spfilter,maxiter,scfthresh,maxnnz=[0],bandwidth=[0],maxdist=1
             #mat.compareAIJB(F,FCSR,nbf) 
             #mat.compareAIJB(F0+F,F0CSR+FCSR,nbf)            
             print 'Eel',Eel,0.5*getTraceProductCSR(DCSR,F0CSR+FCSR)
-        if abs(Eel-Eold) < scfthresh:
-            Print("Converged at iteration %i" % (i+1))
-            break
+
 
         Eold = Eel
-        if solve > 0:      
+        if solve > 0: 
+            stage = pt.getStage(stagename='Trace', oldstage=stage)
+            Eel   = 0.5*pt.getTraceProductAIJslow(D,F0+F)
+            Print("Eel            = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Eel*const.ev2kcal,Eel,Eel*const.ev2hartree))     
             t0 = getWallTime()
             stage = pt.getStage(stagename='Solve', oldstage=stage)
             if uniform or i<2:
@@ -1031,7 +1030,10 @@ def mindo3AIJ(qmol,spfilter,maxiter,scfthresh,maxnnz=[0],bandwidth=[0],maxdist=1
            # Print("{0} seconds for iter {1} in density".format(t,i))
           #  Print("{0}, {1}, {2} ".format(eigarray[0],eigarray[nocc-1],eigarray[nocc]))
             Print("Range of eigenvalues {0} - {1} ".format(eigarray[0],eigarray[nocc-1]))
-
+        
+        if abs(Eel-Eold) < scfthresh:
+            Print("Converged at iteration %i" % (i+1))
+            break
         Ddiag=pt.convert2SeqVec(D.getDiagonal()) 
         if debug:
             orbe,orbs = scipy.linalg.eigh(FCSR.todense())
