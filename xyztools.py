@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 import logging
 import numpy as np
-import scipy.sparse as sparse
 
 def initializeLog(debug=False,warning=False,silent=False):
     import sys
