@@ -85,19 +85,19 @@ def getEigenSolutions(A, B=None):
         Print("")
     return 
 
-def getDensityMatrix(E,T,neig):
+def getDensityMatrix(E,T,nocc):
     import constants as const
 
     D       = T.duplicate()
     xr,tmp  = T.getVecs()
     xi,tmp  = T.getVecs()
     xr_size = xr.getSize()
-    eigarray = np.zeros(neig)
+    eigarray = np.zeros(nocc)
     seqx = PETSc.Vec()
     seqx.createSeq(xr_size,comm=PETSc.COMM_SELF)
     fromIS = PETSc.IS().createGeneral(range(xr_size),comm=PETSc.COMM_SELF)
     toIS = PETSc.IS().createGeneral(range(xr_size),comm=PETSc.COMM_SELF)
-    for m in xrange(neig):
+    for m in xrange(nocc):
         k = E.getEigenpair(m, xr, xi)
         eigarray[m] = k.real
         sctr=PETSc.Scatter().create(xr,fromIS,seqx,toIS)
@@ -115,8 +115,8 @@ def getDensityMatrix(E,T,neig):
     if k.imag != 0.0:
           Print("Complex eigenvalue dedected: %9f%+9f j  %12g" % (k.real, k.imag, error))
   #  HOMO = k.real
-  #  LUMO = E.getEigenpair(neig, xr, xi).real
-  #  eigarray[neig]=LUMO
+  #  LUMO = E.getEigenpair(nocc, xr, xi).real
+  #  eigarray[nocc]=LUMO
   #  gap  = LUMO - HOMO
   #  Print("LUMO-HOMO      = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(gap*const.ev2kcal,gap,gap*const.ev2hartree))
     return D,eigarray
