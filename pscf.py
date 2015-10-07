@@ -436,7 +436,7 @@ def getGuessDAIJ(basis,guess=0,T=None,matcomm=PETSc.COMM_SELF):
                         if atomi.atno == 1: vals[0] = atomi.Z/1.
                         else:               vals[0] = atomi.Z/4.
                     else:    
-                        vals[k] = d
+                        vals[k] = d * vals[k]
                     k += 1
                 A.setValues(row,cols,vals,addv=PETSc.InsertMode.INSERT)                  
             A.assemble()
@@ -927,7 +927,7 @@ def mndo4(qmol,spfilter,maxiter,scfthresh,maxdist=1.E6):
     stage.pop()
     return
 
-def mindo3AIJ(qmol,spfilter,maxiter,scfthresh,maxnnz=[0],bandwidth=[0],maxdist=1.E6,uniform=True,debug=False):
+def mindo3AIJ(qmol,spfilter,maxiter,scfthresh,maxnnz=[0],bandwidth=[0],maxdist=1.E6,uniform=True,guess=0, solve=0, debug=False):
     import PyQuante.MINDO3_Parameters
     import PyQuante.MINDO3
     import constants as const
@@ -970,7 +970,7 @@ def mindo3AIJ(qmol,spfilter,maxiter,scfthresh,maxnnz=[0],bandwidth=[0],maxdist=1
     stage = pt.getStage(stagename='F0', oldstage=stage)
     F0    = getF0AIJ(atoms, basis, B)
     stage = pt.getStage(stagename='D0', oldstage=stage)
-    D     = getGuessDAIJ(basis,matcomm=PETSc.COMM_WORLD)
+    D     = getGuessDAIJ(basis,guess=guess,matcomm=PETSc.COMM_WORLD)
     stage = pt.getStage(stagename='Ddiag', oldstage=stage)
     Ddiag = pt.convert2SeqVec(D.getDiagonal()) 
     if debug:
@@ -1009,28 +1009,28 @@ def mindo3AIJ(qmol,spfilter,maxiter,scfthresh,maxnnz=[0],bandwidth=[0],maxdist=1
             break
 
         Eold = Eel
-        t0 = getWallTime()
-        stage = pt.getStage(stagename='Solve', oldstage=stage)       
-        if uniform or i<2:
-            EPS, nconv = st.solveEPS(F)
-        else:
-            nsubint=st.getNumberOfSubIntervals(EPS)
-            subint = st.getSubIntervals(eigarray,nsubint) 
-            EPS, nconv = st.solveEPS(F,subintervals=subint)   
-        getWallTime(t0)
-        #Print("{0} seconds for iter {1} in solve".format(t,i))
-        if nconv+1 > nocc:
-            Print("{0} eigenvalues converged".format(nconv))
-        else:
-            Print("{0} eigenvalues found, {1} eigenvalues are required".format(nconv,nocc))
-            sys.exit()        
-        stage = pt.getStage(stagename='Density', oldstage=stage)
-        t0 = getWallTime()
-        D,eigarray = st.getDensityMatrix(EPS,B, nocc)
-        getWallTime(t0)
-       # Print("{0} seconds for iter {1} in density".format(t,i))
-      #  Print("{0}, {1}, {2} ".format(eigarray[0],eigarray[nocc-1],eigarray[nocc]))
-        Print("Range of eigenvalues {0} - {1} ".format(eigarray[0],eigarray[nocc-1]))
+        if solve > 0:      
+            t0 = getWallTime()
+            stage = pt.getStage(stagename='Solve', oldstage=stage)
+            if uniform or i<2:
+                EPS, nconv = st.solveEPS(F)
+            else:
+                nsubint=st.getNumberOfSubIntervals(EPS)
+                subint = st.getSubIntervals(eigarray,nsubint) 
+                EPS, nconv = st.solveEPS(F,subintervals=subint)   
+            getWallTime(t0)
+            if nconv+1 > nocc:
+                Print("{0} eigenvalues converged".format(nconv))
+            else:
+                Print("{0} eigenvalues found, {1} eigenvalues are required".format(nconv,nocc))
+                sys.exit()        
+            stage = pt.getStage(stagename='Density', oldstage=stage)
+            t0 = getWallTime()
+            D,eigarray = st.getDensityMatrix(EPS,B, nocc)
+            getWallTime(t0)
+           # Print("{0} seconds for iter {1} in density".format(t,i))
+          #  Print("{0}, {1}, {2} ".format(eigarray[0],eigarray[nocc-1],eigarray[nocc]))
+            Print("Range of eigenvalues {0} - {1} ".format(eigarray[0],eigarray[nocc-1]))
 
         Ddiag=pt.convert2SeqVec(D.getDiagonal()) 
         if debug:
@@ -1061,7 +1061,9 @@ def main():
     maxdist = opts.getReal('maxdist', 1.e6)
     maxiter = opts.getInt('maxiter', 30)
     analysis = opts.getInt('analysis', 0)
+    solve = opts.getInt('solve', 0)
     maxnnz = opts.getInt('nnz', 0)
+    guess = opts.getInt('guess', 0)
     bandwidth = opts.getInt('bw', 0)
     sort = opts.getInt('sort', 0)
     basisset = opts.getString('basis','sto-3g')
@@ -1121,7 +1123,7 @@ def main():
         rhf(qmol,basisset,spfilter,maxiter,scfthresh,maxdist=maxdist)
     elif method == 'mindo3AIJ':
         Print("MINDO/3 calculation starts...")
-        mindo3AIJ(qmol,spfilter,maxiter,scfthresh,maxnnz=[maxnnz],bandwidth=[bandwidth],maxdist=maxdist,uniform=uniform,debug=False)
+        mindo3AIJ(qmol,spfilter,maxiter,scfthresh,maxnnz=[maxnnz],bandwidth=[bandwidth],maxdist=maxdist,uniform=uniform,guess=guess, solve=solve, debug=False)
         Print("MINDO/3 calculation finishes.")
      #   stage = PETSc.Log.Stage('PyQuante'); stage.push();  
       #  Print('PyQuante')
