@@ -947,7 +947,7 @@ def mindo3AIJ(qmol,spfilter,maxiter,scfthresh,maxnnz=[0],bandwidth=[0],maxdist=1
     basis = getBasis(qmol, nbf)
     Print("Number of basis functions: %i" % (nbf))
     Print("Number of valance electrons: %i" % (nel))
-    if not (all(maxnnz) and all(bandwidth)):
+    if not (all(maxnnz) or all(bandwidth)):
       ##D  stage = pt.getStage(stagename='DistAIJ', oldstage=stage)
       ##D  B     = getDistAIJ(basis, nbf, maxdist=maxdist, matcomm=PETSc.COMM_WORLD)
         stage = pt.getStage(stagename='getNnz', oldstage=stage)
@@ -1062,7 +1062,7 @@ def main():
     maxiter = opts.getInt('maxiter', 30)
     analysis = opts.getInt('analysis', 0)
     solve = opts.getInt('solve', 0)
-    maxnnz = opts.getInt('nnz', 0)
+    maxnnz = opts.getInt('maxnnz', 0)
     guess = opts.getInt('guess', 0)
     bandwidth = opts.getInt('bw', 0)
     sort = opts.getInt('sort', 0)
