@@ -585,30 +585,23 @@ def getF2AIJ(atoms, D, Ddiag, B=None,maxdist=1.E6):
         A = D.duplicate()
     A.zeroEntries()    
       
-    #x=np.zeros(nbf)    
     rstart, rend = A.getOwnershipRange()
-    #x = PETSc.Vec()
-    #x.createSeq(rend-rstart,comm=PETSc.COMM_SELF)
     x=A.createVecLeft()
     x.set(0.0)
-    #x=np.zeros(rend-rstart)
     A.setUp()
     ibf = 0 # bf number of the first bfn on iat
     for iat in xrange(nat):
         atomi = atoms[iat]
         jbf = 0
-       # if ibf in xrange(rstart,rend):
         for jat in xrange(nat):
             atomj = atoms[jat]
             if iat != jat and atomi.dist(atomj) < maxdist:
                 gammaij = PyQuante.MINDO3.get_gamma(atomi,atomj)
-              #  x.set(0.0)
                 for i in xrange(atomi.nbf):
                     if ibf+i in xrange(rstart,rend):
                         rowi=ibf+i
                         qi = Ddiag[rowi]
                         qj = 0
-                        #valij=0.0
                         tmp=0
                         for j in xrange(atomj.nbf):
                             
@@ -618,10 +611,8 @@ def getF2AIJ(atoms, D, Ddiag, B=None,maxdist=1.E6):
                             qj += Ddiag[colj]
                             
                             tmp += 0.5*qi*gammaij
-                           # if colj in xrange(rstart,rend): x[colj] += 0.5*qi*gammaij
                             if rowi <= colj: A.setValue(rowi,colj,valij,addv=PETSc.InsertMode.ADD_VALUES)
                         x[rowi] += 1.0 * qj*gammaij #MK 0.5 --> 1.0
-                       # print PETSc.COMM_WORLD.rank,'xrowi',rowi,x[rowi]
                         
             jbf += atomj.nbf
         ibf += atomi.nbf
