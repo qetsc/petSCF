@@ -363,12 +363,13 @@ def convertAIJ2CSR(A):
             B[i,j]=A[i,j]
     return scipy.sparse.csr_matrix(B)
 
-def compareAIJB(Aij,B,N,thresh=1.e-5):
+def compareAIJB(Aij,B,N,thresh=1.e-5,comment='Comparison'):
     """
     Compares all matrix elements of two matrices based on a given thresh
     Matrix A should be petsc AIJ.
     Matrix B can be AIJ or a numpy CSR matrix stored redundantly at all ranks.
     """
+
     rank = PETSc.COMM_WORLD.rank
     rstart, rend = Aij.getOwnershipRange()
     k=0
@@ -376,8 +377,8 @@ def compareAIJB(Aij,B,N,thresh=1.e-5):
         for j in xrange(i,N):
             if abs(Aij[i,j]-B[i,j]) > thresh: 
                 k += 1
-                print('Rank: %i,!!!!!!!!Differs in %i,%i: %f vs %f' % (rank,i,j, Aij[i,j],B[i,j]))
-    if k==0: Print("No difference within %f" % thresh)
+                print('{0}, Rank: {1},!!!!!!!!Differs in {2} {3}: {4} vs {5}'.format(comment,rank,i,j, Aij[i,j],B[i,j]))
+    if k==0: Print("{0} ok  within {1}".format(comment,thresh))
     return
 
 def compareAB(A,B,N,thresh=1.e-5):

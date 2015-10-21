@@ -10,9 +10,10 @@
 -fB '/Volumes/s/matrices/petscbinary/graphene_xxs_B'
 #-scfthresh 1.e-3
 -scfthresh 1.e-7
--maxdist 5.
--maxiter 20
--xyz "/Volumes/s/keceli/Dropbox/work/xyz/watercluster/006.xyz"
+-maxdist 50.
+-maxiter 2
+-solve 1
+-xyz "/Volumes/s/keceli/Dropbox/work/xyz/watercluster/004.xyz"
 #-xyz "/Volumes/s/keceli/Dropbox/work/PyLASH/tmp.xyz"
 -log_summary
 #-malloc_info 

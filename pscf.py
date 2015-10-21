@@ -1,6 +1,6 @@
 
 """
-e.g.:python qetsc.py -options_file options_qetsc
+e.g.:python pscf.py -options_file options.txt
 sample options_qetsc:
 -N 100
 -c 32 
@@ -301,6 +301,17 @@ def getDistMat(basis,nbf):
             tmp[j,i] = tmp[i,j]
     return tmp 
 
+def getGammaMat(basis,nbf):
+    tmp=np.zeros([nbf,nbf])
+    for i in xrange(nbf):
+        atomi=basis[i].atom
+        tmp[i,i] = PyQuante.MINDO3.get_gamma(atomi, atomi)
+        for j in xrange(i+1,nbf):
+            atomj=basis[j].atom
+            tmp[i,j] = PyQuante.MINDO3.get_gamma(atomi, atomj)
+            tmp[j,i] = tmp[i,j]
+    return tmp 
+
 def getDistCSR(basis,nbf,maxdist=1E6):
     """
     Distance matrix that determines the nonzero structure of the Fock matrix
@@ -381,6 +392,60 @@ def getTempAIJ(basis,maxdist,maxnnz=[0],bandwidth=[0],matcomm=PETSc.COMM_SELF):
                 if distij2 < maxdist2: A.setValue(i,j,distij2,addv=PETSc.InsertMode.INSERT)                    
     A.assemble()        
     return  A
+
+def getGammaAIJ(basis,maxdist,maxnnz=[0],bandwidth=[0],matcomm=PETSc.COMM_SELF):
+    """
+    Gamma matrix that determines the nonzero structure of the Fock matrix.
+    The values are from the gamma parameter of MINDO3, for two-center two-electron integrals
+    maxnnz: max number of nonzeros per row. If it is given performance might improve
+    TODO:
+    Values are indeed based on atoms, not basis functions, so possible to improve performance by nbf/natom.
+    Better to preallocate based on diagonal and offdiagonal nonzeros.
+    atom.rho = e2/f03[atom.atno]
+        R2 = atomi.dist2(atomj)*bohr2ang**2
+    return e2/sqrt(R2+0.25*pow(atomi.rho+atomj.rho,2))
+    """
+    import constants as const
+
+    nbf      = len(basis)
+    maxdist2 = maxdist * maxdist
+    A        = PETSc.Mat().create(comm=matcomm)
+#    A.setType('sbaij') 
+    A.setType('mpiaij') 
+   # A.setOption(A.Option.SYMMETRIC,True)
+    A.setSizes([nbf,nbf]) 
+   # if any(maxnnz): A.setPreallocationNNZ(maxnnz) 
+    A.setUp()
+    A.setOption(A.Option.NEW_NONZERO_ALLOCATION_ERR,False)
+    #A.setDiagonal(1.0) # TypeError: Argument 'diag' has incorrect type (expected petsc4py.PETSc.Vec, got float)
+    rstart, rend = A.getOwnershipRange()
+    if any(bandwidth):
+        if len(bandwidth)==1: bandwidth=np.array([bandwidth]*nbf)
+        for i in xrange(rstart,rend):
+            atomi=basis[i].atom
+            gammaii= PyQuante.MINDO3_Parameters.f03[atomi.atno]
+            A[i,i] = gammaii
+            for j in xrange(i+1,min(i+bandwidth[i],nbf)):
+                atomj = basis[j].atom
+                distij2 = atomi.dist2(atomj) * const.bohr2ang**2.
+                if distij2 < maxdist2: 
+                    gammaij=const.e2/np.sqrt(distij2+0.25*(atomi.rho+atomj.rho)**2.)
+                    A[i,j] = gammaij
+                    A[j,i] = gammaij
+    else:
+        for i in xrange(rstart,rend):
+            atomi=basis[i].atom
+            gammaii= PyQuante.MINDO3_Parameters.f03[atomi.atno]
+            A[i,i] = gammaii
+            for j in xrange(i+1,nbf):
+                atomj = basis[j].atom
+                distij2 = atomi.dist2(atomj) * const.bohr2ang**2.
+                if distij2 < maxdist2: 
+                    gammaij=const.e2/np.sqrt(distij2+0.25*(atomi.rho+atomj.rho)**2.)
+                    A[i,j] = gammaij
+                    A[j,i] = gammaij
+    A.assemble()        
+    return  A
        
 def getGuessDAIJold(basis):
     """
@@ -424,27 +489,25 @@ def getGuessDAIJ(basis,guess=0,T=None,matcomm=PETSc.COMM_SELF):
             else:               A[i,i] = atomi.Z/4.
         A.assemble()    
     elif guess==1:
-        d=1.e-5
+        d=0.
         if T:
             A=T.duplicate()
+            rstart, rend = A.getOwnershipRange() 
             for i in xrange(rstart,rend):
-                k=0
                 atomi=basis[i].atom
                 cols,vals = T.getRow(i) 
                 for j in cols:
                     if i==j:
-                        if atomi.atno == 1: vals[0] = atomi.Z/1.
-                        else:               vals[0] = atomi.Z/4.
+                        if atomi.atno == 1: A[i,i] = atomi.Z/1.
+                        else:               A[i,i] = atomi.Z/4.
                     else:    
-                        vals[k] = d * vals[k]
-                    k += 1
-                A.setValues(row,cols,vals,addv=PETSc.InsertMode.INSERT)                  
+                        A[i,j] = d * T[i,j]
             A.assemble()
         else:
             Print("You need to give a template matrix for guess type {0}".format(guess))            
     return  A 
 
-def getF0AIJ(atoms,basis,B):
+def getF0AIJV1(atoms,basis,B):
     "Form the zero-iteration (density matrix independent) Fock matrix"
     nat = len(atoms)
     nbf = len(basis)
@@ -474,6 +537,38 @@ def getF0AIJ(atoms,basis,B):
     A.assemble()
     return A
 
+def getF0AIJ(atoms,basis,T):
+    """
+    Form the zero-iteration (density matrix independent) Fock matrix
+    Diagonal:
+    U
+    """
+    A = T.duplicate()
+    A.setUp()
+    rstart, rend = A.getOwnershipRange()
+    for i in xrange(rstart,rend):
+        basisi=basis[i]
+        atomi=basisi.atom
+        cols,vals = T.getRow(i)
+        tmp = basisi.u # Ref1, Ref2
+        k=0
+        for j in cols:
+            basisj=basis[j]
+            atomj=basisj.atom
+            if atomj != atomi:
+                tmp -= T[i,j] * atomj.Z / len(atomj.basis) # Ref1, Ref2 adopted sum to be over orbitals rather than atoms
+            if i != j:
+                betaij = PyQuante.MINDO3.get_beta0(atomi.atno,atomj.atno)
+                Sij = basisi.cgbf.overlap(basisj.cgbf)
+                IPij = basisi.ip + basisj.ip
+                tmp2 =  betaij * IPij * Sij     # Ref1, Ref2 
+                A[i,j] = tmp2
+            #    A[j,i] = tmp2 # not necessary
+            k += 1
+        A[i,i] = tmp        
+    A.assemble()
+    return A
+
 def getF1AIJ(atoms,basis,D, Ddiag, B=None):
     """
     One-center corrections to the core fock matrix
@@ -485,7 +580,6 @@ def getF1AIJ(atoms,basis,D, Ddiag, B=None):
     """
     nat = len(atoms)
     nbf = len(basis)
-    blocklist=['']*nat
     ibf=0
     count=0
     
@@ -575,7 +669,7 @@ def getF2AIJold(atoms, D, Ddiag, B=None,maxdist=1.E6):
     A.setDiagonal(x,addv=PETSc.InsertMode.ADD_VALUES)       
     return A
 
-def getF2AIJ(atoms, D, Ddiag, B=None,maxdist=1.E6):
+def getF2AIJV0(atoms, D, Ddiag, B=None,maxdist=1.E6):
     "Two-center corrections to the core fock matrix"
     nbf = getNBF(atoms)
     nat = len(atoms)
@@ -622,6 +716,67 @@ def getF2AIJ(atoms, D, Ddiag, B=None,maxdist=1.E6):
     A.assemblyEnd()
     x.assemblyEnd()
     A.setDiagonal(x,addv=PETSc.InsertMode.ADD_VALUES)       
+    return A
+
+def getF2AIJ(atoms,basis, D, diagD, T):
+    """
+    Two-center corrections to the core fock matrix
+    """
+    A = T.duplicate()
+    A.setUp()
+    rstart, rend = A.getOwnershipRange()
+    for i in xrange(rstart,rend):
+        basisi=basis[i]
+        atomi=basisi.atom
+        cols,vals = T.getRow(i)
+        colsD,valsD = D.getRow(i)
+        tmp = basisi.u
+        k=0
+        for j in cols:
+            basisj=basis[j]
+            atomj=basisj.atom
+            if atomj != atomi:
+                tmp += vals[k] * diagD[i]
+            if i != j:
+                tmp2 =  -0.5 * vals[k] * valsD[k]  
+                A[i,j] = tmp2
+                A[j,i] = tmp2
+            k += 1
+        A[i,i] = tmp        
+    A.assemble()
+    return A
+
+def getFDAIJ(atoms, basis, D, diagD, T):
+    """
+    Density matrix dependent terms of the Fock matrix
+    """
+    A = T.duplicate()
+    A.setUp()
+    rstart, rend = A.getOwnershipRange()
+    for i in xrange(rstart,rend):
+        basisi=basis[i]
+        atomi=basisi.atom
+        cols,vals = T.getRow(i)
+        colsD,valsD = D.getRow(i)
+        tmpii = 0.5 * D[i,i] * PyQuante.MINDO3.get_g(basisi,basisi)
+        for j in cols:
+            basisj=basis[j]
+            atomj=basisj.atom
+            if i != j:
+                tmpij=0
+                if atomj == atomi:
+                #   tmpii += diagD[j] * PyQuante.MINDO3.get_g(basisi,basisj) - 0.5 * D[i,j] * PyQuante.MINDO3.get_h(basisi,basisj) # The correct form as given in Eq 2 in Ref1 and page 54 in Ref2
+                    tmpii += diagD[j] * PyQuante.MINDO3.get_g(basisi,basisj) - 0.5 * diagD[j] * PyQuante.MINDO3.get_h(basisi,basisj) # PyQuante implementation
+
+                #   tmpij  = -0.5 * D[i,j] * PyQuante.MINDO3.get_h(basisi,basisj) # Eq 3 in Ref1 but not in Ref2 and PyQuante
+                    tmpij +=  0.5 * D[i,j] * ( 3. * PyQuante.MINDO3.get_h(basisi,basisj) - PyQuante.MINDO3.get_g(basisi,basisj) ) #Only in Pyquante
+                else:
+                    tmpii += T[i,j] * diagD[j]     # Matches Ref1 and Ref2
+                    tmpij = -0.5 * T[i,j] * D[i,j]   # Matches Ref1 and Ref2  
+                A[i,j] = tmpij
+            #    A[j,i] = tmpij # not necessary indeed, upper triangular is enough.
+        A[i,i] = tmpii        
+    A.assemble()
     return A
 
 def getNuclearAttraction(atoms,nbf):
@@ -953,46 +1108,55 @@ def mindo3AIJ(qmol,spfilter,maxiter,scfthresh,maxnnz=[0],bandwidth=[0],maxdist=1
         Print("Average nonzeros per row: {0}".format(avgnnz))
         Print("Total number of nonzeros: {0}".format(sumnnz))
         Print("Nonzero density percent : {0}".format(dennnz))
-        stage = pt.getStage(stagename='getTempAIJ', oldstage=stage)
-        B     = getTempAIJ(basis, maxdist,maxnnz=nnzarray, bandwidth=bwarray, matcomm=PETSc.COMM_WORLD)
+       # stage = pt.getStage(stagename='getTempAIJ', oldstage=stage)
+       # B     = getTempAIJ(basis, maxdist,maxnnz=nnzarray, bandwidth=bwarray, matcomm=PETSc.COMM_WORLD)
+        stage = pt.getStage(stagename='getGammaAIJ', oldstage=stage)
+        B     = getGammaAIJ(basis, maxdist,maxnnz=nnzarray, bandwidth=bwarray, matcomm=PETSc.COMM_WORLD)
     else:
-        stage = pt.getStage(stagename='getTempAIJ', oldstage=stage)
-        B     = getTempAIJ(basis, maxdist,maxnnz=maxnnz, bandwidth=bandwidth, matcomm=PETSc.COMM_WORLD)
+     #   stage = pt.getStage(stagename='getTempAIJ', oldstage=stage)
+     #   B     = getTempAIJ(basis, maxdist,maxnnz=maxnnz, bandwidth=bandwidth, matcomm=PETSc.COMM_WORLD)
+        stage = pt.getStage(stagename='getGammaAIJ', oldstage=stage)
+        B     = getGammaAIJ(basis, maxdist,maxnnz=maxnnz, bandwidth=bandwidth, matcomm=PETSc.COMM_WORLD)
     stage = pt.getStage(stagename='F0', oldstage=stage)
     F0    = getF0AIJ(atoms, basis, B)
     stage = pt.getStage(stagename='D0', oldstage=stage)
-    D     = getGuessDAIJ(basis,guess=guess,matcomm=PETSc.COMM_WORLD)
+    D     = getGuessDAIJ(basis,guess=1,T=B,matcomm=PETSc.COMM_WORLD)
     stage = pt.getStage(stagename='Ddiag', oldstage=stage)
     Ddiag = pt.convert2SeqVec(D.getDiagonal()) 
     if debug:
         BCSR  = getDistCSR(basis, nbf,maxdist=maxdist)
         F0CSR = getF0CSR(atoms, basis, BCSR)
-        #mat.compareAIJB(B,BCSR,nbf)
+        pt.compareAIJB(F0,F0CSR,nbf,comment='F0')
         DCSR   = getGuessDCSR(basis)
+        pt.compareAIJB(D,DCSR,nbf,comment='D')
+        GammaMat = getGammaMat(basis, nbf)
+        pt.compareAIJB(B,GammaMat,nbf,comment='Gamma')        
         Print("Nonzero density: %i" % (100.*BCSR.nnz/nbf/nbf))
     Eel   = 0.
     Eold  = 0.
     for i in xrange(maxiter):
         Print("****************************Iteration {0}****************************".format(i))
-        stage = pt.getStage(stagename='F1', oldstage=stage)
-        F1    = getF1AIJ(atoms, basis, D, Ddiag, B=B)
-        stage = pt.getStage(stagename='F2', oldstage=stage)
-        F2    = getF2AIJ(atoms, D, Ddiag, maxdist=maxdist, B=B)
-        stage = pt.getStage(stagename='F0+F1+F2', oldstage=stage)
-        F     = F0+F1+F2
+    #    stage = pt.getStage(stagename='F1', oldstage=stage)
+    #    F1    = getF1AIJ(atoms, basis, D, Ddiag, B=B)
+    #    stage = pt.getStage(stagename='FD', oldstage=stage)
+    #    F2    = getF2AIJ(atoms,basis, D, Ddiag, B)
+        stage = pt.getStage(stagename='FD', oldstage=stage)
+        FD    = getFDAIJ(atoms,basis, D, Ddiag, B)
+        stage = pt.getStage(stagename='F0+FD', oldstage=stage)
+        F     = F0+FD
 
 
         if debug:
             F1CSR    = getF1CSR(atoms, basis, DCSR)
-            print 'F1 comp', i
-            pt.compareAIJB(F1,F1CSR,nbf)
+          #  print 'F1 comp', i
+          #  pt.compareAIJB(F1,F1CSR,nbf)
             F2CSR    = getF2CSR(atoms, DCSR, BCSR)
-            print 'F2 comp', i  
-            pt.compareAIJB(F2,F2CSR,nbf)             
+          #  print 'F2 comp', i  
+          #  pt.compareAIJB(F2,F2CSR,nbf)             
             FCSR  = F0CSR+F1CSR+F2CSR
             #mat.compareAIJB(F,FCSR,nbf) 
-            #mat.compareAIJB(F0+F,F0CSR+FCSR,nbf)            
-            print 'Eel',Eel,0.5*getTraceProductCSR(DCSR,F0CSR+FCSR)
+            pt.compareAIJB(F,FCSR,nbf,comment='F')            
+           # print 'Eel',Eel,0.5*getTraceProductCSR(DCSR,F0CSR+FCSR)
 
 
         Eold = Eel
@@ -1030,7 +1194,7 @@ def mindo3AIJ(qmol,spfilter,maxiter,scfthresh,maxnnz=[0],bandwidth=[0],maxdist=1
             orbe,orbs = scipy.linalg.eigh(FCSR.todense())
             DCSR = 2*getDCSR(orbs[:,0:nel/2], BCSR)
             print 'D comp', i
-            pt.compareAIJB(D,DCSR,nbf)
+            pt.compareAIJB(D,DCSR,nbf,comment='D')
     Etot   = Eel+Enuke
     Efinal = Etot*const.ev2kcal+Eref
     Print("Enuc           = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Enuke*const.ev2kcal,Enuke,Enuke*const.ev2hartree))
@@ -1116,7 +1280,7 @@ def main():
         rhf(qmol,basisset,spfilter,maxiter,scfthresh,maxdist=maxdist)
     elif method == 'mindo3AIJ':
         Print("MINDO/3 calculation starts...")
-        mindo3AIJ(qmol,spfilter,maxiter,scfthresh,maxnnz=[maxnnz],bandwidth=[bandwidth],maxdist=maxdist,uniform=uniform,guess=guess, solve=solve, debug=False)
+        mindo3AIJ(qmol,spfilter,maxiter,scfthresh,maxnnz=[maxnnz],bandwidth=[bandwidth],maxdist=maxdist,uniform=uniform,guess=guess, solve=solve, debug=True)
         Print("MINDO/3 calculation finishes.")
      #   stage = PETSc.Log.Stage('PyQuante'); stage.push();  
       #  Print('PyQuante')
