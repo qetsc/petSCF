@@ -1228,6 +1228,7 @@ def main():
     scfthresh = opts.getReal('scfthresh',1.e-5)
     spfilter = opts.getReal('spfilter',0.)
     uniform = opts.getBool('uniform',True)
+    debug = opts.getBool('debug',True)
     
     if mol:
         import PyQuante.Molecule 
@@ -1280,7 +1281,7 @@ def main():
         rhf(qmol,basisset,spfilter,maxiter,scfthresh,maxdist=maxdist)
     elif method == 'mindo3AIJ':
         Print("MINDO/3 calculation starts...")
-        mindo3AIJ(qmol,spfilter,maxiter,scfthresh,maxnnz=[maxnnz],bandwidth=[bandwidth],maxdist=maxdist,uniform=uniform,guess=guess, solve=solve, debug=True)
+        mindo3AIJ(qmol,spfilter,maxiter,scfthresh,maxnnz=[maxnnz],bandwidth=[bandwidth],maxdist=maxdist,uniform=uniform,guess=guess, solve=solve, debug=debug)
         Print("MINDO/3 calculation finishes.")
      #   stage = PETSc.Log.Stage('PyQuante'); stage.push();  
       #  Print('PyQuante')
