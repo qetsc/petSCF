@@ -404,11 +404,21 @@ def getGammaAIJ(basis,maxdist,maxnnz=[0],bandwidth=[0],matcomm=PETSc.COMM_SELF):
     atom.rho = e2/f03[atom.atno]
         R2 = atomi.dist2(atomj)*bohr2ang**2
     return e2/sqrt(R2+0.25*pow(atomi.rho+atomj.rho,2))
+    
+    
+                R2 = atomi.dist2(atomj)*bohr2ang**2
+            R = sqrt(R2)
+            scale = get_scale(atomi.atno,atomj.atno,R)
+            gammaij = get_gamma(atomi,atomj)
+            enuke_ij = atomi.Z*atomj.Z*gammaij \
+                     + abs(atomi.Z*atomj.Z*(e2/R-gammaij)*scale)
+            enuke += enuke_ij
     """
     import constants as const
 
     nbf      = len(basis)
     maxdist2 = maxdist * maxdist
+    enuke=0.0
     A        = PETSc.Mat().create(comm=matcomm)
 #    A.setType('sbaij') 
     A.setType('mpiaij') 
@@ -419,6 +429,7 @@ def getGammaAIJ(basis,maxdist,maxnnz=[0],bandwidth=[0],matcomm=PETSc.COMM_SELF):
     A.setOption(A.Option.NEW_NONZERO_ALLOCATION_ERR,False)
     #A.setDiagonal(1.0) # TypeError: Argument 'diag' has incorrect type (expected petsc4py.PETSc.Vec, got float)
     rstart, rend = A.getOwnershipRange()
+    nnz=0
     if any(bandwidth):
         if len(bandwidth)==1: bandwidth=np.array([bandwidth]*nbf)
         for i in xrange(rstart,rend):
@@ -428,10 +439,18 @@ def getGammaAIJ(basis,maxdist,maxnnz=[0],bandwidth=[0],matcomm=PETSc.COMM_SELF):
             for j in xrange(i+1,min(i+bandwidth[i],nbf)):
                 atomj = basis[j].atom
                 distij2 = atomi.dist2(atomj) * const.bohr2ang**2.
-                if distij2 < maxdist2: 
+                if distij2 < 0.01:
+                    A[i,j] = gammaii
+                    A[j,i] = gammaii
+                    nnz += 1
+                elif distij2 < maxdist2: 
                     gammaij=const.e2/np.sqrt(distij2+0.25*(atomi.rho+atomj.rho)**2.)
+                    R=np.sqrt(distij2)
+                    scale = PyQuante.MINDO3.get_scale(atomi.atno,atomj.atno,R)
+                    enuke += atomi.Z*atomj.Z*gammaij +  abs(atomi.Z*atomj.Z*(const.e2/R-gammaij)*scale)
                     A[i,j] = gammaij
                     A[j,i] = gammaij
+                    nnz += 1
     else:
         for i in xrange(rstart,rend):
             atomi=basis[i].atom
@@ -440,12 +459,24 @@ def getGammaAIJ(basis,maxdist,maxnnz=[0],bandwidth=[0],matcomm=PETSc.COMM_SELF):
             for j in xrange(i+1,nbf):
                 atomj = basis[j].atom
                 distij2 = atomi.dist2(atomj) * const.bohr2ang**2.
+                if distij2 < 0.01:
+                    A[i,j] = gammaii
+                    A[j,i] = gammaii
+                    nnz += 1
                 if distij2 < maxdist2: 
                     gammaij=const.e2/np.sqrt(distij2+0.25*(atomi.rho+atomj.rho)**2.)
+                    R=np.sqrt(distij2)
+                    scale = PyQuante.MINDO3.get_scale(atomi.atno,atomj.atno,R)
+                    enuke += atomi.Z*atomj.Z*gammaij +  abs(atomi.Z*atomj.Z*(const.e2/R-gammaij)*scale)
                     A[i,j] = gammaij
                     A[j,i] = gammaij
-    A.assemble()        
-    return  A
+                    nnz += 1
+    A.assemblyBegin()
+    enuke =  MPI.COMM_WORLD.allreduce(enuke)        
+    nnz =  MPI.COMM_WORLD.allreduce(nnz)  + nbf      
+    A.assemblyEnd()
+
+    return  nnz,enuke, A
        
 def getGuessDAIJold(basis):
     """
@@ -1111,12 +1142,18 @@ def mindo3AIJ(qmol,spfilter,maxiter,scfthresh,maxnnz=[0],bandwidth=[0],maxdist=1
        # stage = pt.getStage(stagename='getTempAIJ', oldstage=stage)
        # B     = getTempAIJ(basis, maxdist,maxnnz=nnzarray, bandwidth=bwarray, matcomm=PETSc.COMM_WORLD)
         stage = pt.getStage(stagename='getGammaAIJ', oldstage=stage)
-        B     = getGammaAIJ(basis, maxdist,maxnnz=nnzarray, bandwidth=bwarray, matcomm=PETSc.COMM_WORLD)
+        nnz,Enuke, B     = getGammaAIJ(basis, maxdist,maxnnz=nnzarray, bandwidth=bwarray, matcomm=PETSc.COMM_WORLD)
+        dennnz = nnz / (nbf*(nbf+1)/2.0)  * 100.
+        Print("Nonzero density percent : {0}".format(dennnz))
+        Print("Enuc2          = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Enuke*const.ev2kcal,Enuke,Enuke*const.ev2hartree))
     else:
      #   stage = pt.getStage(stagename='getTempAIJ', oldstage=stage)
      #   B     = getTempAIJ(basis, maxdist,maxnnz=maxnnz, bandwidth=bandwidth, matcomm=PETSc.COMM_WORLD)
         stage = pt.getStage(stagename='getGammaAIJ', oldstage=stage)
-        B     = getGammaAIJ(basis, maxdist,maxnnz=maxnnz, bandwidth=bandwidth, matcomm=PETSc.COMM_WORLD)
+        nnz, Enuke, B     = getGammaAIJ(basis, maxdist,maxnnz=maxnnz, bandwidth=bandwidth, matcomm=PETSc.COMM_WORLD)
+        dennnz = nnz / (nbf*(nbf+1)/2.0)  * 100.
+        Print("Nonzero density percent : {0}".format(dennnz))
+        Print("Enuc3          = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Enuke*const.ev2kcal,Enuke,Enuke*const.ev2hartree))
     stage = pt.getStage(stagename='F0', oldstage=stage)
     F0    = getF0AIJ(atoms, basis, B)
     stage = pt.getStage(stagename='D0', oldstage=stage)
