@@ -16,7 +16,7 @@ except:
 def getNumberOfSubIntervals(eps):
     return eps.getKrylovSchurPartitions()
 
-def getSubIntervals(eigs, nsub, bufferratio=0.5):
+def getSubIntervals(eigs, nsub, bufferratio=0.75):
     """
     Given a list of eigenvalues, (eigs) and number of subintervals (nsub), 
     returns the boundaries for subintervals such that each subinterval has an average number of eigenvalues.
@@ -27,15 +27,16 @@ def getSubIntervals(eigs, nsub, bufferratio=0.5):
     neigs = len(eigs)
     mean = neigs / nsub
     remainder = neigs % nsub
-    irange = eigs[-1] - eigs[0]
+    erange = eigs[-1] - eigs[0]
+    ibuffer = erange * bufferratio
     subint = np.zeros(nsub + 1)
-    subint[0] = eigs[0] * (1.+bufferratio)
+    subint[0] = eigs[0] - ibuffer
     for i in xrange(1, nsub):
         subint[i] = (eigs[mean * i] + eigs[mean * i - 1]) / 2.
         if remainder > 0 and i > 1:
             subint[i] = (eigs[mean * i + 1] + eigs[mean * i]) / 2.
             remainder = remainder - 1
-    subint[nsub] = eigs[-1] * (1.+bufferratio)
+    subint[nsub] = eigs[-1] + ibuffer
     Print("New interval boundaries: {0:5.3f} , {1:5.3f}".format(subint[0],subint[-1]))
     return subint
 
