@@ -159,7 +159,9 @@ def solveEPS(A,B=None,printinfo=False,returnoption=0,checkerror=False,interval=[
         Returns SLEPc EPS object, 
         Number of converged eigenvalues
         An array of converged eigenvalues     
-        A dense matrix of eigenvectors   
+        A dense matrix of eigenvectors  
+        
+    TODO: Resolve with larger range if nconv<nocc     
     """
     eps = SLEPc.EPS().create(comm=A.getComm())
     eps.setOperators(A,B)
@@ -175,6 +177,7 @@ def solveEPS(A,B=None,printinfo=False,returnoption=0,checkerror=False,interval=[
         eps.setKrylovSchurSubintervals(subintervals)    
     eps.solve()
     nconv = eps.getConverged()
+    Print("Number of converged eigenvalues: ".format(nocc))
 
     if printinfo:
         its = eps.getIterationNumber()
@@ -185,9 +188,9 @@ def solveEPS(A,B=None,printinfo=False,returnoption=0,checkerror=False,interval=[
         Print("Number of iterations of the method: %i" % its)
         Print("Solution method: %s" % sol_type)
         Print("Stopping condition: tol=%.4g, maxit=%d" % (tol, maxit))
-    if nconv==0:
-        Print("No eigenvalues found")
-        return eps, nconv
+    if nconv < nocc:
+        Print("{0} eigenvalues found, {1} eigenvalues are required".format(nconv,nocc))
+        sys.exit()
     elif returnoption==0:
         return eps, nconv
     elif returnoption == 1:
@@ -204,8 +207,6 @@ def solveEPS(A,B=None,printinfo=False,returnoption=0,checkerror=False,interval=[
         return eps, nconv, eigarray
     elif returnoption == 2:
         eigarray=np.zeros(nconv)
-#        sliceindex, nconv_local, = eps.getKrylovSchurSubcommInfo()
-
         for i in range(nconv):
             k = eps.getEigenpair(i,None,None)
             eigarray[i]=k.real

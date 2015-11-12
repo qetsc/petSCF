@@ -1047,8 +1047,9 @@ def mindo3AIJ(qmol,opts):
     nel   = PyQuante.MINDO3.get_nel(atoms)
     nocc  = nel/2
     basis = getBasis(qmol, nbf)
-    Print("Number of basis functions: {0}".format(nbf))
+    Print("Number of basis functions  : {0}".format(nbf))
     Print("Number of valance electrons: {0}".format(nel))
+    Print("Number of occupied orbitals: {0}".format(nocc))
     if not (all(maxnnz) or all(bandwidth)):
       ##D  stage = pt.getStage(stagename='DistAIJ', oldstage=stage)
       ##D  B     = getDistAIJ(basis, nbf, maxdist=maxdist, matcomm=PETSc.COMM_WORLD)
@@ -1094,28 +1095,22 @@ def mindo3AIJ(qmol,opts):
         GammaMat = getGammaMat(basis, nbf)
         pt.compareAIJB(B,GammaMat,nbf,comment='Gamma')        
         Print("Nonzero density: %i" % (100.*BCSR.nnz/nbf/nbf))
-    Eel   = 0.
-    Eold  = 0.
+        
+    Eel   = 0.    
     Print("{0:*^60s}".format("SELF-CONSISTENT-FIELD ITERATIONS"))
     for iter in xrange(1,maxiter):
         Print("{0:*^60s}".format("Iteration "+str(iter)))
         stage = pt.getStage(stagename='FD', oldstage=stage)
         FD    = getFDAIJ(atoms,basis, D, Ddiag, B)
         F     = F0 + FD
+        Eold = Eel
 
         if debug:
             F1CSR    = getF1CSR(atoms, basis, DCSR)
-            print 'F1 comp', iter
-            pt.compareAIJB(F1,F1CSR,nbf)
             F2CSR    = getF2CSR(atoms, DCSR, BCSR)
-            print 'F2 comp', iter
-            pt.compareAIJB(F2,F2CSR,nbf)             
             FCSR  = F0CSR+F1CSR+F2CSR
-            mat.compareAIJB(F,FCSR,nbf) 
             pt.compareAIJB(F,FCSR,nbf,comment='F')            
             print 'Eel',Eel,0.5*getTraceProductCSR(DCSR,F0CSR+FCSR)
-
-        Eold = Eel
 
         if solve > 0: 
             stage = pt.getStage(stagename='Trace', oldstage=stage)
@@ -1125,17 +1120,11 @@ def mindo3AIJ(qmol,opts):
             stage = pt.getStage(stagename='Solve', oldstage=stage)
             if staticsubint or iter<2:
                 eps, nconv, eigarray = st.solveEPS(F,returnoption=1,nocc=nocc)  
-                 
             else:
                 nsubint=st.getNumberOfSubIntervals(eps)
                 subint = st.getSubIntervals(eigarray[0:nocc],nsubint) 
                 eps, nconv, eigarray = st.solveEPS(F,subintervals=subint,returnoption=1,nocc=nocc)   
-            getWallTime(t0)
-            if nconv+1 > nocc:
-                Print("{0} eigenvalues converged".format(nconv))
-            else:
-                Print("{0} eigenvalues found, {1} eigenvalues are required".format(nconv,nocc))
-                sys.exit()        
+            getWallTime(t0)    
             stage = pt.getStage(stagename='Density', oldstage=stage)
             t0 = getWallTime()
             if usesips:

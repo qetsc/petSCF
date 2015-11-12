@@ -10,7 +10,7 @@ PSCF is developed to perform Parameterized Self-Consistend-Field calculations su
 * For more info contact Murat Keceli: keceli at gmail
 * Computationally intensive parts are written in C by Hong Zhang and will be contained in SIPs module.
 
-## Installation
+## How to install?
 * PSCF is basically a python code build on top of PyQuante, petsc4py and slepc4py.
 * If you have these packages installed, you don't need any additional installations.
 
@@ -25,3 +25,7 @@ PSCF is developed to perform Parameterized Self-Consistend-Field calculations su
   * MUMPS
   * PT-SCOTCH
   * SCALAPACK
+
+## How to run?
+* mpirun -n 2 python pscf.py -options_file options.txt
+* You can modify options.txt file or add command-line options to override options.txt 
