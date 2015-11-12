@@ -28,15 +28,14 @@ def getSubIntervals(eigs, nsub, bufferratio=0.5):
     mean = neigs / nsub
     remainder = neigs % nsub
     irange = eigs[-1] - eigs[0]
-    ibuffer = irange * bufferratio
     subint = np.zeros(nsub + 1)
-    subint[0] = eigs[0] - ibuffer
+    subint[0] = eigs[0] * (1.+bufferratio)
     for i in xrange(1, nsub):
         subint[i] = (eigs[mean * i] + eigs[mean * i - 1]) / 2.
         if remainder > 0 and i > 1:
             subint[i] = (eigs[mean * i + 1] + eigs[mean * i]) / 2.
             remainder = remainder - 1
-    subint[nsub] = eigs[-1] + ibuffer
+    subint[nsub] = eigs[-1] * (1.+bufferratio)
     Print("New interval boundaries: {0:5.3f} , {1:5.3f}".format(subint[0],subint[-1]))
     return subint
 
@@ -202,8 +201,6 @@ def solveEPS(A,B=None,printinfo=False,returnoption=0,checkerror=False,interval=[
                 error = eps.computeError(i)
                 if error > 1.e-6: Print("Eigenvalue {0} has error {1}".format(k,error)) 
         Print("Range of required eigenvalues: {0:5.3f} , {1:5.3f}".format(eigarray[0],eigarray[nocc-1]))
-        #Print("{0}, {1}, {2} ".format(eigarray[0],eigarray[nocc-1],eigarray[nocc]))
-
         return eps, nconv, eigarray
     elif returnoption == 2:
         eigarray=np.zeros(nconv)
