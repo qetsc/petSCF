@@ -161,7 +161,12 @@ def solveEPS(A,B=None,printinfo=False,returnoption=0,checkerror=False,interval=[
         An array of converged eigenvalues     
         A dense matrix of eigenvectors  
         
-    TODO: Resolve with larger range if nconv<nocc     
+    TODO: 
+        Repeat solve with larger range if nconv<nocc
+        Or continue with random (or approximate or save some from previous iter) 
+        eigenvectors to replace the missing ones.
+        Or and maybe the best option is simply form the Density Matrix with 
+        the converged eigenvectors and increase the interval for the next iter.     
     """
     eps = SLEPc.EPS().create(comm=A.getComm())
     eps.setOperators(A,B)
@@ -177,7 +182,7 @@ def solveEPS(A,B=None,printinfo=False,returnoption=0,checkerror=False,interval=[
         eps.setKrylovSchurSubintervals(subintervals)    
     eps.solve()
     nconv = eps.getConverged()
-    Print("Number of converged eigenvalues: ".format(nocc))
+    Print("Number of converged and required eigenvalues: {0}, {1} ".format(nconv, nocc))
 
     if printinfo:
         its = eps.getIterationNumber()
