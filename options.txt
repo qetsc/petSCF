@@ -3,10 +3,10 @@
 -method mindo3AIJ 
 -scfthresh 1.e-7
 -maxdist 5.5
--maxiter 6
+-maxiter 4
 -solve 1
 -debug 0
--staticsubint False
+-staticsubint True
 -xyz "./XYZ/004.xyz"
 -sips False
 # A chain of identical atoms (instead of an xyz file) can be specified with the following options 
@@ -39,7 +39,7 @@
 #SLEPc options
 
 -eps_krylovschur_partitions 1  
--eps_interval -7000,700
+-eps_interval -inf,700
 -eps_tol  1.e-8
 -eps_krylovschur_detect_zeros TRUE
 -eps_purify 1
