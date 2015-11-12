@@ -1,15 +1,17 @@
-PSCF is developed to perform paraemeterized self-consistend-field calculations such as semi-empirical molecular orbital
-methods (MNDO,PM3, etc) and density-functional based tight binding (DFTB)
+PSCF is developed to perform parameterized self-consistend-field calculations such as semi-empirical molecular orbital
+methods (MNDO,PM3, etc) and density-functional based tight binding (DFTB).
 
 Currently only MINDO/3 method is implemented.
 
-PSCF is based on PyQuante (http://pyquante.sourceforge.net/) and slepc4py (https://bitbucket.org/slepc/slepc4py/).
+PSCF makes use of PyQuante (http://pyquante.sourceforge.net/) molecule class.
+All matrix operations are based on petsc4py (https://bitbucket.org/petsc/petsc4py/) and slepc4py (https://bitbucket.org/slepc/slepc4py/).
+SIPs code is written by Hong Zhang. 
 
-If you have these packages installed, you don't need any additional installations. PSCF is basically a python script
-build on top of these packages.
+If you have these packages installed, you don't need any additional installations. 
+PSCF is basically a python code build on top of these packages.
 
 PyQuante installation:
-Simply download the tarball from the sourceforge and run `python setup.py install`.
+Simply download the tarball from http://pyquante.sourceforge.net/ and run `python setup.py install`.
 
 slepc4py installation:
 Requires, slepc, petsc4py, petsc...
