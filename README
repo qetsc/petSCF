@@ -1,19 +1,27 @@
-PSCF is developed to perform parameterized self-consistend-field calculations such as semi-empirical molecular orbital
-methods (MNDO,PM3, etc) and density-functional based tight binding (DFTB).
 
-Currently only MINDO/3 method is implemented.
+# PSCF
+PSCF is developed to perform Parameterized Self-Consistend-Field calculations such as semi-empirical molecular orbital
+(MNDO,PM3, etc) or density-functional based tight binding (DFTB) methods for large systems, where all the relevant matrices are sparse.
 
-PSCF makes use of PyQuante (http://pyquante.sourceforge.net/) molecule class.
-All matrix operations are based on petsc4py (https://bitbucket.org/petsc/petsc4py/) and slepc4py (https://bitbucket.org/slepc/slepc4py/).
-SIPs code is written by Hong Zhang. 
+* Currently only MINDO/3 method is implemented.
+* PSCF is based on PyQuante (http://pyquante.sourceforge.net/).
+* All matrix operations are based on petsc4py (https://bitbucket.org/petsc/petsc4py/) and slepc4py (https://bitbucket.org/slepc/slepc4py/).
+* Not useful for anything right now, stay tuned...
+* For more info contact Murat Keceli: keceli at gmail
+* Computationally intensive parts are written in C by Hong Zhang and will be contained in SIPs module.
 
-If you have these packages installed, you don't need any additional installations. 
-PSCF is basically a python code build on top of these packages.
+## Installation
+* PSCF is basically a python code build on top of PyQuante, petsc4py and slepc4py.
+* If you have these packages installed, you don't need any additional installations.
 
-PyQuante installation:
-Simply download the tarball from http://pyquante.sourceforge.net/ and run `python setup.py install`.
+### PyQuante installation:
+* Download the tarball from http://pyquante.sourceforge.net/
+* run `python setup.py install`.
 
-slepc4py installation:
-Requires, slepc, petsc4py, petsc...
-
-More details on the installation of these packages...
+### slepc4py installation:
+* Requires, petsc, slepc, petsc4py, mpi4py...
+* Start from http://www.mcs.anl.gov/petsc/
+* Required packages with petsc installation:
+  * MUMPS
+  * PT-SCOTCH
+  * SCALAPACK
