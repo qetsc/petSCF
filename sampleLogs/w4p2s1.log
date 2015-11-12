@@ -1,0 +1,436 @@
+*********Stage Input**********
+xyz read from file:./XYZ/004.xyz
+Number of atoms: 30
+Number of electrons: 100
+MINDO/3 calculation starts...
+*********Stage Input**********
+Distance cutoff: 5.500
+SCF threshold: 1.000e-07
+Maximum number of SCF iterations: 6
+Subintervals will be updated after the first iteration
+*******Stage Initialize*******
+********Stage Enuclear********
+Enuc           =    247444.5428110029 kcal/mol =     10730.0005555268 ev =       394.3279628611 Hartree
+*******Stage Ereference*******
+Eref           =     78218.5988000001 kcal/mol =      3391.8129656129 ev =       124.6492663458 Hartree
+********Stage Basisset********
+Number of basis functions: 60
+Number of valance electrons: 80
+*********Stage getNnz*********
+Maximum nonzeros per row: 15
+Maximum bandwidth       : 44
+Average nonzeros per row: 5.53333333333
+Total number of nonzeros: 332
+Nonzero density percent : 18.1420765027
+******Stage getGammaAIJ*******
+Nonzero density percent : 36.393442623
+Enuc2          =    882730.8998648593 kcal/mol =     38278.0842055791 ev =      1406.7211729302 Hartree
+***********Stage F0***********
+***********Stage D0***********
+*********Stage Ddiag**********
+**************SELF-CONSISTENT-FIELD ITERATIONS**************
+************************Iteration 1*************************
+***********Stage FD***********
+*********Stage Trace**********
+Eel            =   -176603.7934116042 kcal/mol =     -7658.1151472878 ev =      -281.4360474409 Hartree
+*********Stage Solve**********
+Range of required eigenvalues: -27.362 , -11.098
+0.158002853394 seconds
+60 eigenvalues converged
+********Stage Density*********
+0.424391031265 seconds
+************************Iteration 2*************************
+***********Stage FD***********
+*********Stage Trace**********
+Eel            =   -186386.7684991316 kcal/mol =     -8082.3367806744 ev =      -297.0262099604 Hartree
+*********Stage Solve**********
+New interval boundaries: -35.494 , -2.966
+Range of required eigenvalues: -32.368 , -8.996
+0.167316913605 seconds
+40 eigenvalues converged
+********Stage Density*********
+0.421876192093 seconds
+************************Iteration 3*************************
+***********Stage FD***********
+*********Stage Trace**********
+Eel            =   -186579.4395236470 kcal/mol =     -8090.6916232447 ev =      -297.3332507693 Hartree
+*********Stage Solve**********
+New interval boundaries: -44.053 , 2.689
+Range of required eigenvalues: -31.731 , -11.293
+0.178373098373 seconds
+48 eigenvalues converged
+********Stage Density*********
+0.587459087372 seconds
+************************Iteration 4*************************
+***********Stage FD***********
+*********Stage Trace**********
+Eel            =   -186594.4266078951 kcal/mol =     -8091.3415119854 ev =      -297.3571342074 Hartree
+*********Stage Solve**********
+New interval boundaries: -41.950 , -1.075
+Range of required eigenvalues: -31.764 , -11.803
+0.174721002579 seconds
+40 eigenvalues converged
+********Stage Density*********
+0.625298976898 seconds
+************************Iteration 5*************************
+***********Stage FD***********
+*********Stage Trace**********
+Eel            =   -186596.7413373353 kcal/mol =     -8091.4418861860 ev =      -297.3608229634 Hartree
+*********Stage Solve**********
+New interval boundaries: -41.744 , -1.823
+Range of required eigenvalues: -31.726 , -11.871
+0.160063028336 seconds
+40 eigenvalues converged
+********Stage Density*********
+0.461214065552 seconds
+Enuc           =    882730.8998648593 kcal/mol =     38278.0842055791 ev =      1406.7211729302 Hartree
+Eref           =     78218.5988000001 kcal/mol =      3391.8129656129 ev =       124.6492663458 Hartree
+Eel            =   -186596.7413373353 kcal/mol =     -8091.4418861860 ev =      -297.3608229634 Hartree
+Eel+Enuke      =    696134.1585275241 kcal/mol =     30186.6423193931 ev =      1109.3603499669 Hartree
+Eel+Enuke+Eref =    774352.7573275241 kcal/mol =     33578.4552850060 ev =      1234.0096163126 Hartree
+MINDO/3 calculation finishes.
+************************************************************************************************************************
+***             WIDEN YOUR WINDOW TO 120 CHARACTERS.  Use 'enscript -r -fCourier9' to print this document            ***
+************************************************************************************************************************
+
+---------------------------------------------- PETSc Performance Summary: ----------------------------------------------
+
+pscf.py on a dev_debug named Keceli-RMBP.local with 2 processors, by kecelim Thu Nov 12 15:48:48 2015
+Using Petsc Development GIT revision: v3.6.1-287-g0932d2e  GIT Date: 2015-07-31 14:39:10 -0500
+
+                         Max       Max/Min        Avg      Total 
+Time (sec):           4.045e+00      1.00000   4.045e+00
+Objects:              7.740e+02      1.00000   7.740e+02
+Flops:                3.707e+06      1.03115   3.651e+06  7.302e+06
+Flops/sec:            9.164e+05      1.03115   9.026e+05  1.805e+06
+Memory:               1.440e+06      1.02827              2.840e+06
+MPI Messages:         1.380e+03      1.00000   1.380e+03  2.759e+03
+MPI Message Lengths:  1.908e+05      1.00000   1.383e+02  3.817e+05
+MPI Reductions:       1.776e+04      1.00000
+
+Flop counting convention: 1 flop = 1 real number operation of type (multiply/divide/add/subtract)
+                            e.g., VecAXPY() for real vectors of length N --> 2N flops
+                            and VecAXPY() for complex vectors of length N --> 8N flops
+
+Summary of Stages:   ----- Time ------  ----- Flops -----  --- Messages ---  -- Message Lengths --  -- Reductions --
+                        Avg     %Total     Avg     %Total   counts   %Total     Avg         %Total   counts   %Total 
+ 0:      Main Stage: 6.0535e-02   1.5%  0.0000e+00   0.0%  0.000e+00   0.0%  0.000e+00        0.0%  0.000e+00   0.0% 
+ 1:           Input: 2.3760e-03   0.1%  0.0000e+00   0.0%  0.000e+00   0.0%  0.000e+00        0.0%  0.000e+00   0.0% 
+ 2:      Initialize: 6.2866e-03   0.2%  0.0000e+00   0.0%  0.000e+00   0.0%  0.000e+00        0.0%  0.000e+00   0.0% 
+ 3:        Enuclear: 8.2946e-03   0.2%  0.0000e+00   0.0%  0.000e+00   0.0%  0.000e+00        0.0%  0.000e+00   0.0% 
+ 4:      Ereference: 4.8637e-05   0.0%  0.0000e+00   0.0%  0.000e+00   0.0%  0.000e+00        0.0%  0.000e+00   0.0% 
+ 5:        Basisset: 8.4043e-05   0.0%  0.0000e+00   0.0%  0.000e+00   0.0%  0.000e+00        0.0%  0.000e+00   0.0% 
+ 6:          getNnz: 9.8506e-03   0.2%  0.0000e+00   0.0%  0.000e+00   0.0%  0.000e+00        0.0%  0.000e+00   0.0% 
+ 7:     getGammaAIJ: 1.0949e-02   0.3%  0.0000e+00   0.0%  7.000e+00   0.3%  1.089e+00        0.8%  2.100e+01   0.1% 
+ 8:              F0: 1.3661e-01   3.4%  0.0000e+00   0.0%  0.000e+00   0.0%  0.000e+00        0.0%  6.000e+00   0.0% 
+ 9:              D0: 2.3401e-02   0.6%  0.0000e+00   0.0%  0.000e+00   0.0%  0.000e+00        0.0%  6.000e+00   0.0% 
+10:           Ddiag: 6.7449e-04   0.0%  0.0000e+00   0.0%  6.000e+00   0.2%  2.639e-01        0.2%  1.000e+01   0.1% 
+11:              FD: 3.8470e-01   9.5%  0.0000e+00   0.0%  2.000e+01   0.7%  3.335e-01        0.2%  1.550e+02   0.9% 
+12:           Trace: 2.0591e-02   0.5%  0.0000e+00   0.0%  2.000e+01   0.7%  3.335e-01        0.2%  1.250e+02   0.7% 
+13:           Solve: 8.3838e-01  20.7%  6.7573e+06  92.5%  1.076e+03  39.0%  5.671e+01       41.0%  1.191e+04  67.0% 
+14:         Density: 2.5422e+00  62.8%  5.4480e+05   7.5%  1.630e+03  59.1%  7.961e+01       57.5%  5.530e+03  31.1% 
+
+------------------------------------------------------------------------------------------------------------------------
+See the 'Profiling' chapter of the users' manual for details on interpreting output.
+Phase summary info:
+   Count: number of times phase was executed
+   Time and Flops: Max - maximum over all processors
+                   Ratio - ratio of maximum to minimum over all processors
+   Mess: number of messages sent
+   Avg. len: average message length (bytes)
+   Reduct: number of global reductions
+   Global: entire computation
+   Stage: stages of a computation. Set stages with PetscLogStagePush() and PetscLogStagePop().
+      %T - percent time in this phase         %F - percent flops in this phase
+      %M - percent messages in this phase     %L - percent message lengths in this phase
+      %R - percent reductions in this phase
+   Total Mflop/s: 10e-6 * (sum of flops over all processors)/(max time over all processors)
+------------------------------------------------------------------------------------------------------------------------
+
+
+      ##########################################################
+      #                                                        #
+      #                          WARNING!!!                    #
+      #                                                        #
+      #   This code was compiled with a debugging option,      #
+      #   To get timing results run ./configure                #
+      #   using --with-debugging=no, the performance will      #
+      #   be generally two or three times faster.              #
+      #                                                        #
+      ##########################################################
+
+
+Event                Count      Time (sec)     Flops                             --- Global ---  --- Stage ---   Total
+                   Max Ratio  Max     Ratio   Max  Ratio  Mess   Avg len Reduct  %T %F %M %L %R  %T %F %M %L %R Mflop/s
+------------------------------------------------------------------------------------------------------------------------
+
+--- Event Stage 0: Main Stage
+
+
+--- Event Stage 1: Input
+
+
+--- Event Stage 2: Initialize
+
+
+--- Event Stage 3: Enuclear
+
+
+--- Event Stage 4: Ereference
+
+
+--- Event Stage 5: Basisset
+
+
+--- Event Stage 6: getNnz
+
+
+--- Event Stage 7: getGammaAIJ
+
+VecSet                 1 1.0 1.7166e-05 1.4 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+MatAssemblyBegin       1 1.0 1.8909e-0331.0 0.00e+00 0.0 3.0e+00 9.4e+02 2.0e+00  0  0  0  1  0   9  0 43 94 10     0
+MatAssemblyEnd         1 1.0 9.2793e-04 1.0 0.00e+00 0.0 4.0e+00 4.6e+01 1.5e+01  0  0  0  0  0   8  0 57  6 71     0
+
+--- Event Stage 8: F0
+
+VecSet                 1 1.0 1.0967e-05 1.5 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+MatConvert             1 1.0 9.0814e-04 1.3 0.00e+00 0.0 0.0e+00 0.0e+00 2.0e+00  0  0  0  0  0   1  0  0  0 33     0
+MatAssemblyBegin       1 1.0 4.1670e-02413.2 0.00e+00 0.0 0.0e+00 0.0e+00 2.0e+00  1  0  0  0  0  15  0  0  0 33     0
+MatAssemblyEnd         1 1.0 4.3154e-05 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 2.0e+00  0  0  0  0  0   0  0  0  0 33     0
+MatGetValues         686 1.7 1.5166e-02 1.6 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   9  0  0  0  0     0
+MatGetRow             30 1.0 2.2674e-04 1.1 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+
+--- Event Stage 9: D0
+
+VecSet                 1 1.0 7.8678e-06 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+MatConvert             1 1.0 6.2895e-04 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 2.0e+00  0  0  0  0  0   3  0  0  0 33     0
+MatAssemblyBegin       1 1.0 8.6730e-03180.1 0.00e+00 0.0 0.0e+00 0.0e+00 2.0e+00  0  0  0  0  0  19  0  0  0 33     0
+MatAssemblyEnd         1 1.0 4.6968e-05 1.1 0.00e+00 0.0 0.0e+00 0.0e+00 2.0e+00  0  0  0  0  0   0  0  0  0 33     0
+MatGetValues         746 1.6 1.1929e-02 1.6 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0  41  0  0  0  0     0
+MatGetRow             30 1.0 1.4687e-04 1.1 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   1  0  0  0  0     0
+
+--- Event Stage 10: Ddiag
+
+VecSet                 2 1.0 1.5020e-05 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   2  0  0  0  0     0
+VecScatterBegin        1 1.0 8.7023e-05 4.8 0.00e+00 0.0 2.0e+00 2.4e+02 0.0e+00  0  0  0  0  0   8  0 33 66  0     0
+VecScatterEnd          1 1.0 5.7936e-05 5.3 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   5  0  0  0  0     0
+
+--- Event Stage 11: FD
+
+VecSet                15 1.0 1.2946e-04 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+MatConvert            10 1.0 6.1562e-03 1.1 0.00e+00 0.0 0.0e+00 0.0e+00 2.0e+01  0  0  0  0  0   2  0  0  0 13     0
+MatAssemblyBegin      10 1.0 1.4232e-01257.5 0.00e+00 0.0 0.0e+00 0.0e+00 2.0e+01  2  0  0  0  0  19  0  0  0 13     0
+MatAssemblyEnd        10 1.0 2.6352e-03 1.0 0.00e+00 0.0 2.0e+01 4.6e+01 8.0e+01  0  0  1  0  0   1  0100100 52     0
+MatGetValues       10740 1.6 1.8364e-01 1.7 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  4  0  0  0  0  38  0  0  0  0     0
+MatGetRow            600 1.0 3.0584e-03 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   1  0  0  0  0     0
+MatAXPY                5 1.0 1.0786e-02 1.0 0.00e+00 0.0 2.0e+01 4.6e+01 1.1e+02  0  0  1  0  1   3  0100100 71     0
+
+--- Event Stage 12: Trace
+
+VecSet                10 1.0 8.4639e-05 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+MatConvert             5 1.0 2.7466e-03 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 1.0e+01  0  0  0  0  0  13  0  0  0  8     0
+MatAssemblyBegin       5 1.0 3.6287e-04 1.7 0.00e+00 0.0 0.0e+00 0.0e+00 1.0e+01  0  0  0  0  0   1  0  0  0  8     0
+MatAssemblyEnd         5 1.0 2.3212e-03 1.0 0.00e+00 0.0 2.0e+01 4.6e+01 7.0e+01  0  0  1  0  0  11  0100100 56     0
+MatGetRow            600 1.0 3.1824e-03 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0  15  0  0  0  0     0
+MatAXPY                5 1.0 1.0507e-02 1.0 0.00e+00 0.0 2.0e+01 4.6e+01 1.1e+02  0  0  1  0  1  51  0100100 88     0
+
+--- Event Stage 13: Solve
+
+VecCopy               10 1.0 1.8501e-04 1.7 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+VecSet               538 1.0 4.4620e-03 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   1  0  0  0  0     0
+VecScatterBegin     1056 1.0 1.8097e-02 1.1 0.00e+00 0.0 1.1e+03 1.5e+02 5.3e+02  0  0 38 41  3   2  0 98100  4     0
+VecScatterEnd        528 1.0 4.9496e-03 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   1  0  0  0  0     0
+MatSolve             528 1.0 1.1054e-01 1.0 0.00e+00 0.0 1.1e+03 1.5e+02 5.5e+02  3  0 39 41  3  13  0100100  5     0
+MatCholFctrSym         5 1.0 4.3192e-03 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 3.0e+01  0  0  0  0  0   1  0  0  0  0     0
+MatCholFctrNum        10 1.0 5.0950e-03 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   1  0  0  0  0     0
+MatCopy                5 1.0 3.1228e-03 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 1.0e+01  0  0  0  0  0   0  0  0  0  0     0
+MatConvert             5 1.0 2.7540e-03 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 1.0e+01  0  0  0  0  0   0  0  0  0  0     0
+MatAssemblyBegin      15 1.0 2.7680e-04 1.5 0.00e+00 0.0 0.0e+00 0.0e+00 1.0e+01  0  0  0  0  0   0  0  0  0  0     0
+MatAssemblyEnd        15 1.0 5.6458e-04 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+MatGetRow            150 1.0 8.0490e-04 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+MatGetRowIJ            5 1.0 2.8133e-05 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+MatGetOrdering         5 1.0 1.4513e-03 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+MatZeroEntries         5 1.0 1.4520e-04 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+PCSetUp               10 1.0 1.6140e-02 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 8.5e+01  0  0  0  0  0   2  0  0  0  1     0
+PCApply              528 1.0 1.1773e-01 1.0 0.00e+00 0.0 1.1e+03 1.5e+02 5.5e+02  3  0 39 41  3  14  0100100  5     0
+KSPSetUp              10 1.0 6.7711e-05 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+KSPSolve             528 1.0 1.7185e-01 1.0 0.00e+00 0.0 1.1e+03 1.5e+02 1.6e+03  4  0 39 41  9  20  0100100 13     0
+EPSSetUp               5 1.0 2.9085e-02 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 5.1e+02  1  0  0  0  3   3  0  0  0  4     0
+EPSSolve               5 1.0 8.2327e-01 1.0 3.38e+06 1.0 1.1e+03 1.5e+02 1.2e+04 20 93 39 41 66  98100100100 99     8
+STSetUp                5 1.0 1.7811e-02 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 1.5e+02  0  0  0  0  1   2  0  0  0  1     0
+STApply              528 1.0 2.3403e-01 1.0 0.00e+00 0.0 1.1e+03 1.5e+02 1.6e+03  6  0 39 41  9  28  0100100 13     0
+STMatSolve           528 1.0 2.2531e-01 1.0 0.00e+00 0.0 1.1e+03 1.5e+02 1.6e+03  6  0 39 41  9  27  0100100 13     0
+BVCreate              10 1.0 1.5335e-03 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 1.3e+02  0  0  0  0  1   0  0  0  0  1     0
+BVCopy                 5 1.0 2.2030e-04 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 1.0e+01  0  0  0  0  0   0  0  0  0  0     0
+BVMult               615 1.0 1.6930e-01 1.0 2.20e+06 1.0 0.0e+00 0.0e+00 1.2e+03  4 60  0  0  7  20 65  0  0 10    26
+BVDot                610 1.0 1.6091e-01 1.0 1.15e+06 1.0 0.0e+00 0.0e+00 6.1e+02  4 32  0  0  3  19 34  0  0  5    14
+BVOrthogonalize      305 1.0 3.5319e-01 1.0 2.27e+06 1.0 0.0e+00 0.0e+00 4.9e+03  9 62  0  0 28  42 67  0  0 41    13
+BVScale              528 1.0 1.3117e-01 1.0 1.58e+04 1.0 0.0e+00 0.0e+00 0.0e+00  3  0  0  0  0  16  0  0  0  0     0
+BVNorm               237 1.0 3.1602e-03 1.0 1.42e+04 1.0 0.0e+00 0.0e+00 2.4e+02  0  0  0  0  1   0  0  0  0  2     9
+BVSetRandom            5 1.0 7.9012e-04 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 1.0e+01  0  0  0  0  0   0  0  0  0  0     0
+DSSolve                5 1.0 4.2632e-03 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   1  0  0  0  0     0
+DSVectors            300 1.0 1.2519e-03 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+DSOther                5 1.0 8.7910e-03 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   1  0  0  0  0     0
+
+--- Event Stage 14: Density
+
+VecNorm              200 1.0 2.9156e-03 1.0 1.20e+04 1.0 0.0e+00 0.0e+00 2.0e+02  0  0  0  0  1   0  4  0  0  4     8
+VecCopy              600 1.0 6.3605e-03 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+VecSet               420 1.0 3.4840e-03 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+VecAXPY              200 1.0 5.2588e-02 1.0 1.20e+04 1.0 0.0e+00 0.0e+00 0.0e+00  1  0  0  0  0   2  4  0  0  0     0
+VecScatterBegin      405 1.0 5.1370e-03 1.0 0.00e+00 0.0 8.1e+02 2.1e+02 0.0e+00  0  0 29 44  0   0  0 50 77  0     0
+VecScatterEnd        405 1.0 3.8428e-03 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+MatMult              200 1.0 1.2882e-02 1.0 3.04e+05 1.6 4.0e+02 1.8e+02 0.0e+00  0  7 14 18  0   1 91 25 32  0    39
+MatConvert             5 1.0 3.0634e-03 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 1.0e+01  0  0  0  0  0   0  0  0  0  0     0
+MatAssemblyBegin     200 1.0 8.0349e-0171.0 0.00e+00 0.0 0.0e+00 0.0e+00 4.0e+02 10  0  0  0  2  16  0  0  0  7     0
+MatAssemblyEnd       200 1.0 8.3652e-03 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 4.0e+02  0  0  0  0  2   0  0  0  0  7     0
+MatGetRow           6000 1.0 3.1648e-02 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  1  0  0  0  0   1  0  0  0  0     0
+BVCopy               400 1.0 1.7572e-02 1.0 0.00e+00 0.0 0.0e+00 0.0e+00 8.0e+02  0  0  0  0  5   1  0  0  0 14     0
+------------------------------------------------------------------------------------------------------------------------
+
+Memory usage is given in bytes:
+
+Object Type          Creations   Destructions     Memory  Descendants' Mem.
+Reports information only for process 0.
+
+--- Event Stage 0: Main Stage
+
+
+--- Event Stage 1: Input
+
+
+--- Event Stage 2: Initialize
+
+
+--- Event Stage 3: Enuclear
+
+
+--- Event Stage 4: Ereference
+
+
+--- Event Stage 5: Basisset
+
+
+--- Event Stage 6: getNnz
+
+
+--- Event Stage 7: getGammaAIJ
+
+           Index Set     2              2         1668     0
+              Vector     2              1         1592     0
+      Vector Scatter     1              0            0     0
+              Matrix     3              0            0     0
+
+--- Event Stage 8: F0
+
+              Vector     1              0            0     0
+      Vector Scatter     1              0            0     0
+              Matrix     3              0            0     0
+
+--- Event Stage 9: D0
+
+              Vector     1              0            0     0
+      Vector Scatter     1              0            0     0
+              Matrix     3              0            0     0
+
+--- Event Stage 10: Ddiag
+
+           Index Set     2              2         2032     0
+              Vector     2              1         1832     0
+      Vector Scatter     1              1         1328     0
+
+--- Event Stage 11: FD
+
+           Index Set    10             10         8340     0
+              Vector    20             14        23800     0
+      Vector Scatter    15              9         9792     0
+              Matrix    45             27       164412     0
+
+--- Event Stage 12: Trace
+
+           Index Set    10             10         8340     0
+              Vector    15             15        25560     0
+      Vector Scatter    10             10        10880     0
+              Matrix    30             30       182660     0
+
+--- Event Stage 13: Solve
+
+         PetscRandom    10              8         4992     0
+           Index Set    45             44        36304     0
+              Vector   115            120       455552     0
+      Vector Scatter    15             16        16608     0
+              Matrix    35             40       331600     0
+      Preconditioner     5              4         4608     0
+       Krylov Solver     5              4         4576     0
+          EPS Solver    10              8        36896     0
+  Spectral Transform     5              4         3232     0
+       Basis Vectors    20             18       176912     0
+       Direct Solver    10              8       379008     0
+              Region    10              8         5184     0
+
+--- Event Stage 14: Density
+
+              Viewer     1              0            0     0
+         PetscRandom     0              2         1248     0
+           Index Set    20             21        21096     0
+              Vector    65             70       152056     0
+      Vector Scatter   210            218       286184     0
+              Matrix    15             37       241596     0
+      Preconditioner     0              1         1152     0
+       Krylov Solver     0              1         1144     0
+          EPS Solver     0              2         8888     0
+  Spectral Transform     0              1          808     0
+       Basis Vectors     0              2         2048     0
+       Direct Solver     0              2        94752     0
+              Region     0              2         1296     0
+========================================================================================================================
+Average time to get PetscTime(): 9.53674e-08
+Average time for MPI_Barrier(): 6.19888e-07
+Average time for zero size MPI_Send(): 2.02656e-06
+#PETSc Option Table entries:
+-debug 0
+-eps_interval -7000,700
+-eps_krylovschur_detect_zeros TRUE
+-eps_krylovschur_partitions 1
+-eps_purify 1
+-eps_tol 1.e-8
+-log_summary
+-mat_mumps_icntl_13 1
+-mat_mumps_icntl_23 0
+-mat_mumps_icntl_24 1
+-maxdist 5.5
+-maxiter 6
+-method mindo3AIJ
+-scfthresh 1.e-7
+-sips False
+-solve 1
+-st_ksp_type preonly
+-st_pc_factor_mat_solver_package mumps
+-st_pc_type cholesky
+-st_type sinvert
+-staticsubint False
+-xyz ./XYZ/004.xyz
+#End of PETSc Option Table entries
+Compiled without FORTRAN kernels
+Compiled with full precision matrices (default)
+sizeof(short) 2 sizeof(int) 4 sizeof(long) 8 sizeof(void*) 8 sizeof(PetscScalar) 8 sizeof(PetscInt) 4
+Configure options: --download-cmake=0 --download-elemental=0 --downloadpetsc4py=0 --download-hypre=0 --download-metis=0 --with-mpi-dir=/usr/local/Cellar/open-mpi/1.8.4_1/ --download-mumps=1 --download-parmetis=0 --download-parms=0 --download-ptscotch=1 --download-scalapack=1 --download-suitesparse=0 --download-sundials=0 --download-superlu=0 --download-superlu_dist=0 --download-triangle=0 --with-debugging=1 --with-sowing=1 --with-shared-libraries=1 PETSC_ARCH=dev_debug
+-----------------------------------------
+Libraries compiled on Tue Aug  4 12:03:39 2015 on Keceli-RMBP.local 
+Machine characteristics: Darwin-13.4.0-x86_64-i386-64bit
+Using PETSc directory: /Volumes/s/keceli/lib/petsc
+Using PETSc arch: dev_debug
+-----------------------------------------
+
+Using C compiler: /usr/local/Cellar/open-mpi/1.8.4_1/bin/mpicc  -fPIC -Wall -Wwrite-strings -Wno-strict-aliasing -Wno-unknown-pragmas -g3 -O0  ${COPTFLAGS} ${CFLAGS}
+Using Fortran compiler: /usr/local/Cellar/open-mpi/1.8.4_1/bin/mpif90  -fPIC -Wall -Wno-unused-variable -ffree-line-length-0 -Wno-unused-dummy-argument -g -O0   ${FOPTFLAGS} ${FFLAGS} 
+-----------------------------------------
+
+Using include paths: -I/Volumes/s/keceli/lib/petsc/dev_debug/include -I/Volumes/s/keceli/lib/petsc/include -I/Volumes/s/keceli/lib/petsc/include -I/Volumes/s/keceli/lib/petsc/dev_debug/include -I/opt/X11/include -I/usr/local/Cellar/open-mpi/1.8.4_1/include
+-----------------------------------------
+
+Using C linker: /usr/local/Cellar/open-mpi/1.8.4_1/bin/mpicc
+Using Fortran linker: /usr/local/Cellar/open-mpi/1.8.4_1/bin/mpif90
+Using libraries: -Wl,-rpath,/Volumes/s/keceli/lib/petsc/dev_debug/lib -L/Volumes/s/keceli/lib/petsc/dev_debug/lib -lpetsc -Wl,-rpath,/Volumes/s/keceli/lib/petsc/dev_debug/lib -L/Volumes/s/keceli/lib/petsc/dev_debug/lib -lcmumps -ldmumps -lsmumps -lzmumps -lmumps_common -lpord -lscalapack -llapack -lblas -lptesmumps -lptscotch -lptscotcherr -lscotch -lscotcherr -Wl,-rpath,/opt/X11/lib -L/opt/X11/lib -lX11 -lssl -lcrypto -Wl,-rpath,/usr/local/opt/libevent/lib -L/usr/local/opt/libevent/lib -Wl,-rpath,/usr/local/Cellar/open-mpi/1.8.4_1/lib -L/usr/local/Cellar/open-mpi/1.8.4_1/lib -Wl,-rpath,/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/6.0/lib/darwin -L/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/6.0/lib/darwin -lmpi_usempif08 -lmpi_usempi_ignore_tkr -lmpi_mpifh -lgfortran -Wl,-rpath,/usr/local/Cellar/gcc/5.1.0/lib/gcc/5/gcc/x86_64-apple-darwin13.4.0/5.1.0 -L/usr/local/Cellar/gcc/5.1.0/lib/gcc/5/gcc/x86_64-apple-darwin13.4.0/5.1.0 -Wl,-rpath,/usr/local/Cellar/gcc/5.1.0/lib/gcc/5 -L/usr/local/Cellar/gcc/5.1.0/lib/gcc/5 -lgfortran -lgcc_ext.10.5 -lquadmath -lm -lclang_rt.osx -lmpi_cxx -lc++ -Wl,-rpath,/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/../lib/clang/6.0/lib/darwin -L/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/../lib/clang/6.0/lib/darwin -lclang_rt.osx -lm -lz -Wl,-rpath,/usr/local/opt/libevent/lib -L/usr/local/opt/libevent/lib -Wl,-rpath,/usr/local/Cellar/open-mpi/1.8.4_1/lib -L/usr/local/Cellar/open-mpi/1.8.4_1/lib -ldl -lmpi -lSystem -Wl,-rpath,/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/../lib/clang/6.0/lib/darwin -L/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/../lib/clang/6.0/lib/darwin -lclang_rt.osx -ldl 
+-----------------------------------------
+
