@@ -256,25 +256,81 @@ def writeMatToBinFile(A,filename):
         pass
     return 0
 
-def getTraceProductAIJslow(A,B):
-    N=A.getSize()[0]
+def getTraceProduct(A,B):
+    """
+    Returns the trace of the product of A and B where A and B are same shape 2D numpy arrays.
+    """
+  #  if len(A) != len(B):print "length are not equal", len(A),len(B)
+    N=A.shape[0]
     temp=0.0
-    rstart, rend = A.getOwnershipRange()
-    rstartB, rendB = B.getOwnershipRange()
-    for i in xrange(rstart,rend):
-        temp += A[i,i] * B[i,i]
-        for j in xrange(i+1,N):
-            temp += 2 * A[i,j]*B[i,j]
-    return MPI.COMM_WORLD.allreduce(temp,op=MPI.SUM) 
+    for i in xrange(N):
+        for j in xrange(N):
+            temp += A[i,j]*B[j,i]
+    return temp
+
+def getTraceProductCSR(A,B):
+    """
+    Returns the trace of the product of A and B where A and B are scipy CSR matrices.
+    """
+    nnzA=A.nnz
+    nnzB=B.nnz
+    tmp=0.
+    if nnzA==nnzB:
+        for i in xrange(nnzB):
+            tmp+=A.data[i]*B.data[i]
+    elif nnzB < nnzA:
+        B=B.tocoo()
+        for i in xrange(nnzB):
+            tmp+= B.data[i]*A[B.row[i],B.col[i]]
+    else:
+        A=A.tocoo()
+        for i in xrange(nnzA):
+            tmp+= A.data[i]*B[A.row[i],A.col[i]]
+    return tmp
 
 def getTraceProductAIJ(A,B):
+    """
+    Returns the trace of the product which is:
+    sum_i sum_j A(i,j) B(j,i), 
+    so it is simpler than taking the product first and then computing the trace.
+    """
     temp=0.0
     rstart, rend = A.getOwnershipRange()
     for i in xrange(rstart,rend):
         cols,a = A.getRow(i)
-        cols,b = A.getRow(i)
+        cols,b = B.getRow(i)
         temp += a.dot(b)
-    return temp
+    return MPI.COMM_WORLD.allreduce(temp,op=MPI.SUM)
+
+def getTraceProductAIJslow(A,B):
+    """
+    Returns the trace of the product which is:
+    sum_i sum_j A(i,j) B(j,i), 
+    so it is simpler than taking the product first and then computing the trace.
+    """
+    N=A.getSize()[0]
+    temp=0.0
+    rstart, rend = A.getOwnershipRange()
+    for i in xrange(rstart,rend):
+        temp += A[i,i] * B[i,i]
+        for j in xrange(i+1,N):
+           #A and B are symmetric
+            temp += 2 * A[i,j]*B[i,j]
+    return MPI.COMM_WORLD.allreduce(temp,op=MPI.SUM)
+
+def getTrace(A):
+    """
+    Returns the trace of A i.e. sum_i A_{ii}
+    Note:
+    Missing in petsc4py, should be easy to add. 
+    """
+    temp=0.0
+    rstart, rend = A.getOwnershipRange() 
+    for i in xrange(rstart,rend):
+        temp += A[i,i]
+    return MPI.COMM_WORLD.allreduce(temp,op=MPI.SUM)
+
+
 
 def getSeqAIJ(A):
     """

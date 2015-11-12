@@ -9,83 +9,105 @@ import numpy as np
 try:
     import scipy.sparse
 except:
-    Print("no scipy modules")
+    Print("scipy not found")
     pass
+try:
+    import sips
+except:
+    Print("sips not found")
+    pass    
 
-def getNumberOfSubIntervals(E):
-    return E.getKrylovSchurPartitions()
+def getNumberOfSubIntervals(eps):
+    return eps.getKrylovSchurPartitions()
 
-def getSubIntervals(eigs, nint, bufferratio=0.5):
+def getSubIntervals(eigs, nsub, bufferratio=0.5):
     """
-    Given a list of eigenvalues, (eigs) and number of intervals, (nint) returns the boundaries
-    for subintervals such that each interval has an average number of eigenvalues.
+    Given a list of eigenvalues, (eigs) and number of subintervals (nsub), 
+    returns the boundaries for subintervals such that each subinterval has an average number of eigenvalues.
     Doesn't skip gaps, SLEPc doesn't support it, yet.
     range of eigs * bufferratio gives a buffer zone for leftmost and rightmost boundaries.
     """
     eigs = sorted(np.array(eigs))
     neigs = len(eigs)
-    mean = neigs / nint
-    remainder = neigs % nint
+    mean = neigs / nsub
+    remainder = neigs % nsub
     irange = eigs[-1] - eigs[0]
     ibuffer = irange * bufferratio
-    subint = np.zeros(nint + 1)
+    subint = np.zeros(nsub + 1)
     subint[0] = eigs[0] - ibuffer
-    for i in xrange(1, nint):
+    for i in xrange(1, nsub):
         subint[i] = (eigs[mean * i] + eigs[mean * i - 1]) / 2.
         if remainder > 0 and i > 1:
             subint[i] = (eigs[mean * i + 1] + eigs[mean * i]) / 2.
             remainder = remainder - 1
-    subint[nint] = eigs[-1] + ibuffer
+    subint[nsub] = eigs[-1] + ibuffer
     Print("subint")
     Print(subint[0],subint[-1])
     return subint
 
-def getEigenSolutions(A, B=None):
-        
-    sizeA = A.getSize()
-    D     = A.duplicate()
-    cols  = D.getRowIJ()[1]
-    Print("Matrix size: %i,%i" % (sizeA[0],sizeA[1]))
-    xr, tmp = A.getVecs()
-    xi, tmp = A.getVecs()
 
-    # Setup the eigensolver
-    E = SLEPc.EPS().create()
-    E.setOperators(A,B)
-    if B: problem_type=SLEPc.EPS.ProblemType.GHEP
-    else: problem_type=SLEPc.EPS.ProblemType.HEP
-    E.setProblemType( problem_type )
-    E.setFromOptions()
+def getDensityMatrix(eps,T,nocc):
+    """
+    nocc  = Number of occupied orbitals = N_e / 2 = Number of electrons / 2
+    D = One-electron density matrix. The sparsity pattern is the same as T.
+    eigarray = An array of length N_o, containing the eigenvalues 
+    D_{\mu\nu} = 2 \sum_i^N_o x_{i\mu} x_{j\nu}
+    x_i is the i'th eigenvector (ordered by eigenvalues from smallest to largest) Only first N_o is required
+    Returns D, and eigarray
+    """
+    import constants as const
 
-    # Solve the eigensystem
-    E.solve()
+    D       = T.duplicate()
+    xr,tmp  = T.getVecs()
+    xi,tmp  = T.getVecs()
+    xr_size = xr.getSize()
+   # eigarray = np.zeros(nocc)
+    seqx = PETSc.Vec()
+    seqx.createSeq(xr_size,comm=PETSc.COMM_SELF)
+    fromIS = PETSc.IS().createGeneral(range(xr_size),comm=PETSc.COMM_SELF)
+    toIS = PETSc.IS().createGeneral(range(xr_size),comm=PETSc.COMM_SELF)
+    for m in xrange(nocc):
+        k = eps.getEigenpair(m, xr, xi)
+     #   eigarray[m] = k.real
+        sctr=PETSc.Scatter().create(xr,fromIS,seqx,toIS)
+        sctr.begin(xr,seqx,addv=PETSc.InsertMode.INSERT,mode=PETSc.ScatterMode.FORWARD)
+        sctr.end(xr,seqx,addv=PETSc.InsertMode.INSERT,mode=PETSc.ScatterMode.FORWARD)
+        Istart, Iend = D.getOwnershipRange()
+        for i in xrange(Istart,Iend):
+            cols = T.getRow(i)[0] 
+            values = [ 2.0 * seqx[i] * seqx[j] for j in cols]
+            D.setValues(i,cols,values,addv=PETSc.InsertMode.ADD_VALUES)
+        D.assemble()
+        error = eps.computeError(m)
+        if error > 1.e-6: Print(" %12g" % ( error)) 
+    if k.imag != 0.0:
+          Print("Complex eigenvalue dedected: %9f%+9f j  %12g" % (k.real, k.imag, error))
+  #  HOMO = k.real
+  #  LUMO = eps.getEigenpair(nocc, xr, xi).real
+  #  eigarray[nocc]=LUMO
+  #  gap  = LUMO - HOMO
+  #  Print("LUMO-HOMO      = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(gap*const.ev2kcal,gap,gap*const.ev2hartree))
+    return D #,eigarray
 
-    Print("")
-    its = E.getIterationNumber()
-    Print("Number of iterations of the method: %i" % its)
-    sol_type = E.getType()
-    Print("Solution method: %s" % sol_type)
-    nev, ncv, mpd = E.getDimensions()
-    Print("Number of requested eigenvalues: %i" % nev)
-    tol, maxit = E.getTolerances()
-    Print("Stopping condition: tol=%.4g, maxit=%d" % (tol, maxit))
-    nconv = E.getConverged()
-    Print("Number of converged eigenpairs: %d" % nconv)
-    if nconv > 0:
-        Print("")
-        Print("        k          ||Ax-kx||/||kx|| ")
-        Print("----------------- ------------------")
-        for i in range(nconv):
-            k = E.getEigenpair(i, xr, xi)
-            error = E.computeError(i)
-            if k.imag != 0.0:
-              Print(" %9f%+9f j  %12g" % (k.real, k.imag, error))
-            else:
-              Print(" %12f       %12g" % (k.real, error))
-        Print("")
-    return 
+def getSIPsDensityMatrix(eps,nocc):
+    """
+    PetscErrorCode EPSCreateDensityMat(EPS eps,PetscReal *weight,PetscInt idx_start,PetscInt idx_end,Mat *P);
 
-def getDensityMatrix(E,T,nocc):
+    """
+    A= sips.getDensityMat(eps,1,nocc)
+
+    return A
+
+def getDensityMatrixLocal(eps,T,nocc):
+    """
+    nocc  = Number of occupied orbitals = N_e / 2 = Number of electrons / 2
+    D = One-electron density matrix. The sparsity pattern is the same as T.
+    eigarray = An array of length N_o, containing the eigenvalues 
+    D_{\mu\nu} = 2 \sum_i^N_o x_{i\mu} x_{j\nu}
+    x_i is the i'th eigenvector (ordered by eigenvalues from smallest to largest) Only first N_o is required
+    Returns D, and eigarray
+    Assumes that e
+    """
     import constants as const
 
     D       = T.duplicate()
@@ -98,7 +120,7 @@ def getDensityMatrix(E,T,nocc):
     fromIS = PETSc.IS().createGeneral(range(xr_size),comm=PETSc.COMM_SELF)
     toIS = PETSc.IS().createGeneral(range(xr_size),comm=PETSc.COMM_SELF)
     for m in xrange(nocc):
-        k = E.getEigenpair(m, xr, xi)
+        k = eps.getEigenpair(m, xr, xi)
         eigarray[m] = k.real
         sctr=PETSc.Scatter().create(xr,fromIS,seqx,toIS)
         sctr.begin(xr,seqx,addv=PETSc.InsertMode.INSERT,mode=PETSc.ScatterMode.FORWARD)
@@ -110,97 +132,17 @@ def getDensityMatrix(E,T,nocc):
             values = [ 2.0 * seqx[i] * seqx[j] for j in cols]
             D.setValues(i,cols,values,addv=PETSc.InsertMode.ADD_VALUES)
             D.assemble()
-        error = E.computeError(m)
+        error = eps.computeError(m)
         if error > 1.e-6: Print(" %12g" % ( error)) 
     if k.imag != 0.0:
           Print("Complex eigenvalue dedected: %9f%+9f j  %12g" % (k.real, k.imag, error))
   #  HOMO = k.real
-  #  LUMO = E.getEigenpair(nocc, xr, xi).real
+  #  LUMO = eps.getEigenpair(nocc, xr, xi).real
   #  eigarray[nocc]=LUMO
   #  gap  = LUMO - HOMO
   #  Print("LUMO-HOMO      = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(gap*const.ev2kcal,gap,gap*const.ev2hartree))
     return D,eigarray
 
-def getDensityMatrix1(A,nel, B=None):
-    import constants as const
-
-    sizeA = A.getSize()
-    D     = A.duplicate()
-    cols  = D.getRowIJ()[1]
- #   Print("Matrix size: %i,%i" % (sizeA[0],sizeA[1]))
- #   Print("Matrix local size: %i,%i" % (A.getLocalSize()[0],A.getLocalSize()[1]))
-    # Create the results vectors
-    xr, tmp = A.getVecs()
-    xi, tmp = A.getVecs()
-    xr_size = xr.getSize()
-    xr_localsize = xr.getLocalSize()
-  #  Print("Vector size: %i" % (xr_size))
-  #  Print("Vector local size: %i" % (xr.getLocalSize()))
-    # Setup the eigensolver
-    """
-    Here the comm should be the same as the comm that has A
-    """
-    E = SLEPc.EPS().create(comm=A.getComm())
-    E.setOperators(A,B)
-    E.setDimensions(3,PETSc.DECIDE)
-    if B: problem_type=SLEPc.EPS.ProblemType.GHEP
-    else: problem_type=SLEPc.EPS.ProblemType.HEP
-    E.setProblemType( problem_type )
-    E.setFromOptions()
-
-    # Solve the eigensystem
-    E.solve()
-
-    #Print("")
-    its = E.getIterationNumber()
-    #Print("Number of iterations of the method: %i" % its)
-    sol_type = E.getType()
-    #Print("Solution method: %s" % sol_type)
-    nev, ncv, mpd = E.getDimensions()
-    tol, maxit = E.getTolerances()
-    #Print("Stopping condition: tol=%.4g, maxit=%d" % (tol, maxit))
-    nconv = E.getConverged()
-   # islice, nconvlocal,xr = E.getKrylovSchurSubcommInfo()
-   # subcomm = xr.getComm()
-    if nconv<nev:
-        Print("Number of requested-converged eigenpairs: {0}-{1}".format(nev,nconv))
-    seqx = PETSc.Vec()
-    seqx.createSeq(xr_size,comm=PETSc.COMM_SELF)
-    seqx.setFromOptions()
-
-   # seqx.set(0.0)
-    fromIS = PETSc.IS().createGeneral(range(xr_size),comm=PETSc.COMM_SELF)
-    toIS = PETSc.IS().createGeneral(range(xr_size),comm=PETSc.COMM_SELF)
-    if nconv > nel/2 :
-        for m in xrange(nel/2):
-            k = E.getEigenpair(m, xr, xi)
-          #  k = E.getKrylovSchurSubcommPairs(m, veclocal)
-            sctr=PETSc.Scatter().create(xr,fromIS,seqx,toIS)
-            sctr.begin(xr,seqx,addv=PETSc.InsertMode.INSERT,mode=PETSc.ScatterMode.FORWARD)
-            sctr.end(xr,seqx,addv=PETSc.InsertMode.INSERT,mode=PETSc.ScatterMode.FORWARD)
-            Istart, Iend = D.getOwnershipRange()
-   #         for ii in range(xr.getSize()):print xr[ii]
-            for i in xrange(Istart,Iend):
-                cols = D.getRow(i)[0] #maybe restore later
-             #   print m,i,'cols',cols
-                ncols = len(cols)
-                values = [ 2.0 * seqx[i] * seqx[j] for j in cols]
-    #            print 'eig', m,k,'row and cols',i,cols,':',values
-                D.setValues(i,cols,values,addv=PETSc.InsertMode.ADD_VALUES)
-                D.assemble()
-            error = E.computeError(m)
-            if error > 1.e-6: Print(" %12g" % ( error)) 
-        if k.imag != 0.0:
-              Print("Complex eigenvalue dedected: %9f%+9f j  %12g" % (k.real, k.imag, error))
-        HOMO = k.real
-        LUMO = E.getEigenpair(nel/2, xr, xi).real
-        gap  = LUMO - HOMO
-        Print("LUMO-HOMO      = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(gap*const.ev2kcal,gap,gap*const.ev2hartree))
-        return D
-    else:
-        Print("Not enough eigenvalues in the given interval")
-        import sys
-        sys.exit()  
 
 def solveEPS(A,B=None,printinfo=False,returnoption=0,checkerror=False,interval=[0],subintervals=[0]):
     """
@@ -218,59 +160,74 @@ def solveEPS(A,B=None,printinfo=False,returnoption=0,checkerror=False,interval=[
         Returns SLEPc EPS object, 
         Number of converged eigenvalues
         An array of converged eigenvalues     
+    returnoption 3:
+        Returns SLEPc EPS object, 
+        Number of converged eigenvalues
+        An array of converged eigenvalues     
         A dense matrix of eigenvectors   
     """
-    E = SLEPc.EPS().create(comm=A.getComm())
-    E.setOperators(A,B)
+    eps = SLEPc.EPS().create(comm=A.getComm())
+    eps.setOperators(A,B)
     if B: problem_type=SLEPc.EPS.ProblemType.GHEP
     else: problem_type=SLEPc.EPS.ProblemType.HEP
-    E.setProblemType( problem_type )
-    E.setFromOptions()
+    eps.setProblemType( problem_type )
+    eps.setFromOptions()
     if any(interval)==2:
-        E.setInterval(interval[0],interval[1])
+        eps.setInterval(interval[0],interval[1])
     if any(subintervals):
-        E.setInterval(subintervals[0],subintervals[-1])
-        E.setKrylovSchurPartitions(len(subintervals)-1)
-        E.setKrylovSchurSubintervals(subintervals)    
-    E.solve()
-    neig = E.getConverged()
+        eps.setInterval(subintervals[0],subintervals[-1])
+        eps.setKrylovSchurPartitions(len(subintervals)-1)
+        eps.setKrylovSchurSubintervals(subintervals)    
+    eps.solve()
+    nconv = eps.getConverged()
 
     if printinfo:
-        its = E.getIterationNumber()
-        sol_type = E.getType()
-        nev, ncv, mpd = E.getDimensions()
-        tol, maxit = E.getTolerances()
+        its = eps.getIterationNumber()
+        sol_type = eps.getType()
+        nev, ncv, mpd = eps.getDimensions()
+        tol, maxit = eps.getTolerances()
         
         Print("Number of iterations of the method: %i" % its)
         Print("Solution method: %s" % sol_type)
         Print("Stopping condition: tol=%.4g, maxit=%d" % (tol, maxit))
-    if neig==0:
+    if nconv==0:
         Print("No eigenvalues found")
-        return E, neig
+        return eps, nconv
     elif returnoption==0:
-        return E, neig
+        return eps, nconv
     elif returnoption == 1:
-        eigarray=np.zeros(neig)
-        for i in range(neig):
-            k = E.getEigenvalue(i)
+        eigarray=np.zeros(nconv)
+        for i in range(nconv):
+            k = eps.getEigenvalue(i)
             eigarray[i]=k.real
             if checkerror:
-                error = E.computeError(i)
+                error = eps.computeError(i)
                 if error > 1.e-6: Print("Eigenvalue {0} has error {1}".format(k,error)) 
-        return E, neig, eigarray
+        return eps, nconv, eigarray
     elif returnoption == 2:
-        eigarray=np.zeros(neig)
-        eigmat=np.zeros((neig,A.getSize()[0]))
+        eigarray=np.zeros(nconv)
+#        sliceindex, nconv_local, = eps.getKrylovSchurSubcommInfo()
+
+        for i in range(nconv):
+            k = eps.getEigenpair(i,None,None)
+            eigarray[i]=k.real
+            if checkerror:
+                error = eps.computeError(i)
+                if error > 1.e-6: Print("Eigenvalue {0} has error {1}".format(k,error)) 
+        return eps, nconv, eigarray
+    elif returnoption == 3:
+        eigarray=np.zeros(nconv)
+        eigmat=np.zeros((nconv,A.getSize()[0]))
         xr, tmp = A.getVecs()
         xi, tmp = A.getVecs()
         for i in range(nconv):
-            k = E.getEigenpair(i,xr,xi)
+            k = eps.getEigenpair(i,xr,xi)
             eigarray[i]=k.real
             eigmat[i,:]=xr
             if checkerror:
-                error = E.computeError(i)
+                error = eps.computeError(i)
                 if error > 1.e-6: Print("Eigenvalue {0} has error {1}".format(k,error)) 
-        return E, neig, eigarray,eigmat
+        return eps, nconv, eigarray,eigmat
             
 def solve_HEP(A, B=None,problem_type=SLEPc.EPS.ProblemType.HEP):
     sizeA= A.getSize()

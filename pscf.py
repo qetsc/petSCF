@@ -79,46 +79,6 @@ def mkdens(c,nstart,nstop):
     Dmat = np.dot(d,d.T)
     return Dmat
 
-def getTraceProduct(A,B):
-    """
-    Returns the trace of the product of A and B where A and B are same shape 2D numpy arrays.
-    """
-  #  if len(A) != len(B):print "length are not equal", len(A),len(B)
-    N=A.shape[0]
-    temp=0.0
-    for i in xrange(N):
-        for j in xrange(N):
-            temp += A[i,j]*B[j,i]
-    return temp
-
-def getTraceProduct1(A,B):
-    """
-    Returns the trace of the product of A and B where A and B are same shape 2D numpy arrays.
-    """
-    #if len(A) != len(B):print "lengths are not equal", len(A),len(B)
-    return sum(sum(A*B))
-
-def getTraceProductCSR(A,B):
-    """
-    Returns the trace of the product of A and B where A and B are scipy CSR matrices.
-    """
-    nnzA=A.nnz
-    nnzB=B.nnz
-    tmp=0.
-    if nnzA==nnzB:
-        for i in xrange(nnzB):
-            tmp+=A.data[i]*B.data[i]
-    elif nnzB < nnzA:
-        B=B.tocoo()
-        for i in xrange(nnzB):
-            tmp+= B.data[i]*A[B.row[i],B.col[i]]
-    else:
-        A=A.tocoo()
-        for i in xrange(nnzA):
-            tmp+= A.data[i]*B[A.row[i],A.col[i]]
-    return tmp
-
-
 def fetch_jints(Ints,i,j,nbf):
     """
     Not done yet
@@ -221,65 +181,6 @@ def rhf(qmol,basisset,spfilter,maxiter,scfthresh):
     stage.pop()
     return
 
-def getDensityMatrixReplicated(A,nel, B=None):
-    """
-    The way spectrum slicing works in SLEPc doesn't allow to start with a matrix in subcomm.
-    That is the current version will not scale due to collective operations like MatCreateRedundantMatrix
-    """
-    rank=PETSc.COMM_WORLD.rank
-    sizeA = A.getSize()
-    Print("Matrix size: %i,%i" % (sizeA[0],A.getLocalSize()[1]))
-    D     = A.duplicate()
-    E = SLEPc.EPS().create(comm=A.getComm())
-    E.setOperators(A,B)
-    E.setProblemType(problem_type)
-    E.setFromOptions()
-    E.solve()
-   # F,G = E.getOperators()
-   # Print("Operator size: %i,%i" % (F.getSize()[0],F.getLocalSize()[1]))
-
-    nslice = E.getKrylovSchurPartitions()
-    nconv  = E.getConverged()
-    islice, nconvlocal,Xmpi = E.getKrylovSchurSubcommInfo()
-    Print("Operator size: %i,%i" % (Xmpi.getSize(),Xmpi.getLocalSize()))
-  #  Dsub =  PETSc.Mat().createSBAIJ(sizeA,1,comm=Xmpi.getComm())
-  #  Dsub.setUp()
-    Vmpi = PETSc.Vec().createMPI(nslice,comm=PETSc.COMM_WORLD)
-    Vmpi.setUp()
-    Vmpi.set(0.0)
-    Vmpi[islice] = nconvlocal
-    Vmpi.assemble()
-    V = pt.convert2SeqVec(Vmpi)
-    sumV = V.sum()
-    partsumV = V[:islice].sum()
-    print rank,partsumV
-    if sumV != nconv: Print("Total number of eigenvalues mismatch: %d %d" % (nconv,sumV) )
-    for m in xrange(nconvlocal):
-        if m + partsumV < nel / 2:
-            print 'rank, m,nconv',rank,':',m,nconvlocal
-            k = E.getKrylovSchurSubcommPairs(m, Xmpi)
-            X = mat.convert2SeqVec(Xmpi)
-            Istart, Iend = D.getOwnershipRange()
-            for i in xrange(Istart, Iend):
-                print 'assemble start rank:nconv, m,i',rank,':',nconvlocal,m,i
-                cols = D.getRow(i)[0]
-                print 'getrpwassemble start rank:nconv, m,i',rank,':',nconvlocal,m,i
-
-                ncols = len(cols)
-                values = [ 2.0 * X[i] * X[j] for j in cols]
-                D.setValues(i, cols, values, addv=PETSc.InsertMode.ADD_VALUES)
-                print 'sete start ra valunk:nconv, m,i',rank,':',nconvlocal,m,i
-
-                D.assemble()
-                print 'assemble end rank:nconv, m,i',rank,':',nconvlocal,m,i
-        #error = E.computeError(m)
-        #if error > 1.e-6: Print(" %12g" % (error)) 
-    if k.imag != 0.0:
-           Print("Complex eigenvalue dedected: %9f%+9f j  %12g" % (k.real, k.imag, error))
-        
-    return D
-
-
 def getBasis(atoms,nbf):
     """
     Returns the basis set in the order of atoms.
@@ -336,9 +237,6 @@ def getDistCSR(basis,nbf,maxdist=1E6):
     val = val[val>=0.] 
     A = scipy.sparse.csr_matrix((val,(row,col)), shape=(nbf,nbf))
     return  A
-
-
-       
 
 def getDistAIJ(basis,nbf,maxdist=1E6,matcomm=PETSc.COMM_SELF):
     """
@@ -828,17 +726,17 @@ def getNuclearAttraction(atoms,nbf):
         ibf += atomi.nbf
     return tmp
 
-def getDij(eigvecs,i,j):
+def getDij(evecs,i,j):
     """
     Returns the i,j element of a density matrix from given eigenvectors.
     """
     tmp=0.
-    for k in len(eigvecs[0,:]):
-        tmp+=eigvecs[i,k]*eigvecs[j,k]
+    for k in len(evecs[0,:]):
+        tmp+=evecs[i,k]*evecs[j,k]
     return tmp
 
 
-def getDCSR(eigvecs,CSR,guess=False):
+def getDCSR(evecs,CSR,guess=False):
     """
     Returns the density matrix from given eigenvectors.
     """
@@ -856,8 +754,8 @@ def getDCSR(eigvecs,CSR,guess=False):
             Ddata[k]=0.0
             col = Dcol[k]
             tmp=0
-            for m in xrange(len(eigvecs[0,:])):
-                Ddata[k] += eigvecs[row,m] * eigvecs[col,m]
+            for m in xrange(len(evecs[0,:])):
+                Ddata[k] += evecs[row,m] * evecs[col,m]
             k = k + 1 
     return DCSR
 
@@ -1005,7 +903,7 @@ def getF2CSR(atoms,D,csrMat,maxdist=1.E6):
 
 
 
-def mndo3(qmol,spfilter,maxiter,scfthresh):
+def mindo3PyQuante(qmol,spfilter,maxiter,scfthresh):
     import PyQuante.MINDO3_Parameters
     import PyQuante.MINDO3
     qmol=PyQuante.MINDO3.initialize(qmol)
@@ -1050,7 +948,7 @@ def mndo3(qmol,spfilter,maxiter,scfthresh):
     print PyQuante.MINDO3.scf(qmol)
     return
 
-def mndo4(qmol,spfilter,maxiter,scfthresh,maxdist=1.E6):
+def mindo3CSR(qmol,spfilter,maxiter,scfthresh,maxdist=1.E6):
     import PyQuante.MINDO3_Parameters
     import PyQuante.MINDO3
     import scipy.linalg 
@@ -1117,7 +1015,7 @@ def mindo3AIJ(qmol,spfilter,maxiter,scfthresh,maxnnz=[0],bandwidth=[0],maxdist=1
     stage = pt.getStage(stagename='Ereference', oldstage=stage)
     Eref  = PyQuante.MINDO3.get_reference_energy(qmol)
     Print("Eref           = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Eref, Eref*const.kcal2ev, Eref*const.kcal2hartree))
-    stage = pt.getStage(stagename='getNBF,get_nbl', oldstage=stage)
+    stage = pt.getStage(stagename='Basisset', oldstage=stage)
     nbf   = getNBF(qmol)    
     nel   = PyQuante.MINDO3.get_nel(atoms)
     nocc  = nel/2
@@ -1171,7 +1069,7 @@ def mindo3AIJ(qmol,spfilter,maxiter,scfthresh,maxnnz=[0],bandwidth=[0],maxdist=1
         Print("Nonzero density: %i" % (100.*BCSR.nnz/nbf/nbf))
     Eel   = 0.
     Eold  = 0.
-    for i in xrange(maxiter):
+    for i in xrange(1,maxiter):
         Print("****************************Iteration {0}****************************".format(i))
     #    stage = pt.getStage(stagename='F1', oldstage=stage)
     #    F1    = getF1AIJ(atoms, basis, D, Ddiag, B=B)
@@ -1182,33 +1080,33 @@ def mindo3AIJ(qmol,spfilter,maxiter,scfthresh,maxnnz=[0],bandwidth=[0],maxdist=1
         stage = pt.getStage(stagename='F0+FD', oldstage=stage)
         F     = F0+FD
 
-
         if debug:
             F1CSR    = getF1CSR(atoms, basis, DCSR)
-          #  print 'F1 comp', i
-          #  pt.compareAIJB(F1,F1CSR,nbf)
+            print 'F1 comp', i
+            pt.compareAIJB(F1,F1CSR,nbf)
             F2CSR    = getF2CSR(atoms, DCSR, BCSR)
-          #  print 'F2 comp', i  
-          #  pt.compareAIJB(F2,F2CSR,nbf)             
+            print 'F2 comp', i  
+            pt.compareAIJB(F2,F2CSR,nbf)             
             FCSR  = F0CSR+F1CSR+F2CSR
-            #mat.compareAIJB(F,FCSR,nbf) 
+            mat.compareAIJB(F,FCSR,nbf) 
             pt.compareAIJB(F,FCSR,nbf,comment='F')            
-           # print 'Eel',Eel,0.5*getTraceProductCSR(DCSR,F0CSR+FCSR)
-
+            print 'Eel',Eel,0.5*getTraceProductCSR(DCSR,F0CSR+FCSR)
 
         Eold = Eel
         if solve > 0: 
             stage = pt.getStage(stagename='Trace', oldstage=stage)
-            Eel   = 0.5*pt.getTraceProductAIJslow(D,F0+F)
+            Eel   = 0.5*pt.getTraceProductAIJ(D,F0+F)
             Print("Eel            = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Eel*const.ev2kcal,Eel,Eel*const.ev2hartree))     
             t0 = getWallTime()
             stage = pt.getStage(stagename='Solve', oldstage=stage)
             if uniform or i<2:
-                EPS, nconv = st.solveEPS(F)
+             #   EPS, nconv = st.solveEPS(F)
+                eps, nconv,eigarray = st.solveEPS(F,returnoption=1)   
             else:
-                nsubint=st.getNumberOfSubIntervals(EPS)
-                subint = st.getSubIntervals(eigarray,nsubint) 
-                EPS, nconv = st.solveEPS(F,subintervals=subint)   
+                nsubint=st.getNumberOfSubIntervals(eps)
+                subint = st.getSubIntervals(eigarray[0:nocc],nsubint) 
+              #  eps, nconv = st.solveEPS(F,subintervals=subint,returnoption=0)   
+                eps, nconv, eigarray = st.solveEPS(F,subintervals=subint,returnoption=1)   
             getWallTime(t0)
             if nconv+1 > nocc:
                 Print("{0} eigenvalues converged".format(nconv))
@@ -1217,11 +1115,12 @@ def mindo3AIJ(qmol,spfilter,maxiter,scfthresh,maxnnz=[0],bandwidth=[0],maxdist=1
                 sys.exit()        
             stage = pt.getStage(stagename='Density', oldstage=stage)
             t0 = getWallTime()
-            D,eigarray = st.getDensityMatrix(EPS,B, nocc)
+            D = st.getDensityMatrix(eps,B, nocc)
+       #    D = st.getSIPsDensityMatrix(eps,nocc)
             getWallTime(t0)
            # Print("{0} seconds for iter {1} in density".format(t,i))
           #  Print("{0}, {1}, {2} ".format(eigarray[0],eigarray[nocc-1],eigarray[nocc]))
-            Print("Range of eigenvalues {0} - {1} ".format(eigarray[0],eigarray[nocc-1]))
+          #  Print("Range of eigenvalues {0} - {1} ".format(eigarray[0],eigarray[nocc-1]))
         
         if abs(Eel-Eold) < scfthresh:
             Print("Converged at iteration %i" % (i+1))
@@ -1232,6 +1131,7 @@ def mindo3AIJ(qmol,spfilter,maxiter,scfthresh,maxnnz=[0],bandwidth=[0],maxdist=1
             DCSR = 2*getDCSR(orbs[:,0:nel/2], BCSR)
             print 'D comp', i
             pt.compareAIJB(D,DCSR,nbf,comment='D')
+
     Etot   = Eel+Enuke
     Efinal = Etot*const.ev2kcal+Eref
     Print("Enuc           = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Enuke*const.ev2kcal,Enuke,Enuke*const.ev2hartree))
@@ -1239,58 +1139,58 @@ def mindo3AIJ(qmol,spfilter,maxiter,scfthresh,maxnnz=[0],bandwidth=[0],maxdist=1
     Print("Eel            = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Eel*const.ev2kcal,Eel,Eel*const.ev2hartree))
     Print("Eel+Enuke      = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Etot*const.ev2kcal,Etot,Etot*const.ev2hartree))
     Print("Eel+Enuke+Eref = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Efinal, Efinal*const.kcal2ev,Efinal*const.kcal2hartree))
-
+    if debug:
+        stage = PETSc.Log.Stage('PyQuante');
+        Print('%f' % (PyQuante.MINDO3.scf(qmol)))
     return
-
-
 
 def main():
     import PyQuante.IO.XYZ
     import os.path
     import xyztools as xt
-    stage = pt.getStage('Input')  
-    opts = PETSc.Options()
-    mol = opts.getString('mol','')
-    xyzfile = opts.getString('xyz','')
-    maxdist = opts.getReal('maxdist', 1.e6)
-    maxiter = opts.getInt('maxiter', 30)
-    analysis = opts.getInt('analysis', 0)
-    solve = opts.getInt('solve', 0)
-    maxnnz = opts.getInt('maxnnz', 0)
-    guess = opts.getInt('guess', 0)
-    bandwidth = opts.getInt('bw', 0)
-    sort = opts.getInt('sort', 0)
-    basisset = opts.getString('basis','sto-3g')
-    method = opts.getString('method','mindo3')
-    scfthresh = opts.getReal('scfthresh',1.e-5)
-    spfilter = opts.getReal('spfilter',0.)
-    uniform = opts.getBool('uniform',True)
-    debug = opts.getBool('debug',True)
+    stage       = pt.getStage('Input')  
+    opts        = PETSc.Options()
+    mol         = opts.getString('mol','')
+    xyzfile     = opts.getString('xyz','')
+    maxdist     = opts.getReal('maxdist', 1.e6)
+    maxiter     = opts.getInt('maxiter', 30)
+    analysis    = opts.getInt('analysis', 0)
+    solve       = opts.getInt('solve', 0)
+    maxnnz      = opts.getInt('maxnnz', 0)
+    guess       = opts.getInt('guess', 0)
+    bandwidth   = opts.getInt('bw', 0)
+    sort        = opts.getInt('sort', 0)
+    basisset    = opts.getString('basis','sto-3g')
+    method      = opts.getString('method','mindo3')
+    scfthresh   = opts.getReal('scfthresh',1.e-5)
+    spfilter    = opts.getReal('spfilter',0.)
+    uniform     = opts.getBool('uniform',True)
+    debug       = opts.getBool('debug',True)
     
     if mol:
         import PyQuante.Molecule 
-
         Print('xyz from mol input:{0}'.format(mol))  
         qmol=PyQuante.Molecule(mol)
     elif os.path.isfile(xyzfile):
         Print('xyz read from file:{0}'.format(xyzfile))
         if sort > 0:
-            stage = pt.getStage('Sort',oldstage=stage)  
-            xyz        = xt.readXYZ(xyzfile)
-            sortedxyz  = xt.sortXYZ(xyz)
-            sortedfile = xt.writeXYZ(sortedxyz)
+            stage       = pt.getStage('Sort',oldstage=stage)  
+            xyz         = xt.readXYZ(xyzfile)
+            sortedxyz   = xt.sortXYZ(xyz)
+            sortedfile  = xt.writeXYZ(sortedxyz)
+            qmol        = xt.xyz2PyQuanteMol(sortedxyz)
             Print('sorted xyz file:{0}'.format(sortedfile))
-            qmol = xt.xyz2PyQuanteMol(sortedxyz)
         else:   
-            qmol = xt.xyzFile2PyQuanteMol(xyzfile)
+            qmol        = xt.xyzFile2PyQuanteMol(xyzfile)
     else:
         Print("%s file not found" %(xyzfile))
-        N = opts.getInt('N', 32)
-        c = opts.getInt('c', 3)
-        Z = opts.getInt('Z', 8)
-        dist = opts.getInt('dist', 0.712) 
         Print("A chain of atoms will be used.")
-        qmol=getChainMol(N=N, Ze=Z, d=dist)
+        N       = opts.getInt('N', 32)
+        c       = opts.getInt('c', 3)
+        Z       = opts.getInt('Z', 8)
+        dist    = opts.getInt('dist', 0.712) 
+        qmol    = getChainMol(N=N, Ze=Z, d=dist)
+        
     Print("Number of atoms: %i" % (len(qmol.atoms)))
     Print("Number of electrons: %i" % (qmol.get_nel()))
     stage.pop()
@@ -1320,10 +1220,6 @@ def main():
         Print("MINDO/3 calculation starts...")
         mindo3AIJ(qmol,spfilter,maxiter,scfthresh,maxnnz=[maxnnz],bandwidth=[bandwidth],maxdist=maxdist,uniform=uniform,guess=guess, solve=solve, debug=debug)
         Print("MINDO/3 calculation finishes.")
-     #   stage = PETSc.Log.Stage('PyQuante'); stage.push();  
-      #  Print('PyQuante')
-      #  Print('%f' % (PyQuante.MINDO3.scf(qmol)))
-      #  stage.pop()
     else:
         Print("No valid method specified")
 
