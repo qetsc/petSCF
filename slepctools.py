@@ -11,11 +11,7 @@ try:
 except:
     Print("scipy not found")
     pass
-try:
-    import sips
-except:
-    Print("sips not found")
-    pass    
+   
 
 def getNumberOfSubIntervals(eps):
     return eps.getKrylovSchurPartitions()
@@ -41,8 +37,7 @@ def getSubIntervals(eigs, nsub, bufferratio=0.5):
             subint[i] = (eigs[mean * i + 1] + eigs[mean * i]) / 2.
             remainder = remainder - 1
     subint[nsub] = eigs[-1] + ibuffer
-    Print("subint")
-    Print(subint[0],subint[-1])
+    Print("New interval boundaries: {0:5.3f} , {1:5.3f}".format(subint[0],subint[-1]))
     return subint
 
 
@@ -144,7 +139,7 @@ def getDensityMatrixLocal(eps,T,nocc):
     return D,eigarray
 
 
-def solveEPS(A,B=None,printinfo=False,returnoption=0,checkerror=False,interval=[0],subintervals=[0]):
+def solveEPS(A,B=None,printinfo=False,returnoption=0,checkerror=False,interval=[0],subintervals=[0],nocc=0):
     """
     If matrix B is not given, solves the standard eigenvalue problem for a Hermitian matrix A.
     If matrix B (should be positive definite) is given, solve the generalized eigenvalue problem. 
@@ -203,6 +198,9 @@ def solveEPS(A,B=None,printinfo=False,returnoption=0,checkerror=False,interval=[
             if checkerror:
                 error = eps.computeError(i)
                 if error > 1.e-6: Print("Eigenvalue {0} has error {1}".format(k,error)) 
+        Print("Range of required eigenvalues: {0:5.3f} , {1:5.3f}".format(eigarray[0],eigarray[nocc-1]))
+        #Print("{0}, {1}, {2} ".format(eigarray[0],eigarray[nocc-1],eigarray[nocc]))
+
         return eps, nconv, eigarray
     elif returnoption == 2:
         eigarray=np.zeros(nconv)

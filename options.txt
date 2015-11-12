@@ -1,42 +1,45 @@
-#qetsc options
--N 1
--Z 8
--c 32
--basis sto-3g 
-#-spfilter 1.e-15
--method mindo3AIJ #sparsity #mndo
-#-method file
--fA '/Volumes/s/matrices/petscbinary/graphene_xxs_A'
--fB '/Volumes/s/matrices/petscbinary/graphene_xxs_B'
-#-scfthresh 1.e-3
+#PSCF options
+
+-method mindo3AIJ 
 -scfthresh 1.e-7
--maxdist 4.
+-maxdist 5.5
 -maxiter 6
 -solve 1
 -debug 0
--uniform False
+-staticsubint False
+-xyz "./XYZ/004.xyz"
+-sips False
+# A chain of identical atoms (instead of an xyz file) can be specified with the following options 
+#-N 10 # Number of atoms
+#-Z 8 # Atomic number
+#-c 32 # Maximum number of interactions of an atom
 
--xyz "/Volumes/s/keceli/Dropbox/work/xyz/watercluster/006.xyz"
-#-xyz "/Volumes/s/keceli/Dropbox/work/PyLASH/tmp.xyz"
+# A petsc matrix (binary) can be given
+#-method file
+#-fA '/Volumes/s/matrices/petscbinary/graphene_xxs_A'
+#-fB '/Volumes/s/matrices/petscbinary/graphene_xxs_B'
+#-scfthresh 1.e-3
+
+#PETSc options
+
 -log_summary
-#-malloc_info 
--mat_getrow_uppertriangular 1
-#-mat_view ::ascii_info 
-
 -mat_mumps_icntl_13 1 #turn off scaLAPACK for matrix inertia
 -mat_mumps_icntl_24 1 #null pivot row detection for matrix inertia
 -mat_mumps_icntl_23 0
 #-mat_mumps_icntl_28 2
 #-mat_mumps_icntl_29 1
-
+#-malloc_info 
+#-mat_view ::ascii_info 
+#-mat_getrow_uppertriangular 1
 -st_type sinvert 
 -st_ksp_type preonly 
 -st_pc_type cholesky 
 -st_pc_factor_mat_solver_package mumps 
 
+#SLEPc options
+
 -eps_krylovschur_partitions 1  
 -eps_interval -7000,700
-#-eps_interval -0.9,-0.75
--eps_tol  1.e-12
+-eps_tol  1.e-8
 -eps_krylovschur_detect_zeros TRUE
 -eps_purify 1

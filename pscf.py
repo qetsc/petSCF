@@ -325,7 +325,6 @@ def getGammaAIJ(basis,maxdist,maxnnz=[0],bandwidth=[0],matcomm=PETSc.COMM_SELF):
    # if any(maxnnz): A.setPreallocationNNZ(maxnnz) 
     A.setUp()
     A.setOption(A.Option.NEW_NONZERO_ALLOCATION_ERR,False)
-    #A.setDiagonal(1.0) # TypeError: Argument 'diag' has incorrect type (expected petsc4py.PETSc.Vec, got float)
     rstart, rend = A.getOwnershipRange()
     nnz=0
     if any(bandwidth):
@@ -953,6 +952,7 @@ def mindo3CSR(qmol,spfilter,maxiter,scfthresh,maxdist=1.E6):
     import PyQuante.MINDO3
     import scipy.linalg 
     import scipy.sparse
+    
     stage = PETSc.Log.Stage('Initial')  
     stage.push()
     qmol  = PyQuante.MINDO3.initialize(qmol)
@@ -1002,10 +1002,37 @@ def mindo3CSR(qmol,spfilter,maxiter,scfthresh,maxdist=1.E6):
     stage.pop()
     return
 
-def mindo3AIJ(qmol,spfilter,maxiter,scfthresh,maxnnz=[0],bandwidth=[0],maxdist=1.E6,uniform=True,guess=0, solve=0, debug=False):
+#def mindo3AIJ(qmol,spfilter,maxiter,scfthresh,maxnnz=[0],bandwidth=[0],maxdist=1.E6,staticsubint=True,guess=0, solve=0, debug=False):
+def mindo3AIJ(qmol,opts):
     import PyQuante.MINDO3_Parameters
     import PyQuante.MINDO3
     import constants as const
+ 
+    stage = pt.getStage(stagename='Input')
+    maxdist     = opts.getReal('maxdist', 1.e6)
+    maxiter     = opts.getInt('maxiter', 30)
+    analysis    = opts.getInt('analysis', 0)
+    solve       = opts.getInt('solve', 0)
+    maxnnz      = [opts.getInt('maxnnz', 0)]
+    guess       = opts.getInt('guess', 0)
+    bandwidth   = [opts.getInt('bw', 0)]
+    sort        = opts.getInt('sort', 0)     
+    scfthresh   = opts.getReal('scfthresh',1.e-5)
+    spfilter    = opts.getReal('spfilter',0.)
+    staticsubint= opts.getBool('staticsubint',False)
+    debug       = opts.getBool('debug',False)
+    usesips        = opts.getBool('sips',False)
+    Print("Distance cutoff: {0:5.3f}".format(maxdist))
+    Print("SCF threshold: {0:5.3e}".format(scfthresh))
+    Print("Maximum number of SCF iterations: {0}".format(maxiter))
+    if not staticsubint:
+        Print("Subintervals will be updated after the first iteration")
+    if usesips:
+        try:
+            import SIPs.sips as sips
+        except:
+            Print("sips not found")
+            usesips = False
     stage = pt.getStage(stagename='Initialize')
     qmol  = PyQuante.MINDO3.initialize(qmol)
     atoms = qmol.atoms
@@ -1020,8 +1047,8 @@ def mindo3AIJ(qmol,spfilter,maxiter,scfthresh,maxnnz=[0],bandwidth=[0],maxdist=1
     nel   = PyQuante.MINDO3.get_nel(atoms)
     nocc  = nel/2
     basis = getBasis(qmol, nbf)
-    Print("Number of basis functions: %i" % (nbf))
-    Print("Number of valance electrons: %i" % (nel))
+    Print("Number of basis functions: {0}".format(nbf))
+    Print("Number of valance electrons: {0}".format(nel))
     if not (all(maxnnz) or all(bandwidth)):
       ##D  stage = pt.getStage(stagename='DistAIJ', oldstage=stage)
       ##D  B     = getDistAIJ(basis, nbf, maxdist=maxdist, matcomm=PETSc.COMM_WORLD)
@@ -1069,23 +1096,19 @@ def mindo3AIJ(qmol,spfilter,maxiter,scfthresh,maxnnz=[0],bandwidth=[0],maxdist=1
         Print("Nonzero density: %i" % (100.*BCSR.nnz/nbf/nbf))
     Eel   = 0.
     Eold  = 0.
-    for i in xrange(1,maxiter):
-        Print("****************************Iteration {0}****************************".format(i))
-    #    stage = pt.getStage(stagename='F1', oldstage=stage)
-    #    F1    = getF1AIJ(atoms, basis, D, Ddiag, B=B)
-    #    stage = pt.getStage(stagename='FD', oldstage=stage)
-    #    F2    = getF2AIJ(atoms,basis, D, Ddiag, B)
+    Print("{0:*^60s}".format("SELF-CONSISTENT-FIELD ITERATIONS"))
+    for iter in xrange(1,maxiter):
+        Print("{0:*^60s}".format("Iteration "+str(iter)))
         stage = pt.getStage(stagename='FD', oldstage=stage)
         FD    = getFDAIJ(atoms,basis, D, Ddiag, B)
-        stage = pt.getStage(stagename='F0+FD', oldstage=stage)
-        F     = F0+FD
+        F     = F0 + FD
 
         if debug:
             F1CSR    = getF1CSR(atoms, basis, DCSR)
-            print 'F1 comp', i
+            print 'F1 comp', iter
             pt.compareAIJB(F1,F1CSR,nbf)
             F2CSR    = getF2CSR(atoms, DCSR, BCSR)
-            print 'F2 comp', i  
+            print 'F2 comp', iter
             pt.compareAIJB(F2,F2CSR,nbf)             
             FCSR  = F0CSR+F1CSR+F2CSR
             mat.compareAIJB(F,FCSR,nbf) 
@@ -1093,20 +1116,20 @@ def mindo3AIJ(qmol,spfilter,maxiter,scfthresh,maxnnz=[0],bandwidth=[0],maxdist=1
             print 'Eel',Eel,0.5*getTraceProductCSR(DCSR,F0CSR+FCSR)
 
         Eold = Eel
+
         if solve > 0: 
             stage = pt.getStage(stagename='Trace', oldstage=stage)
             Eel   = 0.5*pt.getTraceProductAIJ(D,F0+F)
             Print("Eel            = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Eel*const.ev2kcal,Eel,Eel*const.ev2hartree))     
             t0 = getWallTime()
             stage = pt.getStage(stagename='Solve', oldstage=stage)
-            if uniform or i<2:
-             #   EPS, nconv = st.solveEPS(F)
-                eps, nconv,eigarray = st.solveEPS(F,returnoption=1)   
+            if staticsubint or iter<2:
+                eps, nconv, eigarray = st.solveEPS(F,returnoption=1,nocc=nocc)  
+                 
             else:
                 nsubint=st.getNumberOfSubIntervals(eps)
                 subint = st.getSubIntervals(eigarray[0:nocc],nsubint) 
-              #  eps, nconv = st.solveEPS(F,subintervals=subint,returnoption=0)   
-                eps, nconv, eigarray = st.solveEPS(F,subintervals=subint,returnoption=1)   
+                eps, nconv, eigarray = st.solveEPS(F,subintervals=subint,returnoption=1,nocc=nocc)   
             getWallTime(t0)
             if nconv+1 > nocc:
                 Print("{0} eigenvalues converged".format(nconv))
@@ -1115,21 +1138,20 @@ def mindo3AIJ(qmol,spfilter,maxiter,scfthresh,maxnnz=[0],bandwidth=[0],maxdist=1
                 sys.exit()        
             stage = pt.getStage(stagename='Density', oldstage=stage)
             t0 = getWallTime()
-            D = st.getDensityMatrix(eps,B, nocc)
-       #    D = st.getSIPsDensityMatrix(eps,nocc)
-            getWallTime(t0)
-           # Print("{0} seconds for iter {1} in density".format(t,i))
-          #  Print("{0}, {1}, {2} ".format(eigarray[0],eigarray[nocc-1],eigarray[nocc]))
-          #  Print("Range of eigenvalues {0} - {1} ".format(eigarray[0],eigarray[nocc-1]))
+            if usesips:
+                D = sips.getDensityMat(eps,1,nocc)
+            else:    
+                D = st.getDensityMatrix(eps,B, nocc)
+            t = getWallTime(t0)
         
         if abs(Eel-Eold) < scfthresh:
-            Print("Converged at iteration %i" % (i+1))
+            Print("Converged at iteration %i" % (iter+1))
             break
         Ddiag=pt.convert2SeqVec(D.getDiagonal()) 
         if debug:
             orbe,orbs = scipy.linalg.eigh(FCSR.todense())
             DCSR = 2*getDCSR(orbs[:,0:nel/2], BCSR)
-            print 'D comp', i
+            print 'D comp', iter
             pt.compareAIJB(D,DCSR,nbf,comment='D')
 
     Etot   = Eel+Enuke
@@ -1160,12 +1182,8 @@ def main():
     guess       = opts.getInt('guess', 0)
     bandwidth   = opts.getInt('bw', 0)
     sort        = opts.getInt('sort', 0)
-    basisset    = opts.getString('basis','sto-3g')
     method      = opts.getString('method','mindo3')
-    scfthresh   = opts.getReal('scfthresh',1.e-5)
-    spfilter    = opts.getReal('spfilter',0.)
-    uniform     = opts.getBool('uniform',True)
-    debug       = opts.getBool('debug',True)
+
     
     if mol:
         import PyQuante.Molecule 
@@ -1191,6 +1209,7 @@ def main():
         dist    = opts.getInt('dist', 0.712) 
         qmol    = getChainMol(N=N, Ze=Z, d=dist)
         
+    
     Print("Number of atoms: %i" % (len(qmol.atoms)))
     Print("Number of electrons: %i" % (qmol.get_nel()))
     stage.pop()
@@ -1215,10 +1234,12 @@ def main():
         stage.pop()
 
     elif method == "HF":
+        basisset    = opts.getString('basis','sto-3g')
         rhf(qmol,basisset,spfilter,maxiter,scfthresh,maxdist=maxdist)
     elif method == 'mindo3AIJ':
         Print("MINDO/3 calculation starts...")
-        mindo3AIJ(qmol,spfilter,maxiter,scfthresh,maxnnz=[maxnnz],bandwidth=[bandwidth],maxdist=maxdist,uniform=uniform,guess=guess, solve=solve, debug=debug)
+      #  mindo3AIJ(qmol,spfilter,maxiter,scfthresh,maxnnz=[maxnnz],bandwidth=[bandwidth],maxdist=maxdist,staticsubint=staticsubint,guess=guess, solve=solve, debug=debug)
+        mindo3AIJ(qmol,opts)
         Print("MINDO/3 calculation finishes.")
     else:
         Print("No valid method specified")

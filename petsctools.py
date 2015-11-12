@@ -18,7 +18,7 @@ def getStage(stagename='stage', oldstage=None, printstage=True):
     Easy PETSc staging tool, helps for profiling.
     """
     if oldstage: oldstage.pop()
-    if printstage: Print("******Stage {0}*******".format(stagename))
+    if printstage: Print("{0:*^30s}".format("Stage "+stagename))
     stage = PETSc.Log.Stage(stagename); 
     stage.push();
     return stage
