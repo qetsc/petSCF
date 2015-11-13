@@ -1047,9 +1047,9 @@ def mindo3AIJ(qmol,opts):
     nel   = PyQuante.MINDO3.get_nel(atoms)
     nocc  = nel/2
     basis = getBasis(qmol, nbf)
-    Print("Number of basis functions  : {0}".format(nbf))
+    Print("Number of basis functions  : {0} = Matrix size".format(nbf))
     Print("Number of valance electrons: {0}".format(nel))
-    Print("Number of occupied orbitals: {0}".format(nocc))
+    Print("Number of occupied orbitals: {0} = Number of required eigenvalues".format(nocc))
     if not (all(maxnnz) or all(bandwidth)):
       ##D  stage = pt.getStage(stagename='DistAIJ', oldstage=stage)
       ##D  B     = getDistAIJ(basis, nbf, maxdist=maxdist, matcomm=PETSc.COMM_WORLD)
@@ -1128,7 +1128,7 @@ def mindo3AIJ(qmol,opts):
             stage = pt.getStage(stagename='Density', oldstage=stage)
             t0 = getWallTime()
             if usesips:
-                D = sips.getDensityMat(eps,1,nocc)
+                D = sips.getDensityMat(eps,0,nocc)
             else:    
                 D = st.getDensityMatrix(eps,B, nocc)
             t = getWallTime(t0)

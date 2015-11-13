@@ -206,7 +206,8 @@ def solveEPS(A,B=None,printinfo=False,returnoption=0,checkerror=False,interval=[
             if checkerror:
                 error = eps.computeError(i)
                 if error > 1.e-6: Print("Eigenvalue {0} has error {1}".format(k,error)) 
-        Print("Range of required eigenvalues: {0:5.3f} , {1:5.3f}".format(eigarray[0],eigarray[nocc-1]))
+        if nocc > 0 :
+            Print("Range of required eigenvalues: {0:5.3f} , {1:5.3f}".format(eigarray[0],eigarray[nocc-1]))
         return eps, nconv, eigarray
     elif returnoption == 2:
         eigarray=np.zeros(nconv)

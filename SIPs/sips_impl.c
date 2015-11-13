@@ -167,7 +167,7 @@ PetscErrorCode EPSCreateDensityMat_seqApart(EPS eps,Mat Dmat,PetscInt myidx_star
       ncols = pi[row+1] - pi[row];
       for (j=0; j<ncols; j++){
         col = pj[pi[row]+j];     /* col index */
-        pv[pi[row]+j] += evec_arr[row]*evec_arr[col]; /* P(row,col) */
+        pv[pi[row]+j] += 2.0 * evec_arr[row]*evec_arr[col]; /* P(row,col) */
       }
     }      
     ierr = VecRestoreArrayRead(evec,&evec_arr);CHKERRQ(ierr);   
@@ -324,7 +324,7 @@ PetscErrorCode EPSCreateDensityMat(EPS eps,PetscInt idx_start,PetscInt idx_end,M
           ncols = pi[row+1] - pi[row];
           for (j=0; j<ncols; j++){
             col = pj[pi[row]+j];     /* index of lvec */
-            pv[pi[row]+j] += evec_arr[row]*lvec_arr[col]; /* P(row,col) */
+            pv[pi[row]+j] += 2.0 * evec_arr[row]*lvec_arr[col]; /* P(row,col) */
           }
         }
         ierr = VecRestoreArrayRead(lvec,&lvec_arr);CHKERRQ(ierr);      
