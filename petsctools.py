@@ -295,7 +295,7 @@ def getTraceProductAIJ(A,B):
     so it is simpler than taking the product first and then computing the trace.
     """
     temp=0.0
-    rstart, rend = A.getOwnershipRange()
+    rstart, rend = B.getOwnershipRange()
     for i in xrange(rstart,rend):
         cols,a = A.getRow(i)
         cols,b = B.getRow(i)

@@ -319,7 +319,7 @@ def getGammaAIJ(basis,maxdist,maxnnz=[0],bandwidth=[0],matcomm=PETSc.COMM_SELF):
     enuke=0.0
     A        = PETSc.Mat().create(comm=matcomm)
 #    A.setType('sbaij') 
-    A.setType('mpiaij') 
+    A.setType('aij') 
    # A.setOption(A.Option.SYMMETRIC,True)
     A.setSizes([nbf,nbf]) 
    # if any(maxnnz): A.setPreallocationNNZ(maxnnz) 
