@@ -34,6 +34,33 @@ def printAIJ(A,text=''):
             k += 1
     return 0
 
+def writeMat(A,filename='mat.bin'):
+    """
+    Writes a matrix into a file:
+    If the extension is 
+        bin: Petsc binary file
+        txt: Petsc ASCII file
+        mtx: Matrix market formatted file --> TODO
+    Parameters
+    ----------
+    A: PETSc mat object
+    filename:
+    Returns
+    ---------
+    0 if succseful
+    """
+    ext = filename[-3:]
+    if ext == 'bin':
+        writer=PETSc.Viewer().createBinary(filename, 'w')
+    elif ext == 'txt':
+        writer=PETSc.Viewer().createASCII(filename, 'w')
+    elif ext == 'mtx':
+        pass        
+    else:
+        Print("Use bin, or txt extension")
+    writer(A)
+    return 0
+     
 def printVec(V,text=''):
     rank         = MPI.COMM_WORLD.rank
     rstart, rend = V.getOwnershipRange()

@@ -179,7 +179,8 @@ def solveEPS(A,B=None,printinfo=False,returnoption=0,checkerror=False,interval=[
     if any(subintervals):
         eps.setInterval(subintervals[0],subintervals[-1])
         eps.setKrylovSchurPartitions(len(subintervals)-1)
-        eps.setKrylovSchurSubintervals(subintervals)    
+        eps.setKrylovSchurSubintervals(subintervals)
+    if returnoption == -1: return eps        
     eps.solve()
     nconv = eps.getConverged()
     Print("Number of converged and required eigenvalues: {0}, {1} ".format(nconv, nocc))

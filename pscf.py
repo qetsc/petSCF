@@ -293,24 +293,20 @@ def getTempAIJ(basis,maxdist,maxnnz=[0],bandwidth=[0],matcomm=PETSc.COMM_SELF):
 
 def getGammaAIJ(basis,maxdist,maxnnz=[0],bandwidth=[0],matcomm=PETSc.COMM_SELF):
     """
-    Gamma matrix that determines the nonzero structure of the Fock matrix.
-    The values are from the gamma parameter of MINDO3, for two-center two-electron integrals
-    maxnnz: max number of nonzeros per row. If it is given performance might improve
+    Computes MINDO3 nuclear repulsion energy and gamma matrix
+    Nuclear repulsion energy: Based on PYQuante MINDO3 get_enuke(atoms)
+    Gamma matrix: Based on PyQuante MINDO3 get_gamma(atomi,atomj)
+    "Coulomb repulsion that goes to the proper limit at R=0"
+    Corresponds to two-center two-electron integrals
+    Assumes spherical symmetry, no dependence on basis function, only atom types.
+    Parametrized for pairs of atoms. (Two-atom parameters)
+    maxnnz: max number of nonzeros per row. If it is given performance might improve    
+    Gamma matrix also determines the nonzero structure of the Fock matrix.
+
     TODO:
     Values are indeed based on atoms, not basis functions, so possible to improve performance by nbf/natom.
     Better to preallocate based on diagonal and offdiagonal nonzeros.
-    atom.rho = e2/f03[atom.atno]
-        R2 = atomi.dist2(atomj)*bohr2ang**2
-    return e2/sqrt(R2+0.25*pow(atomi.rho+atomj.rho,2))
-    
-    
-                R2 = atomi.dist2(atomj)*bohr2ang**2
-            R = sqrt(R2)
-            scale = get_scale(atomi.atno,atomj.atno,R)
-            gammaij = get_gamma(atomi,atomj)
-            enuke_ij = atomi.Z*atomj.Z*gammaij \
-                     + abs(atomi.Z*atomj.Z*(e2/R-gammaij)*scale)
-            enuke += enuke_ij
+    Cythonize
     """
     import constants as const
 
@@ -318,15 +314,15 @@ def getGammaAIJ(basis,maxdist,maxnnz=[0],bandwidth=[0],matcomm=PETSc.COMM_SELF):
     maxdist2 = maxdist * maxdist
     enuke=0.0
     A        = PETSc.Mat().create(comm=matcomm)
-#    A.setType('sbaij') 
-    A.setType('aij') 
+    A.setType('aij') #'sbaij'
    # A.setOption(A.Option.SYMMETRIC,True)
     A.setSizes([nbf,nbf]) 
    # if any(maxnnz): A.setPreallocationNNZ(maxnnz) 
     A.setUp()
     A.setOption(A.Option.NEW_NONZERO_ALLOCATION_ERR,False)
     rstart, rend = A.getOwnershipRange()
-    nnz=0
+    nnz = 0
+    mindist = 1.E-5 # just to see same atom or not
     if any(bandwidth):
         if len(bandwidth)==1: bandwidth=np.array([bandwidth]*nbf)
         for i in xrange(rstart,rend):
@@ -336,7 +332,7 @@ def getGammaAIJ(basis,maxdist,maxnnz=[0],bandwidth=[0],matcomm=PETSc.COMM_SELF):
             for j in xrange(i+1,min(i+bandwidth[i],nbf)):
                 atomj = basis[j].atom
                 distij2 = atomi.dist2(atomj) * const.bohr2ang**2.
-                if distij2 < 0.01:
+                if distij2 < mindist:
                     A[i,j] = gammaii
                     A[j,i] = gammaii
                     nnz += 1
@@ -356,7 +352,7 @@ def getGammaAIJ(basis,maxdist,maxnnz=[0],bandwidth=[0],matcomm=PETSc.COMM_SELF):
             for j in xrange(i+1,nbf):
                 atomj = basis[j].atom
                 distij2 = atomi.dist2(atomj) * const.bohr2ang**2.
-                if distij2 < 0.01:
+                if distij2 < mindist:
                     A[i,j] = gammaii
                     A[j,i] = gammaii
                     nnz += 1
@@ -468,8 +464,10 @@ def getF0AIJV1(atoms,basis,B):
 def getF0AIJ(atoms,basis,T):
     """
     Form the zero-iteration (density matrix independent) Fock matrix
-    Diagonal:
-    U
+    Ref 1: DOI:10.1021/ja00839a001
+    Ref 2: ISBN:089573754X
+    Ref 3: DOI:10.1002/wcms.1141
+
     """
     A = T.duplicate()
     A.setUp()
@@ -479,20 +477,17 @@ def getF0AIJ(atoms,basis,T):
         atomi=basisi.atom
         cols,vals = T.getRow(i)
         tmp = basisi.u # Ref1, Ref2
-        k=0
         for j in cols:
             basisj=basis[j]
             atomj=basisj.atom
             if atomj != atomi:
                 tmp -= T[i,j] * atomj.Z / len(atomj.basis) # Ref1, Ref2 adopted sum to be over orbitals rather than atoms
-            if i != j:
+          #  if i != j: # According to Ref1, Ref2 and Ref3  atoms should be different, but PyQuante implementation ignores that.
                 betaij = PyQuante.MINDO3.get_beta0(atomi.atno,atomj.atno)
                 Sij = basisi.cgbf.overlap(basisj.cgbf)
                 IPij = basisi.ip + basisj.ip
                 tmp2 =  betaij * IPij * Sij     # Ref1, Ref2 
                 A[i,j] = tmp2
-            #    A[j,i] = tmp2 # not necessary
-            k += 1
         A[i,i] = tmp        
     A.assemble()
     return A
@@ -686,27 +681,83 @@ def getFDAIJ(atoms, basis, D, diagD, T):
         atomi=basisi.atom
         cols,vals = T.getRow(i)
         colsD,valsD = D.getRow(i)
-        tmpii = 0.5 * D[i,i] * PyQuante.MINDO3.get_g(basisi,basisi)
+        tmpii = 0.5 * D[i,i] * PyQuante.MINDO3.get_g(basisi,basisi) # Ref1 and PyQuante, not in Ref2, Ref3 
         for j in cols:
             basisj=basis[j]
             atomj=basisj.atom
             if i != j:
                 tmpij=0
                 if atomj == atomi:
-                #   tmpii += diagD[j] * PyQuante.MINDO3.get_g(basisi,basisj) - 0.5 * D[i,j] * PyQuante.MINDO3.get_h(basisi,basisj) # The correct form as given in Eq 2 in Ref1 and page 54 in Ref2
-                    tmpii += diagD[j] * PyQuante.MINDO3.get_g(basisi,basisj) - 0.5 * diagD[j] * PyQuante.MINDO3.get_h(basisi,basisj) # PyQuante implementation
-
+                #   tmpii += diagD[j] * PyQuante.MINDO3.get_g(basisi,basisj) - 0.5 * D[i,j] * PyQuante.MINDO3.get_h(basisi,basisj) # as given in Eq 2 in Ref1 and page 54 in Ref2
+                    tmpii += diagD[j] * ( PyQuante.MINDO3.get_g(basisi,basisj) - 0.5 * PyQuante.MINDO3.get_h(basisi,basisj) )#Ref1 and PyQuante, In Ref2, Ref3, i=j is included in the sum
                 #   tmpij  = -0.5 * D[i,j] * PyQuante.MINDO3.get_h(basisi,basisj) # Eq 3 in Ref1 but not in Ref2 and PyQuante
-                    tmpij +=  0.5 * D[i,j] * ( 3. * PyQuante.MINDO3.get_h(basisi,basisj) - PyQuante.MINDO3.get_g(basisi,basisj) ) #Only in Pyquante
+                    tmpij =  0.5 * D[i,j] * ( 3. * PyQuante.MINDO3.get_h(basisi,basisj) - PyQuante.MINDO3.get_g(basisi,basisj) ) #Ref3, PyQuante, not in Ref1 and Ref2
                 else:
-                    tmpii += T[i,j] * diagD[j]     # Matches Ref1 and Ref2
-                    tmpij = -0.5 * T[i,j] * D[i,j]   # Matches Ref1 and Ref2  
+                    tmpii += T[i,j] * diagD[j]     # Ref1, Ref2, Ref3
+                    tmpij = -0.5 * T[i,j] * D[i,j]   # Ref1, Ref2, Ref3  
                 A[i,j] = tmpij
-            #    A[j,i] = tmpij # not necessary indeed, upper triangular is enough.
         A[i,i] = tmpii        
     A.assemble()
     return A
 
+def getGAIJ(basis,comm=PETSc.COMM_SELF,T=None):
+    """
+    Returns the matrix for one-electron Coulomb term, (mu mu | nu nu) where mu and nu orbitals are centered on the same atom.
+    Block diagonal matrix with 1x1 (Hydrogens) or 4x4 blocks.
+    If T is given, assumes the nonzero pattern of T.
+    """
+    if T:
+        A = T.duplicate()
+    else:        
+        nbf             = len(basis)
+        maxnnzperrow    = 4
+        A               = PETSc.Mat().create(comm=matcomm)
+        A.setType('aij') #'sbaij'
+        A.setSizes([nbf,nbf]) 
+        A.setPreallocationNNZ(maxnnzperrow) 
+    
+    A.setUp()
+    rstart, rend = A.getOwnershipRange()
+    for i in xrange(rstart,rend):
+        basisi  = basis[i]
+        atomi   = basisi.atom
+        for j in xrange(maxnnzperrow):
+            basisj = basis[i+j]
+            atomj   = basisj.atom
+            if atomi == atomj:
+                A[i,j] = PyQuante.MINDO3.get_g(basisi,basisj)
+    A.assemble()
+    return A
+
+def getHAIJ(basis,T):
+    """
+    Returns the matrix for one-electron exchange term, (mu nu | mu nu) where mu and nu orbitals are centered on the same atom. 
+    Block diagonal matrix with 1x1 (Hydrogens) or 4x4 blocks.
+    If T is given, assumes the nonzero pattern of T.
+    """
+    if T:
+        A = T.duplicate()
+    else:        
+        nbf             = len(basis)
+        maxnnzperrow    = 4
+        A               = PETSc.Mat().create(comm=matcomm)
+        A.setType('aij') #'sbaij'
+        A.setSizes([nbf,nbf]) 
+        A.setPreallocationNNZ(maxnnzperrow) 
+    
+    A.setUp()
+    rstart, rend = A.getOwnershipRange()
+    for i in xrange(rstart,rend):
+        basisi  = basis[i]
+        atomi   = basisi.atom
+        for j in xrange(maxnnzperrow):
+            basisj = basis[i+j]
+            atomj   = basisj.atom
+            if atomi == atomj:
+                A[i,j] = PyQuante.MINDO3.get_h(basisi,basisj)
+    A.assemble()
+    return A
+        
 def getNuclearAttraction(atoms,nbf):
     """
     Returns the nuclear interaction as implemented in PyQuante.MINDO3
@@ -899,9 +950,6 @@ def getF2CSR(atoms,D,csrMat,maxdist=1.E6):
         ibf += atomi.nbf
     return F2
 
-
-
-
 def mindo3PyQuante(qmol,spfilter,maxiter,scfthresh):
     import PyQuante.MINDO3_Parameters
     import PyQuante.MINDO3
@@ -1002,13 +1050,12 @@ def mindo3CSR(qmol,spfilter,maxiter,scfthresh,maxdist=1.E6):
     stage.pop()
     return
 
-#def mindo3AIJ(qmol,spfilter,maxiter,scfthresh,maxnnz=[0],bandwidth=[0],maxdist=1.E6,staticsubint=True,guess=0, solve=0, debug=False):
 def mindo3AIJ(qmol,opts):
     import PyQuante.MINDO3_Parameters
     import PyQuante.MINDO3
     import constants as const
  
-    stage = pt.getStage(stagename='Input')
+    stage       = pt.getStage(stagename='Input')
     maxdist     = opts.getReal('maxdist', 1.e6)
     maxiter     = opts.getInt('maxiter', 30)
     analysis    = opts.getInt('analysis', 0)
@@ -1021,7 +1068,7 @@ def mindo3AIJ(qmol,opts):
     spfilter    = opts.getReal('spfilter',0.)
     staticsubint= opts.getBool('staticsubint',False)
     debug       = opts.getBool('debug',False)
-    usesips        = opts.getBool('sips',False)
+    usesips     = opts.getBool('sips',False)
     Print("Distance cutoff: {0:5.3f}".format(maxdist))
     Print("SCF threshold: {0:5.3e}".format(scfthresh))
     Print("Maximum number of SCF iterations: {0}".format(maxiter))
@@ -1051,8 +1098,6 @@ def mindo3AIJ(qmol,opts):
     Print("Number of valance electrons: {0}".format(nel))
     Print("Number of occupied orbitals: {0} = Number of required eigenvalues".format(nocc))
     if not (all(maxnnz) or all(bandwidth)):
-      ##D  stage = pt.getStage(stagename='DistAIJ', oldstage=stage)
-      ##D  B     = getDistAIJ(basis, nbf, maxdist=maxdist, matcomm=PETSc.COMM_WORLD)
         stage = pt.getStage(stagename='getNnz', oldstage=stage)
         nnzarray,bwarray = pt.getNnzInfo(basis, maxdist)
         maxnnz = max(nnzarray)
@@ -1065,49 +1110,47 @@ def mindo3AIJ(qmol,opts):
         Print("Average nonzeros per row: {0}".format(avgnnz))
         Print("Total number of nonzeros: {0}".format(sumnnz))
         Print("Nonzero density percent : {0}".format(dennnz))
-       # stage = pt.getStage(stagename='getTempAIJ', oldstage=stage)
-       # B     = getTempAIJ(basis, maxdist,maxnnz=nnzarray, bandwidth=bwarray, matcomm=PETSc.COMM_WORLD)
         stage = pt.getStage(stagename='getGammaAIJ', oldstage=stage)
-        nnz,Enuke, B     = getGammaAIJ(basis, maxdist,maxnnz=nnzarray, bandwidth=bwarray, matcomm=PETSc.COMM_WORLD)
+        nnz,Enuke, T     = getGammaAIJ(basis, maxdist,maxnnz=nnzarray, bandwidth=bwarray, matcomm=PETSc.COMM_WORLD)
         dennnz = nnz / (nbf*(nbf+1)/2.0)  * 100.
         Print("Nonzero density percent : {0}".format(dennnz))
         Print("Enuc2          = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Enuke*const.ev2kcal,Enuke,Enuke*const.ev2hartree))
     else:
      #   stage = pt.getStage(stagename='getTempAIJ', oldstage=stage)
-     #   B     = getTempAIJ(basis, maxdist,maxnnz=maxnnz, bandwidth=bandwidth, matcomm=PETSc.COMM_WORLD)
+     #   T     = getTempAIJ(basis, maxdist,maxnnz=maxnnz, bandwidth=bandwidth, matcomm=PETSc.COMM_WORLD)
         stage = pt.getStage(stagename='getGammaAIJ', oldstage=stage)
-        nnz, Enuke, B     = getGammaAIJ(basis, maxdist,maxnnz=maxnnz, bandwidth=bandwidth, matcomm=PETSc.COMM_WORLD)
+        nnz, Enuke, T     = getGammaAIJ(basis, maxdist,maxnnz=maxnnz, bandwidth=bandwidth, matcomm=PETSc.COMM_WORLD)
         dennnz = nnz / (nbf*(nbf+1)/2.0)  * 100.
         Print("Nonzero density percent : {0}".format(dennnz))
         Print("Enuc3          = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Enuke*const.ev2kcal,Enuke,Enuke*const.ev2hartree))
     stage = pt.getStage(stagename='F0', oldstage=stage)
-    F0    = getF0AIJ(atoms, basis, B)
+    F0    = getF0AIJ(atoms, basis, T)
     stage = pt.getStage(stagename='D0', oldstage=stage)
-    D     = getGuessDAIJ(basis,guess=1,T=B,matcomm=PETSc.COMM_WORLD)
+    D     = getGuessDAIJ(basis,guess=1,T=T,matcomm=PETSc.COMM_WORLD)
     stage = pt.getStage(stagename='Ddiag', oldstage=stage)
     Ddiag = pt.convert2SeqVec(D.getDiagonal()) 
     if debug:
-        BCSR  = getDistCSR(basis, nbf,maxdist=maxdist)
-        F0CSR = getF0CSR(atoms, basis, BCSR)
+        TCSR  = getDistCSR(basis, nbf,maxdist=maxdist)
+        F0CSR = getF0CSR(atoms, basis, TCSR)
         pt.compareAIJB(F0,F0CSR,nbf,comment='F0')
         DCSR   = getGuessDCSR(basis)
         pt.compareAIJB(D,DCSR,nbf,comment='D')
         GammaMat = getGammaMat(basis, nbf)
-        pt.compareAIJB(B,GammaMat,nbf,comment='Gamma')        
-        Print("Nonzero density: %i" % (100.*BCSR.nnz/nbf/nbf))
+        pt.compareAIJB(T,GammaMat,nbf,comment='Gamma')        
+        Print("Nonzero density: %i" % (100.*TCSR.nnz/nbf/nbf))
         
     Eel   = 0.    
     Print("{0:*^60s}".format("SELF-CONSISTENT-FIELD ITERATIONS"))
     for iter in xrange(1,maxiter):
         Print("{0:*^60s}".format("Iteration "+str(iter)))
         stage = pt.getStage(stagename='FD', oldstage=stage)
-        FD    = getFDAIJ(atoms,basis, D, Ddiag, B)
+        FD    = getFDAIJ(atoms,basis, D, Ddiag, T)
         F     = F0 + FD
         Eold = Eel
 
         if debug:
             F1CSR    = getF1CSR(atoms, basis, DCSR)
-            F2CSR    = getF2CSR(atoms, DCSR, BCSR)
+            F2CSR    = getF2CSR(atoms, DCSR, TCSR)
             FCSR  = F0CSR+F1CSR+F2CSR
             pt.compareAIJB(F,FCSR,nbf,comment='F')            
             print 'Eel',Eel,0.5*getTraceProductCSR(DCSR,F0CSR+FCSR)
@@ -1119,18 +1162,29 @@ def mindo3AIJ(qmol,opts):
             t0 = getWallTime()
             stage = pt.getStage(stagename='Solve', oldstage=stage)
             if staticsubint or iter<2:
-                eps, nconv, eigarray = st.solveEPS(F,returnoption=1,nocc=nocc)  
+                if solve==2: 
+                    eps = st.solveEPS(F,returnoption=-1,nocc=nocc)
+                else:  
+                    eps, nconv, eigarray = st.solveEPS(F,returnoption=1,nocc=nocc)  
             else:
-                nsubint=st.getNumberOfSubIntervals(eps)
-                subint = st.getSubIntervals(eigarray[0:nocc],nsubint) 
-                eps, nconv, eigarray = st.solveEPS(F,subintervals=subint,returnoption=1,nocc=nocc)   
+                if solve==2: 
+                    eps = st.solveEPS(F,returnoption=-1,nocc=nocc)  
+                else:                  
+                    nsubint=st.getNumberOfSubIntervals(eps)
+                    subint = st.getSubIntervals(eigarray[0:nocc],nsubint) 
+                    eps, nconv, eigarray = st.solveEPS(F,subintervals=subint,returnoption=1,nocc=nocc)   
             getWallTime(t0)    
             stage = pt.getStage(stagename='Density', oldstage=stage)
             t0 = getWallTime()
             if usesips:
-                D = sips.getDensityMat(eps,0,nocc)
+                if solve==2: 
+                    D = sips.solveDensityMat(eps,0,nocc)
+                else: 
+                    
+                    D = sips.getDensityMat(eps,0,nocc)
+                
             else:    
-                D = st.getDensityMatrix(eps,B, nocc)
+                D = st.getDensityMatrix(eps,T, nocc)
             t = getWallTime(t0)
         
         if abs(Eel-Eold) < scfthresh:
@@ -1139,7 +1193,7 @@ def mindo3AIJ(qmol,opts):
         Ddiag=pt.convert2SeqVec(D.getDiagonal()) 
         if debug:
             orbe,orbs = scipy.linalg.eigh(FCSR.todense())
-            DCSR = 2*getDCSR(orbs[:,0:nel/2], BCSR)
+            DCSR = 2*getDCSR(orbs[:,0:nel/2], TCSR)
             print 'D comp', iter
             pt.compareAIJB(D,DCSR,nbf,comment='D')
 
@@ -1172,7 +1226,6 @@ def main():
     bandwidth   = opts.getInt('bw', 0)
     sort        = opts.getInt('sort', 0)
     method      = opts.getString('method','mindo3')
-
     
     if mol:
         import PyQuante.Molecule 
@@ -1227,7 +1280,6 @@ def main():
         rhf(qmol,basisset,spfilter,maxiter,scfthresh,maxdist=maxdist)
     elif method == 'mindo3AIJ':
         Print("MINDO/3 calculation starts...")
-      #  mindo3AIJ(qmol,spfilter,maxiter,scfthresh,maxnnz=[maxnnz],bandwidth=[bandwidth],maxdist=maxdist,staticsubint=staticsubint,guess=guess, solve=solve, debug=debug)
         mindo3AIJ(qmol,opts)
         Print("MINDO/3 calculation finishes.")
     else:
