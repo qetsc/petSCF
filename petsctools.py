@@ -13,6 +13,14 @@ except:
     Print("no scipy modules")
     pass
 
+def getWallTime(t0=0):
+    """
+    Returns the walltime - t0 in seconds.
+    """
+    t = MPI.Wtime() - t0
+    if(t0): Print("{0} seconds".format(t))
+    return t
+
 def getStage(stagename='stage', oldstage=None, printstage=True):
     """
     Easy PETSc staging tool, helps for profiling.

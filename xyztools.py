@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import logging
 import numpy as np
+import constants as const
 
 def initializeLog(debug=False,warning=False,silent=False):
     import sys
@@ -61,7 +62,7 @@ def sortXYZ(xyz,pivot=[0.,0.,0.]):
 
 def readXYZ(xyzfile):
     """
-    Reads an xyz formatted file and returns the coordinates in a list.
+    Reads an xyz formatted file (in Angstroms) and returns the coordinates in a list.
     """
     with open(xyzfile) as f:
         line = f.readline()
@@ -77,12 +78,15 @@ def readXYZ(xyzfile):
             xyz[i]=[tmp[0],float(tmp[1]),float(tmp[2]),float(tmp[3])]
     return xyz
 def xyz2PyQuanteMol(xyz):
+    """
+    PyQuante a
+    """
     import PyQuante.Molecule 
     N=len(xyz)
     atoms = [('',(0,0,0)) for i in xrange(N)]
     for i in xrange(N):
-        atoms[i] = (xyz[i][0],(xyz[i][1],xyz[i][2],xyz[i][3]))
-    return PyQuante.Molecule(str(N),atoms,units='Angstrom') 
+        atoms[i] = (xyz[i][0],(xyz[i][1]*const.ang2bohr,xyz[i][2]*const.ang2bohr,xyz[i][3]*const.ang2bohr))
+    return PyQuante.Molecule(str(N),atoms,units='Bohr') 
 
 def xyzFile2PyQuanteMol(xyzfile):
     """
@@ -97,11 +101,11 @@ def xyzFile2PyQuanteMol(xyzfile):
         title = f.readline()
         atoms = [('',(0,0,0)) for i in xrange(N)]
         for i in xrange(N):
-            line = f.readline()
+            line = f.readline() 
             chunks = line.split()
             x,y,z = map(float,chunks[1:])
-            atoms[i] = (chunks[0],(x,y,z))
-    return PyQuante.Molecule(title,atoms,units='Angstrom')           
+            atoms[i] = (chunks[0],(x*const.ang2bohr,y*const.ang2bohr,z*const.ang2bohr))
+    return PyQuante.Molecule(title,atoms,units='Bohr')           
 def main():
     import os.path
     args = getArgs()
