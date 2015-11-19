@@ -195,10 +195,10 @@ def getG(basis, comm=PETSc.COMM_SELF, T=None):
     Block diagonal matrix with 1x1 (Hydrogens) or 4x4 blocks.
     If T is given, assumes the nonzero pattern of T.
     """
+    nbf             = len(basis)
     if T:
         A = T.duplicate()
     else:        
-        nbf             = len(basis)
         maxnnzperrow    = 4
         A               = PETSc.Mat().create(comm=comm)
         A.setType('aij') #'sbaij'
@@ -210,13 +210,16 @@ def getG(basis, comm=PETSc.COMM_SELF, T=None):
     for i in xrange(rstart,rend):
         basisi  = basis[i]
         atomi   = basisi.atom
-        for j in xrange(atomi.nbf-k):
-            basisj = basis[i+j]
-            atomj   = basisj.atom
-            if atomi == atomj:
-                A[i,j] = PyQuante.MINDO3.get_g(basisi,basisj)
-                k=k+1
-            else: k=0    
+        nbfi    = atomi.nbf
+        A[i,i] = PyQuante.MINDO3.get_g(basisi,basisi)
+        if atomi.atno > 1:
+            minj = max(0,i-nbfi)
+            maxj = min(nbf,i+nbfi) 
+            for j in xrange(minj,maxj):
+                basisj = basis[j]
+                atomj   = basisj.atom
+                if atomi.atid == atomj.atid:
+                    A[i,j] = PyQuante.MINDO3.get_g(basisi,basisj)
     A.assemble()
     return A
 
@@ -226,10 +229,10 @@ def getH(basis, comm=PETSc.COMM_SELF, T=None):
     Block diagonal matrix with 1x1 (Hydrogens) or 4x4 blocks.
     If T is given, assumes the nonzero pattern of T.
     """
+    nbf             = len(basis)
     if T:
         A = T.duplicate()
     else:        
-        nbf             = len(basis)
         maxnnzperrow    = 4
         A               = PETSc.Mat().create(comm=comm)
         A.setType('aij') #'sbaij'
@@ -241,20 +244,24 @@ def getH(basis, comm=PETSc.COMM_SELF, T=None):
     for i in xrange(rstart,rend):
         basisi  = basis[i]
         atomi   = basisi.atom
-        for j in xrange(1,atomi.nbf-k):
-            basisj = basis[i+j]
-            atomj   = basisj.atom
-            if atomi == atomj:
-                A[i,j] = PyQuante.MINDO3.get_h(basisi,basisj)
-                k=k+1
-            else: k=0   
+        nbfi    = atomi.nbf
+        A[i,i] = PyQuante.MINDO3.get_g(basisi,basisi)
+        if atomi.atno > 1:
+            minj = max(0,i-nbfi)
+            maxj = min(nbf,i+nbfi) 
+            for j in xrange(minj,maxj):
+                basisj = basis[j]
+                atomj   = basisj.atom
+                if atomi.atid == atomj.atid and i != j:
+                    A[i,j] = PyQuante.MINDO3.get_h(basisi,basisj)
     A.assemble()
     return A
 
-def getFD(atoms, basis, D, diagD, T):
+def getFD( basis, D, T):
     """
     Density matrix dependent terms of the Fock matrix
     """
+    diagD = pt.convert2SeqVec(D.getDiagonal()) 
     A = T.duplicate()
     A.setUp()
     rstart, rend = A.getOwnershipRange()
@@ -264,7 +271,6 @@ def getFD(atoms, basis, D, diagD, T):
         colsT,valsT = T.getRow(i)
         colsD,valsD = D.getRow(i)
         tmpii = 0.5 * diagD[i] * PyQuante.MINDO3.get_g(basisi,basisi) # Since g[i,i]=h[i,i] 
-        tmpii1=0
         k=0
         for j in colsT:
             basisj=basis[j]
@@ -305,7 +311,7 @@ def getF(atomIDs, D, F0, T, G, H):
         colsG,valsG = G.getRow(i)
         colsH,valsH = H.getRow(i)
         colsT,valsT = T.getRow(i)
-        tmpii       = 0.5 * diagD[i] * diagG[i] # Since g[i,i]=h[i,i] 
+        tmpii       = 0.5 * diagD[i] * diagG[i] # Since g[i,i]=h[i,i]
         k=0
         idxG=0
         for j in colsT:
@@ -316,11 +322,12 @@ def getF(atomIDs, D, F0, T, G, H):
                 Dij   = valsD[k]
                 Tij   = valsT[k]
                 if atomj == atomi:
+                    idxG=np.where(colsG==j)
                     Gij   = valsG[idxG]
                     Hij   = valsH[idxG]
                     tmpii += Djj * ( Gij - 0.5 * Hij ) # Ref1 and PyQuante, In Ref2, Ref3, when i==j, g=h
                     tmpij =  0.5 * Dij * ( 3. * Hij - Gij ) # Ref3, PyQuante, I think this term is an improvement to MINDO3 (it is in MNDO) so not found in Ref1 and Ref2  
-                    idxG  = idxG + 1
+                  #  idxG  = idxG + 1
                 else:
                     tmpii += Tij * Djj     # Ref1, Ref2, Ref3
                     tmpij = -0.5 * Tij * Dij   # Ref1, Ref2, Ref3  
@@ -330,12 +337,27 @@ def getF(atomIDs, D, F0, T, G, H):
     A.assemble()
     return A
 
-def scf(D,F0,T,G,H,atomIDs,scfthresh,maxiter):
+def scf(opts,nocc,atomIDs,D,F0,T,G,H):
     """
     """
+    maxiter     = opts.getInt('maxiter', 30)
+    scfthresh   = opts.getReal('scfthresh',1.e-5)
+    staticsubint= opts.getBool('staticsubint',False)
+    usesips     = opts.getBool('sips',False)
+
     Eel       = 0.
     converged = False    
     Print("{0:*^60s}".format("SELF-CONSISTENT-FIELD ITERATIONS"))
+    Print("SCF threshold: {0:5.3e}".format(scfthresh))
+    Print("Maximum number of SCF iterations: {0}".format(maxiter))
+    if staticsubint: Print("Fixed subintervals will be used")
+    else: Print("Subintervals will be adjusted at each iteration")
+    if usesips:
+        try:
+            import SIPs.sips as sips
+        except:
+            Print("SIPs not found")
+            usesips = False
     for iter in xrange(1,maxiter):
         Print("{0:*^60s}".format("Iteration "+str(iter)))
         stage = pt.getStage(stagename='FD')
@@ -372,28 +394,15 @@ def getEnergy(qmol,opts):
     stage       = pt.getStage(stagename='Initialize')
     t0          = pt.getWallTime()
     maxdist     = opts.getReal('maxdist', 1.e6)
-    maxiter     = opts.getInt('maxiter', 30)
     solve       = opts.getInt('solve', 0)
     maxnnz      = [opts.getInt('maxnnz', 0)]
     guess       = opts.getInt('guess', 0)
     bandwidth   = [opts.getInt('bw', 0)]
     sort        = opts.getInt('sort', 0)     
-    scfthresh   = opts.getReal('scfthresh',1.e-5)
     spfilter    = opts.getReal('spfilter',0.)
-    staticsubint= opts.getBool('staticsubint',False)
     debug       = opts.getBool('debug',False)
-    usesips     = opts.getBool('sips',False)
     Print("Distance cutoff: {0:5.3f}".format(maxdist))
-    Print("SCF threshold: {0:5.3e}".format(scfthresh))
-    Print("Maximum number of SCF iterations: {0}".format(maxiter))
-    if not staticsubint:
-        Print("Subintervals will be updated after the first iteration")
-    if usesips:
-        try:
-            import SIPs.sips as sips
-        except:
-            Print("sips not found")
-            usesips = False
+
     stage = pt.getStage(stagename='Initialize')
     qmol  = PyQuante.MINDO3.initialize(qmol)
     atoms   = qmol.atoms
@@ -440,7 +449,7 @@ def getEnergy(qmol,opts):
     stage = pt.getStage(stagename='H', oldstage=stage)
     H     = getH(basis,T=G)
     pt.getWallTime(t0)
-    converged, Eelec = scf(D0,F0,T,G,H,atomIDs,scfthresh,maxiter)
+    converged, Eelec = scf(opts,nocc,atomIDs,D0,F0,T,G,H)
     Etot   = Eelec + Enuke
     Efinal = Etot*const.ev2kcal+Eref
     Print("Enuc             = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Enuke*const.ev2kcal,Enuke,Enuke*const.ev2hartree))
@@ -494,6 +503,7 @@ def main(qmol,opts):
     nel   = PyQuante.MINDO3.get_nel(atoms)
     nocc  = nel/2
     basis = getBasis(qmol, nbf)
+    atomIDs = getAtomIDs(basis)
     matcomm=PETSc.COMM_WORLD
     Print("Number of basis functions  : {0} = Matrix size".format(nbf))
     Print("Number of valance electrons: {0}".format(nel))
@@ -534,7 +544,7 @@ def main(qmol,opts):
     for iter in xrange(1,maxiter):
         Print("{0:*^60s}".format("Iteration "+str(iter)))
         stage = pt.getStage(stagename='FD', oldstage=stage)
-        FD    = getFD(atoms,basis, D, Ddiag, T)
+        FD    = getFD(basis, D, T)
         F     = F0 + FD
         Eold = Eel
 

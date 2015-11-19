@@ -868,7 +868,8 @@ def main():
         rhf(qmol,basisset,spfilter,maxiter,scfthresh,maxdist=maxdist)
     elif method == 'mindo3AIJ':
         Print("MINDO/3 calculation starts...")
-        mindo3.scf(qmol,opts)
+       # mindo3.main(qmol,opts)
+        mindo3.getEnergy(qmol,opts)
         Print("MINDO/3 calculation finishes.")
     else:
         Print("No valid method specified")
