@@ -150,8 +150,9 @@ def getNnzInfo(basis,maxdist):
     Distance calculation loop should be over atoms indeed, which will improve performance by nbf/natom.
     If atoms are ordered based on a distance from a pivot point, loop can be reduced to exclude far atoms.
     """
+    import constants as const
     nbf=len(basis)
-    maxdist2 = maxdist * maxdist
+    maxdist2 = maxdist * maxdist * const.ang2bohr**2.
     nnzarray=np.ones(nbf,dtype='int16')
     bwarray=np.zeros(nbf,dtype='int16')
     for i in xrange(nbf):
@@ -161,6 +162,16 @@ def getNnzInfo(basis,maxdist):
             if distij2 < maxdist2: 
                 nnzarray[i] += 1
                 bwarray[i]   = j - i + 1
+    maxnnz = max(nnzarray)
+    maxbw = max(bwarray)
+    sumnnz = sum(nnzarray)
+    avgnnz = sumnnz / float(nbf)
+    dennnz = sumnnz / (nbf*(nbf+1)/2.0)  * 100.
+    Print("Maximum nonzeros per row: {0}".format(maxnnz))
+    Print("Maximum bandwidth       : {0}".format(maxbw))
+    Print("Average nonzeros per row: {0}".format(avgnnz))
+    Print("Total number of nonzeros: {0}".format(sumnnz))
+    Print("Nonzero density percent : {0}".format(dennnz))            
     return nnzarray, bwarray   
 
 def getSparsityInfo(BCSR, nbf, maxdensity, savefig=True):
@@ -322,6 +333,17 @@ def getTraceProductCSR(A,B):
         for i in xrange(nnzA):
             tmp+= A.data[i]*B[A.row[i],A.col[i]]
     return tmp
+
+def getTraceDiagProduct(A,B):
+    """
+    Returns the trace of the product which is:
+    sum_i sum_j A(i,j) B(j,i), 
+    so it is simpler than taking the product first and then computing the trace.
+    """
+    a = A.getDiagonal()
+    b = B.getDiagonal()
+    temp = a.dot(b)
+    return MPI.COMM_WORLD.allreduce(temp,op=MPI.SUM)
 
 def getTraceProductAIJ(A,B):
     """

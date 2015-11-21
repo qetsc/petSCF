@@ -52,9 +52,11 @@ def getGamma(basis,maxdist,maxnnz=[0],bandwidth=[0],comm=PETSc.COMM_SELF):
     enuke=0.0
     A        = PETSc.Mat().create(comm=comm)
     A.setType('aij') #'sbaij'
-   # A.setOption(A.Option.SYMMETRIC,True)
     A.setSizes([nbf,nbf]) 
-   # if any(maxnnz): A.setPreallocationNNZ(maxnnz) 
+    if any(maxnnz): 
+        A.setPreallocationNNZ(maxnnz) 
+    else:
+        A.setPreallocationNNZ(nbf)
     A.setUp()
     A.setOption(A.Option.NEW_NONZERO_ALLOCATION_ERR,False)
     rstart, rend = A.getOwnershipRange()
@@ -68,19 +70,20 @@ def getGamma(basis,maxdist,maxnnz=[0],bandwidth=[0],comm=PETSc.COMM_SELF):
             A[i,i] = gammaii
             for j in xrange(i+1,min(i+bandwidth[i],nbf)):
                 atomj = basis[j].atom
-                distij2 = atomi.dist2(atomj) * const.bohr2ang**2.
-                if distij2 < mindist:
+                if atomi == atomj:
                     A[i,j] = gammaii
                     A[j,i] = gammaii
                     nnz += 1
-                elif distij2 < maxdist2: 
-                    gammaij=const.e2/np.sqrt(distij2+0.25*(atomi.rho+atomj.rho)**2.)
-                    R=np.sqrt(distij2)
-                    scale = PyQuante.MINDO3.get_scale(atomi.atno,atomj.atno,R)
-                    enuke += ( atomi.Z*atomj.Z*gammaij +  abs(atomi.Z*atomj.Z*(const.e2/R-gammaij)*scale) ) / ( atomi.nbf *atomj.nbf )
-                    A[i,j] = gammaij
-                    A[j,i] = gammaij
-                    nnz += 1
+                else:                        
+                    distij2 = atomi.dist2(atomj) * const.bohr2ang**2.
+                    if distij2 < maxdist2: 
+                        gammaij=const.e2/np.sqrt(distij2+0.25*(atomi.rho+atomj.rho)**2.)
+                        R=np.sqrt(distij2)
+                        scale = PyQuante.MINDO3.get_scale(atomi.atno,atomj.atno,R)
+                        enuke += ( atomi.Z*atomj.Z*gammaij +  abs(atomi.Z*atomj.Z*(const.e2/R-gammaij)*scale) ) / ( atomi.nbf *atomj.nbf )
+                        A[i,j] = gammaij
+                        A[j,i] = gammaij
+                        nnz += 1
     else:
         for i in xrange(rstart,rend):
             atomi=basis[i].atom
@@ -88,24 +91,24 @@ def getGamma(basis,maxdist,maxnnz=[0],bandwidth=[0],comm=PETSc.COMM_SELF):
             A[i,i] = gammaii
             for j in xrange(i+1,nbf):
                 atomj = basis[j].atom
-                distij2 = atomi.dist2(atomj) * const.bohr2ang**2.
-                if distij2 < mindist:
+                if atomi == atomj:
                     A[i,j] = gammaii
                     A[j,i] = gammaii
                     nnz += 1
-                if distij2 < maxdist2: 
-                    gammaij=const.e2/np.sqrt(distij2+0.25*(atomi.rho+atomj.rho)**2.)
-                    R=np.sqrt(distij2)
-                    scale = PyQuante.MINDO3.get_scale(atomi.atno,atomj.atno,R)
-                    enuke += atomi.Z*atomj.Z*gammaij +  abs(atomi.Z*atomj.Z*(const.e2/R-gammaij)*scale)
-                    A[i,j] = gammaij
-                    A[j,i] = gammaij
-                    nnz += 1
+                else:                        
+                    distij2 = atomi.dist2(atomj) * const.bohr2ang**2.
+                    if distij2 < maxdist2: 
+                        gammaij=const.e2/np.sqrt(distij2+0.25*(atomi.rho+atomj.rho)**2.)
+                        R=np.sqrt(distij2)
+                        scale = PyQuante.MINDO3.get_scale(atomi.atno,atomj.atno,R)
+                        enuke += ( atomi.Z*atomj.Z*gammaij +  abs(atomi.Z*atomj.Z*(const.e2/R-gammaij)*scale) ) / ( atomi.nbf *atomj.nbf )
+                        A[i,j] = gammaij
+                        A[j,i] = gammaij
+                        nnz += 1
     A.assemblyBegin()
     enuke =  MPI.COMM_WORLD.allreduce(enuke)        
     nnz =  MPI.COMM_WORLD.allreduce(nnz)  + nbf      
     A.assemblyEnd()
-
     return  nnz,enuke, A
        
 def getF0(atoms,basis,T):
@@ -319,7 +322,10 @@ def getF(atomIDs, D, F0, T, G, H):
             if i != j:
                 tmpij = 0
                 Djj   = diagD[j] # D[j,j]
-                Dij   = valsD[k]
+                if len(valsD)>1:
+                    Dij   = valsD[k]
+                else:
+                    Dij   = 0
                 Tij   = valsT[k]
                 if atomj == atomi:
                     idxG=np.where(colsG==j)
@@ -341,6 +347,7 @@ def scf(opts,nocc,atomIDs,D,F0,T,G,H):
     """
     """
     maxiter     = opts.getInt('maxiter', 30)
+    guess       = opts.getInt('guess', 0)
     scfthresh   = opts.getReal('scfthresh',1.e-5)
     staticsubint= opts.getBool('staticsubint',False)
     usesips     = opts.getBool('sips',False)
@@ -364,7 +371,10 @@ def scf(opts,nocc,atomIDs,D,F0,T,G,H):
         F    = getF(atomIDs, D, F0, T, G, H)
         F    = F0 + F
         Eold = Eel
-        Eel  = 0.5 * pt.getTraceProductAIJ(D, F0+F)
+        if iter==1 and guess==0:
+            Eel  = 0.5 * pt.getTraceDiagProduct(D,F0+F)
+        else:
+            Eel  = 0.5 * pt.getTraceProductAIJ(D, F0+F)
         Print("Eel            = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Eel*const.ev2kcal,Eel,Eel*const.ev2hartree))  
         t0 = pt.getWallTime()
         stage = pt.getStage(stagename='Solve', oldstage=stage)
@@ -401,10 +411,14 @@ def getEnergy(qmol,opts):
     sort        = opts.getInt('sort', 0)     
     spfilter    = opts.getReal('spfilter',0.)
     debug       = opts.getBool('debug',False)
+    checknnz    = opts.getBool('checknnz',False) 
+    pyquante    = opts.getBool('pyquante',False) #TODO get Pyquante energy for testing
     Print("Distance cutoff: {0:5.3f}".format(maxdist))
 
     stage = pt.getStage(stagename='Initialize')
     qmol  = PyQuante.MINDO3.initialize(qmol)
+    if pyquante:
+        Epyquante = PyQuante.MINDO3.scf(qmol)
     atoms   = qmol.atoms
     Eref  = PyQuante.MINDO3.get_reference_energy(qmol)
     nbf   = PyQuante.MINDO3.get_nbf(qmol)    
@@ -416,34 +430,19 @@ def getEnergy(qmol,opts):
     Print("Number of basis functions  : {0} = Matrix size".format(nbf))
     Print("Number of valance electrons: {0}".format(nel))
     Print("Number of occupied orbitals: {0} = Number of required eigenvalues".format(nocc))
-    if not (all(maxnnz) or all(bandwidth)):
+    if checknnz:
         stage = pt.getStage(stagename='getNnz', oldstage=stage)
-        nnzarray,bwarray = pt.getNnzInfo(basis, maxdist)
-        maxnnz = max(nnzarray)
-        maxbw = max(bwarray)
-        sumnnz = sum(nnzarray)
-        avgnnz = sumnnz / float(nbf)
-        dennnz = sumnnz / (nbf*(nbf+1)/2.0)  * 100.
-        Print("Maximum nonzeros per row: {0}".format(maxnnz))
-        Print("Maximum bandwidth       : {0}".format(maxbw))
-        Print("Average nonzeros per row: {0}".format(avgnnz))
-        Print("Total number of nonzeros: {0}".format(sumnnz))
-        Print("Nonzero density percent : {0}".format(dennnz))
-        stage = pt.getStage(stagename='getGamma', oldstage=stage)
-        nnz,Enuke, T     = getGamma(basis, maxdist,maxnnz=nnzarray, bandwidth=bwarray, comm=matcomm)
-        dennnz = nnz / (nbf*(nbf+1)/2.0)  * 100.
-        Print("Nonzero density percent : {0}".format(dennnz))
-    else:
-        stage = pt.getStage(stagename='getGamma', oldstage=stage)
-        nnz, Enuke, T     = getGamma(basis, maxdist,maxnnz=maxnnz, bandwidth=bandwidth, comm=matcomm)
-        dennnz = nnz / (nbf*(nbf+1)/2.0)  * 100.
-        Print("Nonzero density percent : {0}".format(dennnz))
+        maxnnz,bandwidth = pt.getNnzInfo(basis, maxdist)
+    stage = pt.getStage(stagename='getGamma', oldstage=stage)
+    nnz, Enuke, T     = getGamma(basis, maxdist,maxnnz=maxnnz, bandwidth=bandwidth, comm=matcomm)
+    dennnz = nnz / (nbf*(nbf+1)/2.0)  * 100.
+    Print("Nonzero density percent : {0}".format(dennnz))
     Print("Eref           = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Eref, Eref*const.kcal2ev, Eref*const.kcal2hartree))    
     Print("Enuc           = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Enuke*const.ev2kcal,Enuke,Enuke*const.ev2hartree))
     stage = pt.getStage(stagename='F0', oldstage=stage)
     F0    = getF0(atoms, basis, T)
     stage = pt.getStage(stagename='D0', oldstage=stage)
-    D0     = getD0(basis,guess=1,T=T,comm=matcomm)
+    D0     = getD0(basis,guess=guess,T=T,comm=matcomm)
     stage = pt.getStage(stagename='G', oldstage=stage)
     G     = getG(basis,comm=matcomm)    
     stage = pt.getStage(stagename='H', oldstage=stage)

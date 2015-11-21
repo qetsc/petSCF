@@ -814,6 +814,7 @@ def main():
     bandwidth   = opts.getInt('bw', 0)
     sort        = opts.getInt('sort', 0)
     method      = opts.getString('method','mindo3')
+    pyquante    = opts.getBool('pyquante',False)
     
     if mol:
         import PyQuante.Molecule 
@@ -868,7 +869,6 @@ def main():
         rhf(qmol,basisset,spfilter,maxiter,scfthresh,maxdist=maxdist)
     elif method == 'mindo3AIJ':
         Print("MINDO/3 calculation starts...")
-       # mindo3.main(qmol,opts)
         mindo3.getEnergy(qmol,opts)
         Print("MINDO/3 calculation finishes.")
     else:
