@@ -1,0 +1,654 @@
+*********Stage Input**********
+xyz read from file:./XYZ/012.xyz
+**********Stage Sort**********
+sorted xyz file:tmp.xyz
+Number of atoms: 711
+Number of electrons: 2370
+MINDO/3 calculation starts...
+*******Stage Initialize*******
+Distance cutoff: 10.000
+*******Stage Initialize*******
+Number of basis functions  : 1422 = Matrix size
+Number of valance electrons: 1896
+Number of occupied orbitals: 948 = Number of required eigenvalues
+********Stage getGamma********
+Nonzero density percent : 27.4235905404
+Eref           =   1853780.7915600031 kcal/mol =     80385.9672850268 ev =      2954.1876123947 Hartree
+Enuc           =  26242971.9971059710 kcal/mol =   1137980.6598632310 ev =     41820.8361739639 Hartree
+***********Stage F0***********
+***********Stage D0***********
+***********Stage G************
+***********Stage H************
+5.48688697815 seconds
+**************SELF-CONSISTENT-FIELD ITERATIONS**************
+SCF threshold: 1.000e-07
+Maximum number of SCF iterations: 10
+Subintervals will be adjusted at each iteration
+************************Iteration 1*************************
+***********Stage FD***********
+Eel            = -557318724.6614538431 kcal/mol = -24167153.4045121148 ev =   -888143.8841347484 Hartree
+*********Stage Solve**********
+Number of converged and required eigenvalues: 1422, 948 
+Range of required eigenvalues: -28.045 , -10.836
+24.9384520054 seconds
+********Stage Density*********
+
+EPSCreateDensityMat: idx_start/end: 0, 948
+[18] interval [-4, -2], inertia 951 1143; nconv_loc 0
+[4] interval [-32, -30], inertia 0 0; nconv_loc 0
+[14] interval [-12, -10], inertia 708 948; nconv_loc 240
+[17] interval [-6, -4], inertia 948 951; nconv_loc 0
+[16] interval [-8, -6], inertia 948 948; nconv_loc 0
+[5] interval [-30, -28], inertia 0 1; nconv_loc 1
+[15] interval [-10, -8], inertia 948 948; nconv_loc 0
+[19] interval [-2, 0], inertia 1143 1422; nconv_loc 0
+[13] interval [-14, -12], inertia 484 708; nconv_loc 224
+[3] interval [-34, -32], inertia 0 0; nconv_loc 0
+[2] interval [-36, -34], inertia 0 0; nconv_loc 0
+[6] interval [-28, -26], inertia 1 237; nconv_loc 236
+[1] interval [-38, -36], inertia 0 0; nconv_loc 0
+[12] interval [-16, -14], inertia 256 484; nconv_loc 228
+[7] interval [-26, -24], inertia 237 237; nconv_loc 0
+[11] interval [-18, -16], inertia 237 256; nconv_loc 19
+[8] interval [-24, -22], inertia 237 237; nconv_loc 0
+[9] interval [-22, -20], inertia 237 237; nconv_loc 0
+[10] interval [-20, -18], inertia 237 237; nconv_loc 0
+[0] interval [-40, -38], inertia 0 0; nconv_loc 0
+0.389611959457 seconds
+************************Iteration 2*************************
+***********Stage FD***********
+Eel            = -28101446.3304325715 kcal/mol =  -1218570.1543919418 ev =    -44782.5034209563 Hartree
+*********Stage Solve**********
+New interval boundaries: -40.951 , 2.071
+Number of converged and required eigenvalues: 987, 948 
+Range of required eigenvalues: -38.469 , -3.617
+21.4764139652 seconds
+********Stage Density*********
+
+EPSCreateDensityMat: idx_start/end: 0, 948
+[3] interval [-26.6938, -26.4374], inertia 152 163; nconv_loc 11
+[8] interval [-15.1147, -14.8738], inertia 476 494; nconv_loc 18
+[2] interval [-26.9261, -26.6938], inertia 145 152; nconv_loc 7
+[1] interval [-27.2552, -26.9261], inertia 130 145; nconv_loc 15
+[4] interval [-26.4374, -26.1089], inertia 163 170; nconv_loc 7
+[5] interval [-26.1089, -15.7404], inertia 170 427; nconv_loc 257
+[6] interval [-15.7404, -15.4059], inertia 427 452; nconv_loc 25
+[9] interval [-14.8738, -14.4328], inertia 494 522; nconv_loc 28
+[10] interval [-14.4328, -13.6392], inertia 522 587; nconv_loc 65
+[17] interval [-11.3149, -11.2438], inertia 768 769; nconv_loc 1
+[18] interval [-11.2438, -11.1579], inertia 769 776; nconv_loc 7
+[7] interval [-15.4059, -15.1147], inertia 452 476; nconv_loc 24
+[13] interval [-12.9262, -12.5844], inertia 640 669; nconv_loc 29
+[16] interval [-11.3663, -11.3149], inertia 766 768; nconv_loc 2
+[11] interval [-13.6392, -13.2449], inertia 587 614; nconv_loc 27
+[19] interval [-11.1579, 2.07088], inertia 776 987; nconv_loc 172
+[0] interval [-40.9514, -27.2552], inertia 0 130; nconv_loc 130
+[12] interval [-13.2449, -12.9262], inertia 614 640; nconv_loc 26
+[15] interval [-12.0516, -11.3663], inertia 707 766; nconv_loc 59
+[14] interval [-12.5844, -12.0516], inertia 669 707; nconv_loc 38
+0.476588964462 seconds
+************************Iteration 3*************************
+***********Stage FD***********
+Eel            = -28106336.9243444763 kcal/mol =  -1218782.2264578498 ev =    -44790.2970781231 Hartree
+*********Stage Solve**********
+New interval boundaries: -64.608 , 22.522
+Number of converged and required eigenvalues: 1422, 948 
+Range of required eigenvalues: -37.223 , -8.300
+41.1601879597 seconds
+********Stage Density*********
+
+EPSCreateDensityMat: idx_start/end: 0, 948
+[16] interval [-11.5302, -10.6922], inertia 874 912; nconv_loc 38
+[15] interval [-12.0921, -11.5302], inertia 843 874; nconv_loc 31
+[14] interval [-12.6983, -12.0921], inertia 794 843; nconv_loc 49
+[8] interval [-16.5512, -15.7745], inertia 459 521; nconv_loc 62
+[17] interval [-10.6922, -9.85021], inertia 912 933; nconv_loc 21
+[4] interval [-25.5409, -22.4812], inertia 226 240; nconv_loc 14
+[5] interval [-22.4812, -18.6029], inertia 240 314; nconv_loc 74
+[18] interval [-9.85021, -8.6805], inertia 933 945; nconv_loc 12
+[11] interval [-14.4954, -13.9478], inertia 624 679; nconv_loc 55
+[12] interval [-13.9478, -13.2861], inertia 679 739; nconv_loc 60
+[6] interval [-18.6029, -17.4707], inertia 314 384; nconv_loc 70
+[9] interval [-15.7745, -15.1853], inertia 521 561; nconv_loc 40
+[10] interval [-15.1853, -14.4954], inertia 561 624; nconv_loc 63
+[7] interval [-17.4707, -16.5512], inertia 384 459; nconv_loc 75
+[13] interval [-13.2861, -12.6983], inertia 739 794; nconv_loc 55
+[19] interval [-8.6805, 22.5222], inertia 945 1422; nconv_loc 3
+[0] interval [-64.6082, -29.5241], inertia 0 88; nconv_loc 88
+[1] interval [-29.5241, -28.1946], inertia 88 158; nconv_loc 70
+[2] interval [-28.1946, -26.9662], inertia 158 201; nconv_loc 43
+[3] interval [-26.9662, -25.5409], inertia 201 226; nconv_loc 25
+0.363317966461 seconds
+************************Iteration 4*************************
+***********Stage FD***********
+Eel            = -28107218.7947703376 kcal/mol =  -1218820.4672291027 ev =    -44791.7024280435 Hartree
+*********Stage Solve**********
+New interval boundaries: -58.915 , 13.392
+Number of converged and required eigenvalues: 1421, 948 
+Range of required eigenvalues: -41.214 , -7.270
+44.3910458088 seconds
+********Stage Density*********
+
+EPSCreateDensityMat: idx_start/end: 0, 948
+[4] interval [-27.2927, -24.5291], inertia 188 236; nconv_loc 48
+[3] interval [-28.5945, -27.2927], inertia 137 188; nconv_loc 51
+[7] interval [-18.2813, -17.5355], inertia 337 387; nconv_loc 50
+[5] interval [-24.5291, -19.496], inertia 236 282; nconv_loc 46
+[2] interval [-29.423, -28.5945], inertia 93 137; nconv_loc 44
+[8] interval [-17.5355, -16.9965], inertia 387 426; nconv_loc 39
+[1] interval [-30.6845, -29.423], inertia 43 93; nconv_loc 50
+[0] interval [-58.9147, -30.6845], inertia 0 43; nconv_loc 43
+[9] interval [-16.9965, -16.4179], inertia 426 468; nconv_loc 42
+[11] interval [-15.8227, -15.1521], inertia 513 569; nconv_loc 56
+[10] interval [-16.4179, -15.8227], inertia 468 513; nconv_loc 45
+[19] interval [-11.1158, 13.3917], inertia 888 1421; nconv_loc 60
+[6] interval [-19.496, -18.2813], inertia 282 337; nconv_loc 55
+[15] interval [-13.6752, -13.1488], inertia 705 750; nconv_loc 45
+[16] interval [-13.1488, -12.6243], inertia 750 791; nconv_loc 41
+[12] interval [-15.1521, -14.6346], inertia 569 611; nconv_loc 42
+0.404217004776 seconds
+************************Iteration 5*************************
+***********Stage FD***********
+[14] interval [-14.1468, -13.6752], inertia 659 705; nconv_loc 46
+[13] interval [-14.6346, -14.1468], inertia 611 659; nconv_loc 48
+[17] interval [-12.6243, -12.0601], inertia 791 839; nconv_loc 48
+[18] interval [-12.0601, -11.1158], inertia 839 888; nconv_loc 49
+Eel            = -28107628.1357889362 kcal/mol =  -1218838.2175876561 ev =    -44792.3547544522 Hartree
+*********Stage Solve**********
+New interval boundaries: -66.673 , 18.188
+Number of converged and required eigenvalues: 1422, 948 
+Range of required eigenvalues: -42.551 , -7.950
+41.7039780617 seconds
+********Stage Density*********
+
+EPSCreateDensityMat: idx_start/end: 0, 948
+[9] interval [-17.0311, -16.4064], inertia 442 486; nconv_loc 44
+[6] interval [-19.4624, -18.4247], inertia 293 342; nconv_loc 49
+[13] interval [-14.6428, -14.1567], inertia 626 674; nconv_loc 48
+[7] interval [-18.4247, -17.6937], inertia 342 394; nconv_loc 52
+[8] interval [-17.6937, -17.0311], inertia 394 442; nconv_loc 48
+[10] interval [-16.4064, -15.7497], inertia 486 535; nconv_loc 49
+[1] interval [-30.5637, -29.391], inertia 56 107; nconv_loc 51
+[0] interval [-66.6725, -30.5637], inertia 0 56; nconv_loc 56
+[19] interval [-10.9444, 18.188], inertia 900 1422; nconv_loc 48
+[2] interval [-29.391, -28.4192], inertia 107 151; nconv_loc 44
+[11] interval [-15.7497, -15.2681], inertia 535 572; nconv_loc 37
+[12] interval [-15.2681, -14.6428], inertia 572 626; nconv_loc 54
+[3] interval [-28.4192, -27.2871], inertia 151 192; nconv_loc 41
+[4] interval [-27.2871, -24.7104], inertia 192 238; nconv_loc 46
+[5] interval [-24.7104, -19.4624], inertia 238 293; nconv_loc 55
+[16] interval [-13.1327, -12.5175], inertia 762 815; nconv_loc 53
+0.299496889114 seconds
+************************Iteration 6*************************
+***********Stage FD***********
+[17] interval [-12.5175, -11.8438], inertia 815 851; nconv_loc 36
+[18] interval [-11.8438, -10.9444], inertia 851 900; nconv_loc 49
+[14] interval [-14.1567, -13.6723], inertia 674 715; nconv_loc 41
+[15] interval [-13.6723, -13.1327], inertia 715 762; nconv_loc 47
+Eel            = -28107891.2208121568 kcal/mol =  -1218849.6258103359 ev =    -44792.7740071061 Hartree
+*********Stage Solve**********
+New interval boundaries: -68.502 , 18.002
+Number of converged and required eigenvalues: 1422, 948 
+Range of required eigenvalues: -44.081 , -7.456
+40.0321769714 seconds
+********Stage Density*********
+
+EPSCreateDensityMat: idx_start/end: 0, 948
+[2] interval [-29.6032, -28.6882], inertia 103 143; nconv_loc 40
+[4] interval [-27.4002, -24.9953], inertia 184 236; nconv_loc 52
+[3] interval [-28.6882, -27.4002], inertia 143 184; nconv_loc 41
+[1] interval [-30.916, -29.6032], inertia 50 103; nconv_loc 53
+[0] interval [-68.5025, -30.916], inertia 0 50; nconv_loc 50
+[7] interval [-18.6464, -17.8832], inertia 341 387; nconv_loc 46
+[19] interval [-11.1019, 18.0017], inertia 886 1422; nconv_loc 62
+[5] interval [-24.9953, -19.755], inertia 236 292; nconv_loc 56
+[6] interval [-19.755, -18.6464], inertia 292 341; nconv_loc 49
+0.333323001862 seconds
+************************Iteration 7*************************
+***********Stage FD***********
+[14] interval [-14.3411, -13.7542], inertia 665 707; nconv_loc 42
+[11] interval [-15.9035, -15.4129], inertia 527 567; nconv_loc 40
+[15] interval [-13.7542, -13.2093], inertia 707 751; nconv_loc 44
+[18] interval [-11.9308, -11.1019], inertia 838 886; nconv_loc 48
+[8] interval [-17.8832, -17.2537], inertia 387 435; nconv_loc 48
+[9] interval [-17.2537, -16.6256], inertia 435 474; nconv_loc 39
+[12] interval [-15.4129, -14.814], inertia 567 618; nconv_loc 51
+[13] interval [-14.814, -14.3411], inertia 618 665; nconv_loc 47
+[10] interval [-16.6256, -15.9035], inertia 474 527; nconv_loc 53
+[16] interval [-13.2093, -12.7055], inertia 751 800; nconv_loc 49
+[17] interval [-12.7055, -11.9308], inertia 800 838; nconv_loc 38
+Eel            = -28108090.0874027237 kcal/mol =  -1218858.2493128106 ev =    -44793.0909211777 Hartree
+*********Stage Solve**********
+New interval boundaries: -71.550 , 20.013
+Number of converged and required eigenvalues: 1422, 948 
+Range of required eigenvalues: -45.177 , -7.473
+43.3351111412 seconds
+********Stage Density*********
+
+EPSCreateDensityMat: idx_start/end: 0, 948
+[11] interval [-16.0302, -15.443], inertia 526 573; nconv_loc 47
+[6] interval [-19.9967, -18.8785], inertia 293 341; nconv_loc 48
+[15] interval [-13.788, -13.1827], inertia 710 759; nconv_loc 49
+[16] interval [-13.1827, -12.7198], inertia 759 792; nconv_loc 33
+[13] interval [-14.8822, -14.3953], inertia 618 667; nconv_loc 49
+[5] interval [-25.0269, -19.9967], inertia 238 293; nconv_loc 55
+[4] interval [-27.2731, -25.0269], inertia 188 238; nconv_loc 50
+[1] interval [-31.0997, -29.7483], inertia 53 99; nconv_loc 46
+[8] interval [-18.0343, -17.3795], inertia 383 431; nconv_loc 48
+[14] interval [-14.3953, -13.788], inertia 667 710; nconv_loc 43
+[9] interval [-17.3795, -16.672], inertia 431 476; nconv_loc 45
+[17] interval [-12.7198, -11.8182], inertia 792 845; nconv_loc 53
+[18] interval [-11.8182, -10.9109], inertia 845 891; nconv_loc 46
+[10] interval [-16.672, -16.0302], inertia 476 526; nconv_loc 50
+[7] interval [-18.8785, -18.0343], inertia 341 383; nconv_loc 42
+[3] interval [-28.7189, -27.2731], inertia 144 188; nconv_loc 44
+[12] interval [-15.443, -14.8822], inertia 573 618; nconv_loc 45
+[2] interval [-29.7483, -28.7189], inertia 99 144; nconv_loc 45
+[19] interval [-10.9109, 20.0127], inertia 891 1422; nconv_loc 57
+[0] interval [-71.5504, -31.0997], inertia 0 53; nconv_loc 53
+0.383473873138 seconds
+************************Iteration 8*************************
+***********Stage FD***********
+Eel            = -28108256.4789385423 kcal/mol =  -1218865.4645912382 ev =    -44793.3560829574 Hartree
+*********Stage Solve**********
+New interval boundaries: -73.456 , 20.806
+Number of converged and required eigenvalues: 1422, 948 
+Range of required eigenvalues: -46.018 , -7.297
+41.6548252106 seconds
+********Stage Density*********
+
+EPSCreateDensityMat: idx_start/end: 0, 948
+[5] interval [-25.1997, -20.2824], inertia 236 292; nconv_loc 56
+[6] interval [-20.2824, -19.0734], inertia 292 342; nconv_loc 50
+[7] interval [-19.0734, -18.2222], inertia 342 383; nconv_loc 41
+[8] interval [-18.2222, -17.4601], inertia 383 429; nconv_loc 46
+[4] interval [-27.2634, -25.1997], inertia 187 236; nconv_loc 49
+[3] interval [-28.7429, -27.2634], inertia 141 187; nconv_loc 46
+[9] interval [-17.4601, -16.8146], inertia 429 475; nconv_loc 46
+[2] interval [-29.888, -28.7429], inertia 100 141; nconv_loc 41
+[1] interval [-31.3375, -29.888], inertia 56 100; nconv_loc 44
+[19] interval [-10.8904, 20.8059], inertia 886 1422; nconv_loc 62
+[12] interval [-15.5203, -14.962], inertia 570 621; nconv_loc 51
+[16] interval [-13.3227, -12.615], inertia 754 798; nconv_loc 44
+[18] interval [-11.7984, -10.8904], inertia 845 886; nconv_loc 41
+[17] interval [-12.615, -11.7984], inertia 798 845; nconv_loc 47
+[15] interval [-13.8384, -13.3227], inertia 715 754; nconv_loc 39
+[0] interval [-73.4557, -31.3375], inertia 0 56; nconv_loc 56
+[14] interval [-14.4885, -13.8384], inertia 662 715; nconv_loc 53
+[10] interval [-16.8146, -16.1586], inertia 475 521; nconv_loc 46
+[13] interval [-14.962, -14.4885], inertia 621 662; nconv_loc 41
+[11] interval [-16.1586, -15.5203], inertia 521 570; nconv_loc 49
+0.342661857605 seconds
+************************Iteration 9*************************
+***********Stage FD***********
+Eel            = -28107895.9863760956 kcal/mol =  -1218849.8324606954 ev =    -44792.7816015154 Hartree
+*********Stage Solve**********
+New interval boundaries: -75.058 , 21.743
+Number of converged and required eigenvalues: 1420, 948 
+Range of required eigenvalues: -46.581 , -4.911
+44.6557838917 seconds
+********Stage Density*********
+
+EPSCreateDensityMat: idx_start/end: 0, 948
+[6] interval [-20.6256, -19.3131], inertia 305 340; nconv_loc 35
+[7] interval [-19.3131, -18.3514], inertia 340 384; nconv_loc 44
+[2] interval [-30.0432, -28.7215], inertia 83 116; nconv_loc 33
+[1] interval [-31.6748, -30.0432], inertia 53 83; nconv_loc 30
+[18] interval [-11.7147, -10.7266], inertia 784 825; nconv_loc 41
+[12] interval [-15.6091, -15.0485], inertia 534 570; nconv_loc 36
+[5] interval [-25.1618, -20.6256], inertia 216 305; nconv_loc 89
+[3] interval [-28.7215, -27.2528], inertia 116 169; nconv_loc 53
+[4] interval [-27.2528, -25.1618], inertia 169 216; nconv_loc 47
+[14] interval [-14.5082, -13.8924], inertia 608 651; nconv_loc 43
+[8] interval [-18.3514, -17.587], inertia 384 420; nconv_loc 36
+[17] interval [-12.5922, -11.7147], inertia 732 784; nconv_loc 52
+[13] interval [-15.0485, -14.5082], inertia 570 608; nconv_loc 38
+[15] interval [-13.8924, -13.335], inertia 651 688; nconv_loc 37
+[16] interval [-13.335, -12.5922], inertia 688 732; nconv_loc 44
+[11] interval [-16.2094, -15.6091], inertia 494 534; nconv_loc 40
+[19] interval [-10.7266, 21.7429], inertia 825 1420; nconv_loc 123
+[9] interval [-17.587, -16.9217], inertia 420 456; nconv_loc 36
+[10] interval [-16.9217, -16.2094], inertia 456 494; nconv_loc 38
+[0] interval [-75.0581, -31.6748], inertia 0 53; nconv_loc 53
+0.3860039711 seconds
+Enuc             =  26242971.9971059710 kcal/mol =   1137980.6598632310 ev =     41820.8361739639 Hartree
+Eref             =   1853780.7915600031 kcal/mol =     80385.9672850268 ev =      2954.1876123947 Hartree
+Eelec            = -28107895.9863760956 kcal/mol =  -1218849.8324606954 ev =    -44792.7816015154 Hartree
+Eelec+Enuc       =  -1864923.9892701267 kcal/mol =    -80869.1725974644 ev =     -2971.9454275515 Hartree
+Eelec+Enuc+Eref  =    -11143.1977101236 kcal/mol =      -483.2053124376 ev =       -17.7578151568 Hartree
+MINDO/3 calculation finishes.
+************************************************************************************************************************
+***             WIDEN YOUR WINDOW TO 120 CHARACTERS.  Use 'enscript -r -fCourier9' to print this document            ***
+************************************************************************************************************************
+
+---------------------------------------------- PETSc Performance Summary: ----------------------------------------------
+
+pscf.py on a arch-gcc-shared named compute-0-28.local with 20 processors, by kecelim Sat Nov 21 01:20:15 2015
+Using Petsc Development GIT revision: v3.6.2-1147-g7d294b9  GIT Date: 2015-10-05 16:09:41 -0500
+
+                         Max       Max/Min        Avg      Total 
+Time (sec):           3.597e+02      1.00004   3.597e+02
+Objects:              1.418e+03      1.55312   9.562e+02
+Flops:                1.269e+10     15.58248   1.870e+09  3.740e+10
+Flops/sec:            3.529e+07     15.58303   5.199e+06  1.040e+08
+Memory:               7.687e+07      1.19757              1.314e+09
+MPI Messages:         7.200e+02      1.98074   5.848e+02  1.170e+04
+MPI Message Lengths:  3.460e+05      1.77613   4.830e+02  5.649e+06
+MPI Reductions:       1.265e+03      1.00000
+
+Flop counting convention: 1 flop = 1 real number operation of type (multiply/divide/add/subtract)
+                            e.g., VecAXPY() for real vectors of length N --> 2N flops
+                            and VecAXPY() for complex vectors of length N --> 8N flops
+
+Summary of Stages:   ----- Time ------  ----- Flops -----  --- Messages ---  -- Message Lengths --  -- Reductions --
+                        Avg     %Total     Avg     %Total   counts   %Total     Avg         %Total   counts   %Total 
+ 0:      Main Stage: 3.0289e-01   0.1%  0.0000e+00   0.0%  0.000e+00   0.0%  0.000e+00        0.0%  0.000e+00   0.0% 
+ 1:           Input: 2.2706e-04   0.0%  0.0000e+00   0.0%  0.000e+00   0.0%  0.000e+00        0.0%  0.000e+00   0.0% 
+ 2:            Sort: 1.0873e-01   0.0%  0.0000e+00   0.0%  0.000e+00   0.0%  0.000e+00        0.0%  0.000e+00   0.0% 
+ 3:      Initialize: 1.7168e-01   0.0%  0.0000e+00   0.0%  0.000e+00   0.0%  0.000e+00        0.0%  0.000e+00   0.0% 
+ 4:        getGamma: 1.0301e+00   0.3%  0.0000e+00   0.0%  1.606e+03  13.7%  3.559e+02       73.7%  8.100e+01   6.4% 
+ 5:              F0: 4.2440e+00   1.2%  0.0000e+00   0.0%  0.000e+00   0.0%  0.000e+00        0.0%  4.000e+00   0.3% 
+ 6:              D0: 2.6444e-02   0.0%  0.0000e+00   0.0%  0.000e+00   0.0%  0.000e+00        0.0%  2.100e+01   1.7% 
+ 7:               G: 2.6128e-02   0.0%  0.0000e+00   0.0%  4.000e+01   0.3%  2.052e-02        0.0%  2.100e+01   1.7% 
+ 8:               H: 1.6673e-02   0.0%  0.0000e+00   0.0%  0.000e+00   0.0%  0.000e+00        0.0%  5.000e+00   0.4% 
+ 9:              FD: 6.8676e+00   1.9%  2.8240e+03   0.0%  9.708e+03  83.0%  1.269e+02       26.3%  5.410e+02  42.8% 
+10:           Solve: 3.4346e+02  95.5%  3.7397e+10 100.0%  3.420e+02   2.9%  1.754e-01        0.0%  5.820e+02  46.0% 
+11:         Density: 3.4233e+00   1.0%  0.0000e+00   0.0%  0.000e+00   0.0%  0.000e+00        0.0%  9.000e+00   0.7% 
+
+------------------------------------------------------------------------------------------------------------------------
+See the 'Profiling' chapter of the users' manual for details on interpreting output.
+Phase summary info:
+   Count: number of times phase was executed
+   Time and Flops: Max - maximum over all processors
+                   Ratio - ratio of maximum to minimum over all processors
+   Mess: number of messages sent
+   Avg. len: average message length (bytes)
+   Reduct: number of global reductions
+   Global: entire computation
+   Stage: stages of a computation. Set stages with PetscLogStagePush() and PetscLogStagePop().
+      %T - percent time in this phase         %F - percent flops in this phase
+      %M - percent messages in this phase     %L - percent message lengths in this phase
+      %R - percent reductions in this phase
+   Total Mflop/s: 10e-6 * (sum of flops over all processors)/(max time over all processors)
+------------------------------------------------------------------------------------------------------------------------
+
+
+      ##########################################################
+      #                                                        #
+      #                          WARNING!!!                    #
+      #                                                        #
+      #   This code was compiled with a debugging option,      #
+      #   To get timing results run ./configure                #
+      #   using --with-debugging=no, the performance will      #
+      #   be generally two or three times faster.              #
+      #                                                        #
+      ##########################################################
+
+
+Event                Count      Time (sec)     Flops                             --- Global ---  --- Stage ---   Total
+                   Max Ratio  Max     Ratio   Max  Ratio  Mess   Avg len Reduct  %T %F %M %L %R  %T %F %M %L %R Mflop/s
+------------------------------------------------------------------------------------------------------------------------
+
+--- Event Stage 0: Main Stage
+
+
+--- Event Stage 1: Input
+
+
+--- Event Stage 2: Sort
+
+
+--- Event Stage 3: Initialize
+
+
+--- Event Stage 4: getGamma
+
+BuildTwoSided          1 1.0 5.3721e-02 1.0 0.00e+00 0.0 6.0e+01 4.0e+00 0.0e+00  0  0  1  0  0   5  0  4  0  0     0
+VecSet                 5 1.0 5.4598e-05 1.7 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+MatConvert             2 1.0 1.1671e-02 1.5 0.00e+00 0.0 0.0e+00 0.0e+00 4.0e+00  0  0  0  0  0   1  0  0  0  5     0
+MatAssemblyBegin       4 1.0 7.0409e-0125.5 0.00e+00 0.0 3.6e+02 1.1e+04 8.0e+00  0  0  3 70  1  24  0 22 95 10     0
+MatAssemblyEnd         4 1.0 9.5752e-02 1.3 0.00e+00 0.0 9.5e+02 1.4e+02 4.5e+01  0  0  8  2  4   9  0 59  3 56     0
+MatGetRow            144 1.0 1.3053e-03 2.3 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+MatAXPY                1 1.0 6.2404e-02 1.1 0.00e+00 0.0 4.8e+02 1.4e+02 2.2e+01  0  0  4  1  2   6  0 30  2 27     0
+MatTranspose           1 1.0 1.1170e-01 1.0 0.00e+00 0.0 8.9e+02 4.6e+03 2.4e+01  0  0  8 72  2  11  0 56 98 30     0
+SFSetGraph             1 1.0 2.0599e-04 7.1 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+SFReduceBegin          1 1.0 5.5508e-02 1.0 0.00e+00 0.0 3.0e+02 2.1e+02 0.0e+00  0  0  3  1  0   5  0 19  2  0     0
+SFReduceEnd            1 1.0 5.4312e-0459.9 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+
+--- Event Stage 5: F0
+
+VecSet                 1 1.0 1.0014e-05 1.3 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+MatConvert             1 1.0 2.2327e-02 4.5 0.00e+00 0.0 0.0e+00 0.0e+00 2.0e+00  0  0  0  0  0   0  0  0  0 50     0
+MatAssemblyBegin       1 1.0 1.9697e+001863.7 0.00e+00 0.0 0.0e+00 0.0e+00 2.0e+00  0  0  0  0  0  19  0  0  0 50     0
+MatAssemblyEnd         1 1.0 1.5497e-04 1.8 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+MatGetRow             72 1.0 1.2364e-03 2.1 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+
+--- Event Stage 6: D0
+
+VecSet                 1 1.0 1.6212e-05 1.4 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+MatAssemblyBegin       1 1.0 5.0960e-03 3.7 0.00e+00 0.0 0.0e+00 0.0e+00 2.0e+00  0  0  0  0  0  14  0  0  0 10     0
+MatAssemblyEnd         1 1.0 1.7833e-02 1.1 0.00e+00 0.0 0.0e+00 0.0e+00 1.5e+01  0  0  0  0  1  64  0  0  0 71     0
+
+--- Event Stage 7: G
+
+VecSet                 1 1.0 1.5974e-05 1.5 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+MatAssemblyBegin       1 1.0 6.9790e-03 5.0 0.00e+00 0.0 0.0e+00 0.0e+00 2.0e+00  0  0  0  0  0  18  0  0  0 10     0
+MatAssemblyEnd         1 1.0 1.2207e-02 1.0 0.00e+00 0.0 4.0e+01 6.0e+00 1.5e+01  0  0  0  0  1  46  0100100 71     0
+
+--- Event Stage 8: H
+
+VecSet                 1 1.0 7.1526e-06 1.5 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+MatConvert             1 1.0 4.7531e-03 2.2 0.00e+00 0.0 0.0e+00 0.0e+00 2.0e+00  0  0  0  0  0  20  0  0  0 40     0
+MatAssemblyBegin       1 1.0 3.5980e-03 4.6 0.00e+00 0.0 0.0e+00 0.0e+00 2.0e+00  0  0  0  0  0  16  0  0  0 40     0
+MatAssemblyEnd         1 1.0 1.2310e-03 4.4 0.00e+00 0.0 0.0e+00 0.0e+00 1.0e+00  0  0  0  0  0   4  0  0  0 20     0
+
+--- Event Stage 9: FD
+
+VecDot                 1 1.0 1.4150e-02 3.9 1.43e+02 1.0 0.0e+00 0.0e+00 1.0e+00  0  0  0  0  0   0100  0  0  0     0
+VecSet                82 1.0 7.9274e-04 1.1 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+VecScatterBegin        9 1.0 4.4823e-04 1.2 0.00e+00 0.0 3.8e+02 5.7e+02 0.0e+00  0  0  3  4  0   0  0  4 15  0     0
+VecScatterEnd          1 1.0 2.7001e-0333.3 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+MatConvert            27 1.0 2.9843e-01 1.7 0.00e+00 0.0 0.0e+00 0.0e+00 5.4e+01  0  0  0  0  4   3  0  0  0 10     0
+MatAssemblyBegin      27 1.0 2.5174e+00 2.6 0.00e+00 0.0 0.0e+00 0.0e+00 5.4e+01  0  0  0  0  4  24  0  0  0 10     0
+MatAssemblyEnd        27 1.0 5.4191e-01 1.2 0.00e+00 0.0 8.6e+03 1.4e+02 2.5e+02  0  0 73 21 20   7  0 88 78 47     0
+MatGetRow           6336 1.0 8.8024e-02 2.2 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   1  0  0  0  0     0
+MatAXPY               18 1.0 1.0717e+00 1.0 0.00e+00 0.0 8.6e+03 1.4e+02 4.0e+02  0  0 73 21 31  15  0 88 78 73     0
+
+--- Event Stage 10: Solve
+
+VecCopy            2187712.3 1.4973e-0112.8 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+VecSet             1812210.7 1.4899e-01 7.0 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+MatSolve           1783311.2 1.2378e+02 8.5 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  7  0  0  0  0   7  0  0  0  0     0
+MatCholFctrSym        10 1.1 1.5772e+00 1.6 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+MatCholFctrNum       122 8.1 1.6738e+02 7.1 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00 10  0  0  0  0  10  0  0  0  0     0
+MatCopy              11218.7 4.9558e+0018.0 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+MatConvert            18 1.0 1.4854e-01 1.9 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+MatAssemblyBegin     242 8.1 6.8092e-04 6.8 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+MatAssemblyEnd       242 8.1 1.9094e-01 5.8 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+MatGetRow         15926418.7 3.7242e-0118.7 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+MatGetRowIJ           10 1.1 5.6982e-05 1.7 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+MatGetSubMatrice       9 1.0 2.7373e-01 1.2 0.00e+00 0.0 0.0e+00 0.0e+00 3.6e+01  0  0  0  0  3   0  0  0  0  6     0
+MatGetOrdering        10 1.1 3.9591e-02 6.6 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+MatZeroEntries       11218.7 9.3539e-0214.7 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+MatRedundantMat        9 1.0 3.2372e-01 1.1 0.00e+00 0.0 0.0e+00 0.0e+00 3.6e+01  0  0  0  0  3   0  0  0  0  6     0
+PCSetUp              122 8.1 1.6869e+02 6.8 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00 10  0  0  0  0  11  0  0  0  0     0
+PCApply            1783311.2 1.2392e+02 8.5 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  7  0  0  0  0   7  0  0  0  0     0
+KSPSetUp             122 8.1 4.7207e-04 6.3 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+KSPSolve           1783311.2 1.2612e+02 8.5 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  7  0  0  0  0   7  0  0  0  0     0
+EPSSetUp               9 1.0 2.9240e+01 1.0 0.00e+00 0.0 3.4e+02 6.0e+00 3.2e+02  8  0  3  0 25   8  0100100 54     0
+EPSSolve               9 1.0 3.4313e+02 1.0 1.27e+1015.6 3.4e+02 6.0e+00 3.8e+02 95100  3  0 30 100100100100 65   109
+STSetUp               18 1.0 1.7208e+01 1.1 0.00e+00 0.0 0.0e+00 0.0e+00 2.7e+01  5  0  0  0  2   5  0  0  0  5     0
+STApply            1783311.2 1.2748e+02 8.5 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  7  0  0  0  0   7  0  0  0  0     0
+STMatSolve         1783311.2 1.2734e+02 8.5 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  7  0  0  0  0   7  0  0  0  0     0
+BVCreate             122 5.5 3.4325e-02 4.5 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+BVCopy              393125.0 8.4258e-0221.6 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+BVMult             2412610.9 1.6344e+0111.4 7.18e+0915.0 0.0e+00 0.0e+00 0.0e+00  1 58  0  0  0   1 58  0  0  0  1318
+BVDot              2377910.9 1.0938e+01 8.4 5.47e+0916.4 0.0e+00 0.0e+00 0.0e+00  1 42  0  0  0   1 42  0  0  0  1438
+BVOrthogonalize    1372610.6 2.3670e+01 9.5 1.09e+1016.5 0.0e+00 0.0e+00 0.0e+00  1 83  0  0  0   1 83  0  0  0  1319
+BVScale            1794611.1 1.4678e+00 6.5 2.55e+0711.1 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0    58
+BVNorm              422014.2 8.5811e-0211.6 1.20e+0714.2 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0   410
+BVSetRandom          113 8.1 1.4859e-01 6.5 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+DSSolve              35016.7 7.4672e+0022.4 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+DSVectors          1805212.5 8.0753e-0216.3 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+DSOther              35016.7 1.4258e-0111.6 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+
+--- Event Stage 11: Density
+
+VecCopy              689 2.4 3.5589e-02 4.6 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   1  0  0  0  0     0
+VecSet                 9 1.0 1.5783e-04 1.9 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   0  0  0  0  0     0
+MatConvert             9 1.0 7.4970e-02 2.6 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   2  0  0  0  0     0
+BVCopy               689 2.4 5.1836e-02 2.7 0.00e+00 0.0 0.0e+00 0.0e+00 0.0e+00  0  0  0  0  0   1  0  0  0  0     0
+------------------------------------------------------------------------------------------------------------------------
+
+Memory usage is given in bytes:
+
+Object Type          Creations   Destructions     Memory  Descendants' Mem.
+Reports information only for process 0.
+
+--- Event Stage 0: Main Stage
+
+
+--- Event Stage 1: Input
+
+
+--- Event Stage 2: Sort
+
+
+--- Event Stage 3: Initialize
+
+
+--- Event Stage 4: getGamma
+
+           Index Set     6              6         8576     0
+              Vector     9              8        25120     0
+      Vector Scatter     5              4         4256     0
+              Matrix    15             12      1817672     0
+Star Forest Bipartite Graph     1              1          840     0
+
+--- Event Stage 5: F0
+
+              Vector     1              0            0     0
+      Vector Scatter     1              0            0     0
+              Matrix     3              0            0     0
+
+--- Event Stage 6: D0
+
+           Index Set     2              2         1536     0
+              Vector     2              1         1640     0
+      Vector Scatter     1              0            0     0
+              Matrix     3              0            0     0
+
+--- Event Stage 7: G
+
+           Index Set     2              2         1536     0
+              Vector     2              1         1640     0
+      Vector Scatter     1              0            0     0
+              Matrix     3              0            0     0
+
+--- Event Stage 8: H
+
+              Vector     1              0            0     0
+      Vector Scatter     1              0            0     0
+              Matrix     3              0            0     0
+
+--- Event Stage 9: FD
+
+           Index Set    54             54       179568     0
+              Vector    92             83       472912     0
+      Vector Scatter    54             45        45128     0
+              Matrix   135            108     10623276     0
+
+--- Event Stage 10: Solve
+
+         PetscRandom    18             16        10080     0
+           Index Set    54             51       172008     0
+              Vector   240            231     49948672     0
+      Vector Scatter     0              8         8512     0
+              Matrix    44             63    162981224     0
+      Preconditioner    18             16        16896     0
+       Krylov Solver    18             16        18176     0
+          EPS Solver    18             16       479156     0
+  Spectral Transform    18             16        12800     0
+       Basis Vectors    53             50       462224     0
+       Direct Solver    18             16      1256424     0
+              Region    18             16        10240     0
+
+--- Event Stage 11: Density
+
+              Viewer     1              0            0     0
+         PetscRandom     0              2         1260     0
+           Index Set     0              3         7992     0
+              Vector     9             32      2553760     0
+      Vector Scatter     0              6         6384     0
+              Matrix     9             32     81029764     0
+      Preconditioner     0              2         2112     0
+       Krylov Solver     0              2         2272     0
+          EPS Solver     0              2        61728     0
+  Spectral Transform     0              2         1600     0
+       Basis Vectors     0              3         3048     0
+       Direct Solver     0              2       163776     0
+              Region     0              2         1280     0
+========================================================================================================================
+Average time to get PetscTime(): 9.05991e-07
+Average time for MPI_Barrier(): 0.000431204
+Average time for zero size MPI_Send(): 0.000388145
+#PETSc Option Table entries:
+-bw 500
+-debug 0
+-eps_interval -40,0
+-eps_krylovschur_detect_zeros TRUE
+-eps_krylovschur_partitions 20
+-eps_purify 1
+-eps_tol 1.e-8
+-log_summary
+-mat_mumps_icntl_13 1
+-mat_mumps_icntl_23 0
+-mat_mumps_icntl_24 1
+-maxdist 10
+-maxiter 10
+-method mindo3AIJ
+-scfthresh 1.e-7
+-sips True
+-solve 1
+-sort 1
+-st_ksp_type preonly
+-st_pc_factor_mat_solver_package mumps
+-st_pc_type cholesky
+-st_type sinvert
+-staticsubint False
+-xyz ./XYZ/012.xyz
+#End of PETSc Option Table entries
+Compiled without FORTRAN kernels
+Compiled with full precision matrices (default)
+sizeof(short) 2 sizeof(int) 4 sizeof(long) 8 sizeof(void*) 8 sizeof(PetscScalar) 8 sizeof(PetscInt) 4
+Configure options: --download-fblaslapack=1 --download-mpich=1 --download-scalapack=1 --download-mumps=1 --download-scotch=1 --download-ptscotch=1 --download-metis=1 --download-parmetis=1 --with-cc=gcc --with-clanguage=c --with-shared-libraries=1 --with-python=1 --PETSC_ARCH=arch-gcc-shared
+-----------------------------------------
+Libraries compiled on Mon Oct  5 18:09:48 2015 on linus.tcg.anl.gov 
+Machine characteristics: Linux-2.6.18-398.el5-x86_64-with-redhat-5.11-Tikanga
+Using PETSc directory: /tcghome/kecelim/qetsc/petsc
+Using PETSc arch: arch-gcc-shared
+-----------------------------------------
+
+Using C compiler: /tcghome/kecelim/qetsc/petsc/arch-gcc-shared/bin/mpicc    -Wall -Wwrite-strings -Wno-strict-aliasing -Wno-unknown-pragmas -g3  ${COPTFLAGS} ${CFLAGS}
+Using Fortran compiler: /tcghome/kecelim/qetsc/petsc/arch-gcc-shared/bin/mpif90    -Wall -Wno-unused-variable -ffree-line-length-0 -Wno-unused-dummy-argument -g  ${FOPTFLAGS} ${FFLAGS} 
+-----------------------------------------
+
+Using include paths: -I/tcghome/kecelim/qetsc/petsc/arch-gcc-shared/include -I/tcghome/kecelim/qetsc/petsc/include -I/tcghome/kecelim/qetsc/petsc/include -I/tcghome/kecelim/qetsc/petsc/arch-gcc-shared/include
+-----------------------------------------
+
+Using C linker: /tcghome/kecelim/qetsc/petsc/arch-gcc-shared/bin/mpicc
+Using Fortran linker: /tcghome/kecelim/qetsc/petsc/arch-gcc-shared/bin/mpif90
+Using libraries: -Wl,-rpath,/tcghome/kecelim/qetsc/petsc/arch-gcc-shared/lib -L/tcghome/kecelim/qetsc/petsc/arch-gcc-shared/lib -lpetsc -Wl,-rpath,/tcghome/kecelim/qetsc/petsc/arch-gcc-shared/lib -L/tcghome/kecelim/qetsc/petsc/arch-gcc-shared/lib -lcmumps -ldmumps -lsmumps -lzmumps -lmumps_common -lpord -lscalapack -lflapack -lfblas -lparmetis -lmetis -lptesmumps -lptscotch -lptscotcherr -lscotch -lscotcherr -lX11 -lssl -lcrypto -lm -Wl,-rpath,/tcghome/ygeorgi/fock/gcc-4.7.2/lib/gcc/x86_64-unknown-linux-gnu/4.7.2 -L/tcghome/ygeorgi/fock/gcc-4.7.2/lib/gcc/x86_64-unknown-linux-gnu/4.7.2 -Wl,-rpath,/tcghome/ygeorgi/fock/gcc-4.7.2/lib64 -L/tcghome/ygeorgi/fock/gcc-4.7.2/lib64 -Wl,-rpath,/tcghome/ygeorgi/intel/composer_xe_2013_sp1.1.106/compiler/lib/intel64 -L/tcghome/ygeorgi/intel/composer_xe_2013_sp1.1.106/compiler/lib/intel64 -Wl,-rpath,/tcghome/ygeorgi/intel/composer_xe_2013_sp1.1.106/ipp/lib/intel64 -L/tcghome/ygeorgi/intel/composer_xe_2013_sp1.1.106/ipp/lib/intel64 -Wl,-rpath,/tcghome/ygeorgi/intel/composer_xe_2013_sp1.1.106/mkl/lib/intel64 -L/tcghome/ygeorgi/intel/composer_xe_2013_sp1.1.106/mkl/lib/intel64 -Wl,-rpath,/tcghome/ygeorgi/intel/composer_xe_2013_sp1.1.106/tbb/lib/intel64/gcc4.4 -L/tcghome/ygeorgi/intel/composer_xe_2013_sp1.1.106/tbb/lib/intel64/gcc4.4 -Wl,-rpath,/tcghome/ygeorgi/fock/gcc-4.7.2/lib -L/tcghome/ygeorgi/fock/gcc-4.7.2/lib -lmpifort -lgfortran -lm -lgfortran -lm -lquadmath -lm -lmpicxx -lstdc++ -lrt -lm -lz -Wl,-rpath,/tcghome/kecelim/qetsc/petsc/arch-gcc-shared/lib -L/tcghome/kecelim/qetsc/petsc/arch-gcc-shared/lib -Wl,-rpath,/tcghome/ygeorgi/fock/gcc-4.7.2/lib/gcc/x86_64-unknown-linux-gnu/4.7.2 -L/tcghome/ygeorgi/fock/gcc-4.7.2/lib/gcc/x86_64-unknown-linux-gnu/4.7.2 -Wl,-rpath,/tcghome/ygeorgi/fock/gcc-4.7.2/lib64 -L/tcghome/ygeorgi/fock/gcc-4.7.2/lib64 -Wl,-rpath,/tcghome/ygeorgi/intel/composer_xe_2013_sp1.1.106/compiler/lib/intel64 -L/tcghome/ygeorgi/intel/composer_xe_2013_sp1.1.106/compiler/lib/intel64 -Wl,-rpath,/tcghome/ygeorgi/intel/composer_xe_2013_sp1.1.106/compiler/lib/intel64 -L/tcghome/ygeorgi/intel/composer_xe_2013_sp1.1.106/compiler/lib/intel64 -Wl,-rpath,/tcghome/ygeorgi/intel/composer_xe_2013_sp1.1.106/ipp/lib/intel64 -L/tcghome/ygeorgi/intel/composer_xe_2013_sp1.1.106/ipp/lib/intel64 -Wl,-rpath,/tcghome/ygeorgi/intel/composer_xe_2013_sp1.1.106/compiler/lib/intel64 -L/tcghome/ygeorgi/intel/composer_xe_2013_sp1.1.106/compiler/lib/intel64 -Wl,-rpath,/tcghome/ygeorgi/intel/composer_xe_2013_sp1.1.106/mkl/lib/intel64 -L/tcghome/ygeorgi/intel/composer_xe_2013_sp1.1.106/mkl/lib/intel64 -Wl,-rpath,/tcghome/ygeorgi/intel/composer_xe_2013_sp1.1.106/tbb/lib/intel64/gcc4.4 -L/tcghome/ygeorgi/intel/composer_xe_2013_sp1.1.106/tbb/lib/intel64/gcc4.4 -Wl,-rpath,/tcghome/ygeorgi/intel/composer_xe_2013_sp1.1.106/compiler/lib/intel64 -L/tcghome/ygeorgi/intel/composer_xe_2013_sp1.1.106/compiler/lib/intel64 -Wl,-rpath,/tcghome/ygeorgi/intel/composer_xe_2013_sp1.1.106/compiler/lib/intel64 -L/tcghome/ygeorgi/intel/composer_xe_2013_sp1.1.106/compiler/lib/intel64 -Wl,-rpath,/tcghome/ygeorgi/intel/composer_xe_2013_sp1.1.106/ipp/lib/intel64 -L/tcghome/ygeorgi/intel/composer_xe_2013_sp1.1.106/ipp/lib/intel64 -Wl,-rpath,/tcghome/ygeorgi/intel/composer_xe_2013_sp1.1.106/compiler/lib/intel64 -L/tcghome/ygeorgi/intel/composer_xe_2013_sp1.1.106/compiler/lib/intel64 -Wl,-rpath,/tcghome/ygeorgi/intel/composer_xe_2013_sp1.1.106/mkl/lib/intel64 -L/tcghome/ygeorgi/intel/composer_xe_2013_sp1.1.106/mkl/lib/intel64 -Wl,-rpath,/tcghome/ygeorgi/intel/composer_xe_2013_sp1.1.106/tbb/lib/intel64/gcc4.4 -L/tcghome/ygeorgi/intel/composer_xe_2013_sp1.1.106/tbb/lib/intel64/gcc4.4 -Wl,-rpath,/tcghome/ygeorgi/fock/gcc-4.7.2/lib -L/tcghome/ygeorgi/fock/gcc-4.7.2/lib -ldl -Wl,-rpath,/tcghome/kecelim/qetsc/petsc/arch-gcc-shared/lib -lmpi -lgcc_s -ldl 
+-----------------------------------------
+
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   PID 40725 RUNNING AT compute-0-28.local
+=   EXIT CODE: 11
+=   CLEANING UP REMAINING PROCESSES
+=   YOU CAN IGNORE THE BELOW CLEANUP MESSAGES
+===================================================================================
+YOUR APPLICATION TERMINATED WITH THE EXIT STRING: Segmentation fault (signal 11)
+This typically refers to a problem with your application.
+Please see the FAQ page for debugging suggestions
