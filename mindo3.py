@@ -29,6 +29,85 @@ def getAtomIDs(basis):
         tmp[i]=basis[i].atom.atid
     return tmp
 
+def getT(basis,maxdist,maxnnz=[0],bandwidth=[0],comm=PETSc.COMM_SELF):
+    """
+    Computes MINDO3 nuclear repulsion energy and gamma matrix
+    Nuclear repulsion energy: Based on PyQuante MINDO3 get_enuke(atoms)
+    Gamma matrix: Based on PyQuante MINDO3 get_gamma(atomi,atomj)
+    "Coulomb repulsion that goes to the proper limit at R=0"
+    Corresponds to two-center two-electron integrals
+    Assumes spherical symmetry, no dependence on basis function, only atom types.
+    Parametrized for pairs of atoms. (Two-atom parameters)
+    maxnnz: max number of nonzeros per row. If it is given performance might improve    
+    Gamma matrix also determines the nonzero structure of the Fock matrix.
+    TODO:
+    Values are indeed based on atoms, not basis functions, so possible to improve performance by nbf/natom.
+    Better to preallocate based on diagonal and offdiagonal nonzeros.
+    Cythonize
+    """
+    import constants as const
+
+    nbf      = len(basis)
+    maxdist2 = maxdist * maxdist
+    enuke=0.0
+    Vdiag = PETSc.Vec().create(comm=comm)
+    A        = PETSc.Mat().create(comm=comm)
+    A.setType('aij') #'sbaij'
+    A.setSizes([nbf,nbf]) 
+    if any(maxnnz): 
+        A.setPreallocationNNZ(maxnnz) 
+    else:
+        A.setPreallocationNNZ(nbf)
+    A.setUp()
+    A.setOption(A.Option.NEW_NONZERO_ALLOCATION_ERR,False)
+    rstart, rend = A.getOwnershipRange()
+    localsize = rend-rstart
+    Vdiag.setSizes((localsize,nbf))
+    Vdiag.setUp()
+    nnz = 0
+    bohr2ang2 = const.bohr2ang**2.
+    e2        = const.e2
+    if any(bandwidth):
+        if len(bandwidth)==1: bandwidth=np.array([bandwidth]*nbf)
+    else:
+        bandwidth=np.array([nbf]*nbf)    
+    for i in xrange(rstart,rend):
+        atomi   = basis[i].atom
+        Zi      = atomi.Z
+        nbfi    = atomi.nbf 
+        atnoi   = atomi.atno
+        rhoi    = atomi.rho
+        gammaii = PyQuante.MINDO3_Parameters.f03[atnoi]
+        Vdiag[i] = gammaii
+        for j in xrange(i+1,min(i+bandwidth[i],nbf)):
+        #for j in xrange(i+1,nbf):
+            atomj = basis[j].atom
+            if atomi == atomj:
+                A[i,j] = gammaii
+                nnz += 1
+            else:                        
+                distij2 = atomi.dist2(atomj) * bohr2ang2
+                if distij2 < maxdist2:
+                    Zj      = atomj.Z
+                    nbfj    = atomj.nbf 
+                    atnoj   = atomj.atno
+                    rhoj    = atomj.rho 
+                    gammaij=const.e2/np.sqrt(distij2 + 0.25*(rhoi + rhoj)**2.)
+                    R=np.sqrt(distij2)
+                    scale = PyQuante.MINDO3.get_scale(atnoi,atnoj,R)
+                    enuke += ( Zi * Zj * gammaij +  abs(Zi * Zj * (e2 / R - gammaij) * scale) ) / ( nbfi * nbfj )
+                    A[i,j] = gammaij
+                    nnz += 1
+    A.setDiagonal(Vdiag) 
+    A.assemblyBegin()
+    enuke =  MPI.COMM_WORLD.allreduce(enuke)        
+    nnz =  MPI.COMM_WORLD.allreduce(nnz)  + nbf      
+    A.assemblyEnd()
+    B = A.duplicate(copy=True)
+    B = B + A.transpose() 
+    B.setDiagonal(Vdiag) 
+    return  nnz,enuke, B
+
 def getGamma(basis,maxdist,maxnnz=[0],bandwidth=[0],comm=PETSc.COMM_SELF):
     """
     Computes MINDO3 nuclear repulsion energy and gamma matrix
@@ -117,7 +196,8 @@ def getF0(atoms,basis,T):
     Ref 1: DOI:10.1021/ja00839a001
     Ref 2: ISBN:089573754X
     Ref 3: DOI:10.1002/wcms.1141
-
+    TODO: 
+    Cythonize
     """
     A = T.duplicate()
     A.setUp()
@@ -434,7 +514,7 @@ def getEnergy(qmol,opts):
         stage = pt.getStage(stagename='getNnz', oldstage=stage)
         maxnnz,bandwidth = pt.getNnzInfo(basis, maxdist)
     stage = pt.getStage(stagename='getGamma', oldstage=stage)
-    nnz, Enuke, T     = getGamma(basis, maxdist,maxnnz=maxnnz, bandwidth=bandwidth, comm=matcomm)
+    nnz, Enuke, T     = getT(basis, maxdist,maxnnz=maxnnz, bandwidth=bandwidth, comm=matcomm)
     dennnz = nnz / (nbf*(nbf+1)/2.0)  * 100.
     Print("Nonzero density percent : {0}".format(dennnz))
     Print("Eref           = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Eref, Eref*const.kcal2ev, Eref*const.kcal2hartree))    
