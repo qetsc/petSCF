@@ -817,10 +817,32 @@ def main():
     pyquante    = opts.getBool('pyquante',False)
     
     if mol:
+        stage = pt.getStage(stagename=method,oldstage=stage)
         import PyQuante.Molecule 
         Print('xyz from mol input:{0}'.format(mol))  
         qmol=PyQuante.Molecule(mol)
+    elif method == 'file':
+        stage = pt.getStage(stagename=method,oldstage=stage)
+        from os.path import isfile
+        fA = opts.getString('fA','')
+        fB = opts.getString('fB','')
+        if isfile(fA):
+            Print('Matrix A from file:{0}'.format(fA))
+            stage = pt.getStage(stagename='Load Mat',oldstage=stage)
+            A  = pt.getMatFromFile(fA,comm=PETSc.COMM_WORLD)
+            if isfile(fB):
+                Print('Matrix B from file:{0}'.format(fB))
+                B  = pt.getMatFromFile(fB,comm=PETSc.COMM_WORLD)
+                stage = pt.getStage(stagename='Solve',oldstage=stage)
+                st.solveEPS(A,B,returnoption=solve)    
+            else:
+                stage = pt.getStage(stagename='Solve',oldstage=stage)
+                st.solveEPS(A,returnoption=solve)    
+        else:       
+            Print('This method requires binary files for matrices')
+            sys.exit()
     elif os.path.isfile(xyzfile):
+        stage = pt.getStage(stagename=method,oldstage=stage)
         Print('xyz read from file:{0}'.format(xyzfile))
         if sort > 0:
             stage       = pt.getStage('Sort',oldstage=stage)  
@@ -840,39 +862,31 @@ def main():
         dist    = opts.getReal('d', 0.712) 
         qmol    = getChainMol(N=N, Z=Z, d=dist)
         
-    
-    Print("Number of atoms: %i" % (len(qmol.atoms)))
-    Print("Number of electrons: %i" % (qmol.get_nel()))
-    stage.pop()
-    if method == 'file':
-        fA = opts.getString('fA')
-        fB = opts.getString('fB')
-        fA = '/Volumes/s/matrices/petscbinary/nanotube2e-r_P2_A'
-        fB = '/Volumes/s/matrices/petscbinary/nanotube2e-r_P2_B'
-        A  = pt.getMatFromFile(fA,comm=PETSc.COMM_WORLD)
-        B  = pt.getMatFromFile(fB,comm=PETSc.COMM_WORLD)
-        st.getEigenSolutions(A,B)
-    elif method == "sparsity":
-        import PyQuante.MINDO3
-        stage = pt.getStage(stagename='Initialize',oldstage=stage)
-        qmol  = PyQuante.MINDO3.initialize(qmol)
-        nbf   = getNBF(qmol)    
-        basis = getBasis(qmol, nbf)
-        stage = pt.getStage(stagename='distCSR',oldstage=stage)
-        BCSR  = getDistCSR(basis, nbf,maxdist=maxdist)
-        stage = pt.getStage(stagename='getSparsityInfo',oldstage=stage)
-        pt.getSparsityInfo(BCSR, nbf, maxdensity)
+    if qmol:
+        Print("Number of atoms: %i" % (len(qmol.atoms)))
+        Print("Number of electrons: %i" % (qmol.get_nel()))
         stage.pop()
-
-    elif method == "HF":
-        basisset    = opts.getString('basis','sto-3g')
-        rhf(qmol,basisset,spfilter,maxiter,scfthresh,maxdist=maxdist)
-    elif method == 'mindo3AIJ':
-        Print("MINDO/3 calculation starts...")
-        mindo3.getEnergy(qmol,opts)
-        Print("MINDO/3 calculation finishes.")
-    else:
-        Print("No valid method specified")
+        if method == "sparsity":
+            import PyQuante.MINDO3
+            stage = pt.getStage(stagename='Initialize',oldstage=stage)
+            qmol  = PyQuante.MINDO3.initialize(qmol)
+            nbf   = getNBF(qmol)    
+            basis = getBasis(qmol, nbf)
+            stage = pt.getStage(stagename='distCSR',oldstage=stage)
+            BCSR  = getDistCSR(basis, nbf,maxdist=maxdist)
+            stage = pt.getStage(stagename='getSparsityInfo',oldstage=stage)
+            pt.getSparsityInfo(BCSR, nbf, maxdensity)
+            stage.pop()
+    
+        elif method == "HF":
+            basisset    = opts.getString('basis','sto-3g')
+            rhf(qmol,basisset,spfilter,maxiter,scfthresh,maxdist=maxdist)
+        elif method == 'mindo3AIJ':
+            Print("MINDO/3 calculation starts...")
+            mindo3.getEnergy(qmol,opts)
+            Print("MINDO/3 calculation finishes.")
+        else:
+            Print("No valid method specified")
 
 if __name__ == '__main__':
     main()
