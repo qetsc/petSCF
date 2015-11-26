@@ -816,6 +816,7 @@ def main():
     method      = opts.getString('method','mindo3')
     pyquante    = opts.getBool('pyquante',False)
     
+    qmol=None
     if mol:
         stage = pt.getStage(stagename=method,oldstage=stage)
         import PyQuante.Molecule 
