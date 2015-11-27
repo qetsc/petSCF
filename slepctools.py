@@ -173,7 +173,6 @@ def solveEPS(A,B=None,printinfo=False,returnoption=0,checkerror=False,interval=[
     if B: problem_type=SLEPc.EPS.ProblemType.GHEP
     else: problem_type=SLEPc.EPS.ProblemType.HEP
     eps.setProblemType( problem_type )
-    eps.setFromOptions()
     if any(interval)==2:
         eps.setInterval(interval[0],interval[1])
     if any(subintervals):
@@ -191,6 +190,8 @@ def solveEPS(A,B=None,printinfo=False,returnoption=0,checkerror=False,interval=[
     PETSc.Options().setValue('mat_mumps_icntl_13',1)
     PETSc.Options().setValue('mat_mumps_icntl_24',1)
     PETSc.Options().setValue('mat_mumps_cntl_3',1.e-12)
+    eps.setFromOptions()
+    eps.setUp()
     if returnoption == -1: return eps        
     eps.solve()
     nconv = eps.getConverged()
