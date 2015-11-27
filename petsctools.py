@@ -285,6 +285,8 @@ def getMatComm(n,comm=MPI.COMM_WORLD,debug=False):
 def getMatFromFile(filename,comm):
     matreader=PETSc.Viewer().createBinary(filename,mode='r',comm=comm)
     A=PETSc.Mat().create(comm=comm)
+    A.setType('sbaij')
+    A.setFromOptions()
     A.load(matreader)
     return A
 
