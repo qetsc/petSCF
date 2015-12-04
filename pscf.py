@@ -801,7 +801,7 @@ def main():
     import os.path
     import xyztools as xt
     import mindo3
-    stage       = pt.getStage('Input')  
+    stage       = pt.getStage('PSCF')  
     opts        = PETSc.Options()
     mol         = opts.getString('mol','')
     xyzfile     = opts.getString('xyz','')
@@ -813,17 +813,16 @@ def main():
     guess       = opts.getInt('guess', 0)
     bandwidth   = opts.getInt('bw', 0)
     sort        = opts.getInt('sort', 0)
-    method      = opts.getString('method','mindo3')
+    method      = opts.getString('method','mindo3').lower()
     pyquante    = opts.getBool('pyquante',False)
-    
+    writeXYZ    = opts.getBool('writeXYZ',False)
+    Print("Number of MPI ranks: {0}".format(PETSc.COMM_WORLD.size))
     qmol=None
     if mol:
-        stage = pt.getStage(stagename=method,oldstage=stage)
         import PyQuante.Molecule 
         Print('xyz from mol input:{0}'.format(mol))  
         qmol=PyQuante.Molecule(mol)
     elif method == 'file':
-        stage = pt.getStage(stagename=method,oldstage=stage)
         from os.path import isfile
         fA = opts.getString('fA','')
         fB = opts.getString('fB','')
@@ -843,19 +842,19 @@ def main():
             Print('This method requires binary files for matrices')
             sys.exit()
     elif os.path.isfile(xyzfile):
-        stage = pt.getStage(stagename=method,oldstage=stage)
         Print('xyz read from file:{0}'.format(xyzfile))
         if sort > 0:
             stage       = pt.getStage('Sort',oldstage=stage)  
             xyz         = xt.readXYZ(xyzfile)
             sortedxyz   = xt.sortXYZ(xyz)
-            sortedfile  = xt.writeXYZ(sortedxyz)
+            if writeXYZ: 
+                sortedfile  = xt.writeXYZ(sortedxyz)
+                Print('sorted xyz file:{0}'.format(sortedfile))
             qmol        = xt.xyz2PyQuanteMol(sortedxyz)
-            Print('sorted xyz file:{0}'.format(sortedfile))
         else:   
             qmol        = xt.xyzFile2PyQuanteMol(xyzfile)
     else:
-        Print("%s file not found" %(xyzfile))
+        Print("{0} not found".format(xyzfile))
         Print("A chain of atoms will be used.")
         N       = opts.getInt('N', 32)
         c       = opts.getInt('c', 3)
@@ -866,7 +865,6 @@ def main():
     if qmol:
         Print("Number of atoms: %i" % (len(qmol.atoms)))
         Print("Number of electrons: %i" % (qmol.get_nel()))
-        stage.pop()
         if method == "sparsity":
             import PyQuante.MINDO3
             stage = pt.getStage(stagename='Initialize',oldstage=stage)
@@ -879,11 +877,12 @@ def main():
             pt.getSparsityInfo(BCSR, nbf, maxdensity)
             stage.pop()
     
-        elif method == "HF":
+        elif method.startswith('hf'):
             basisset    = opts.getString('basis','sto-3g')
             rhf(qmol,basisset,spfilter,maxiter,scfthresh,maxdist=maxdist)
-        elif method == 'mindo3AIJ':
+        elif method.startswith('mindo3'):
             Print("MINDO/3 calculation starts...")
+            stage.pop()
             mindo3.getEnergy(qmol,opts)
             Print("MINDO/3 calculation finishes.")
         else:

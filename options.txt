@@ -1,13 +1,13 @@
 #PSCF options
 
 -method mindo3AIJ 
--scfthresh 1.e-7
--maxdist 5.5
--maxiter 4
+-scfthresh 1.e-6
+-maxdist 10 #unit: Angstrom
+-maxiter 40
 -solve 1
 -debug 0
--staticsubint True
--xyz "./XYZ/004.xyz"
+-staticsubint 1 # subintervals optimized after first iteration
+-xyz "./XYZ/002.xyz"
 -sips True
 
 # A chain of identical atoms (instead of an xyz file) can be specified with the following options 
@@ -23,24 +23,25 @@
 
 #PETSc options
 
--log_summary
--mat_mumps_icntl_13 1 #turn off scaLAPACK for matrix inertia
--mat_mumps_icntl_24 1 #null pivot row detection for matrix inertia
--mat_mumps_icntl_23 0
+#-log_summary
+#-mat_mumps_icntl_13 1 #turn off scaLAPACK for matrix inertia
+#-mat_mumps_icntl_24 1 #null pivot row detection for matrix inertia
+#-mat_mumps_icntl_23 0
 #-mat_mumps_icntl_28 2
 #-mat_mumps_icntl_29 1
 #-malloc_info 
 #-mat_view ::ascii_info 
 #-mat_getrow_uppertriangular 1
--st_type sinvert 
--st_ksp_type preonly 
--st_pc_type cholesky 
--st_pc_factor_mat_solver_package mumps 
+#-st_type sinvert 
+#-st_ksp_type preonly 
+#-st_pc_type cholesky 
+#-st_pc_factor_mat_solver_package mumps 
 
 #SLEPc options
 
--eps_krylovschur_partitions 1  
--eps_interval -700,700
--eps_tol  1.e-8
--eps_krylovschur_detect_zeros TRUE
--eps_purify 1
+#-eps_krylovschur_partitions 1 
+#-eps_interval -35,-5
+#-eps_tol  1.e-8
+#-eps_krylovschur_detect_zeros True
+#-eps_nev 40
+#-eps_purify 1

@@ -45,7 +45,6 @@ def getT(basis,maxdist,maxnnz=[0],bandwidth=[0],comm=PETSc.COMM_SELF):
     Better to preallocate based on diagonal and offdiagonal nonzeros.
     Cythonize
     """
-    import constants as const
 
     nbf      = len(basis)
     maxdist2 = maxdist * maxdist
@@ -92,7 +91,7 @@ def getT(basis,maxdist,maxnnz=[0],bandwidth=[0],comm=PETSc.COMM_SELF):
                     nbfj    = atomj.nbf 
                     atnoj   = atomj.atno
                     rhoj    = atomj.rho 
-                    gammaij=const.e2/np.sqrt(distij2 + 0.25*(rhoi + rhoj)**2.)
+                    gammaij = e2 / np.sqrt(distij2 + 0.25 * (rhoi + rhoj)**2.)
                     R=np.sqrt(distij2)
                     scale = PyQuante.MINDO3.get_scale(atnoi,atnoj,R)
                     enuke += ( Zi * Zj * gammaij +  abs(Zi * Zj * (e2 / R - gammaij) * scale) ) / ( nbfi * nbfj )
@@ -423,13 +422,13 @@ def getF(atomIDs, D, F0, T, G, H):
     A.assemble()
     return A
 
-def scf(opts,nocc,atomIDs,D,F0,T,G,H):
+def scf(opts,nocc,atomIDs,D,F0,T,G,H,stage):
     """
     """
     maxiter     = opts.getInt('maxiter', 30)
     guess       = opts.getInt('guess', 0)
     scfthresh   = opts.getReal('scfthresh',1.e-5)
-    staticsubint= opts.getBool('staticsubint',False)
+    staticsubint= opts.getInt('staticsubint',0)
     usesips     = opts.getBool('sips',False)
 
     Eel       = 0.
@@ -447,10 +446,11 @@ def scf(opts,nocc,atomIDs,D,F0,T,G,H):
             usesips = False
     for iter in xrange(1,maxiter):
         Print("{0:*^60s}".format("Iteration "+str(iter)))
-        stage = pt.getStage(stagename='FD')
+        stage = pt.getStage(stagename='F',oldstage=stage)
         F    = getF(atomIDs, D, F0, T, G, H)
         F    = F0 + F
         Eold = Eel
+        stage = pt.getStage(stagename='Trace',oldstage=stage)
         if iter==1 and guess==0:
             Eel  = 0.5 * pt.getTraceDiagProduct(D,F0+F)
         else:
@@ -458,21 +458,30 @@ def scf(opts,nocc,atomIDs,D,F0,T,G,H):
         Print("Eel            = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Eel*const.ev2kcal,Eel,Eel*const.ev2hartree))  
         t0 = pt.getWallTime()
         stage = pt.getStage(stagename='Solve', oldstage=stage)
-        if staticsubint or iter<2:
-            eps, nconv, eigarray = st.solveEPS(F,returnoption=1,nocc=nocc)  
+        if staticsubint==0 or iter<2:
+            eps, nconv, eigarray = st.solveEPS(F,returnoption=1,nocc=nocc)
+            left, right  = eps.getInterval()
+        elif staticsubint==1:
+            nsubint=st.getNumberOfSubIntervals(eps)
+            subint = st.getSubIntervals(eigarray[0:nocc],nsubint,interval=[left,right])
+            eps, nconv, eigarray = st.solveEPS(F,eps=eps,subintervals=subint,returnoption=1,nocc=nocc)   
         else:
             nsubint=st.getNumberOfSubIntervals(eps)
-            subint = st.getSubIntervals(eigarray[0:nocc],nsubint) 
-            eps, nconv, eigarray = st.solveEPS(F,subintervals=subint,returnoption=1,nocc=nocc)   
+            subint = st.getSubIntervals(eigarray[0:nocc],nsubint)
+            eps, nconv, eigarray = st.solveEPS(F,eps=eps,subintervals=subint,returnoption=1,nocc=nocc)   
+        
         pt.getWallTime(t0)    
         stage = pt.getStage(stagename='Density', oldstage=stage)
         t0 = pt.getWallTime()
+        nden = nocc
+        if nconv < nocc: 
+            nden = nconv
         if usesips:
-            D = sips.getDensityMat(eps,0,nocc)
+            D = sips.getDensityMat(eps,0,nden)
         else:    
-            D = st.getDensityMatrix(eps,T, nocc)
+            D = st.getDensityMatrix(eps,T, nden)
         t = pt.getWallTime(t0)
-        if abs(Eel-Eold) < scfthresh:
+        if abs(Eel-Eold) < scfthresh and nconv >= nocc:
             Print("Converged at iteration %i" % (iter+1))
             converged = True
             return converged, Eel
@@ -481,21 +490,19 @@ def scf(opts,nocc,atomIDs,D,F0,T,G,H):
 def getEnergy(qmol,opts):
     import PyQuante.MINDO3
 
-    stage       = pt.getStage(stagename='Initialize')
+    stage       = pt.getStage(stagename='MINDO\3')
     t0          = pt.getWallTime()
     maxdist     = opts.getReal('maxdist', 1.e6)
     solve       = opts.getInt('solve', 0)
     maxnnz      = [opts.getInt('maxnnz', 0)]
     guess       = opts.getInt('guess', 0)
     bandwidth   = [opts.getInt('bw', 0)]
-    sort        = opts.getInt('sort', 0)     
     spfilter    = opts.getReal('spfilter',0.)
     debug       = opts.getBool('debug',False)
     checknnz    = opts.getBool('checknnz',False) 
     pyquante    = opts.getBool('pyquante',False) #TODO get Pyquante energy for testing
     Print("Distance cutoff: {0:5.3f}".format(maxdist))
 
-    stage = pt.getStage(stagename='Initialize')
     qmol  = PyQuante.MINDO3.initialize(qmol)
     if pyquante:
         Epyquante = PyQuante.MINDO3.scf(qmol)
@@ -511,9 +518,9 @@ def getEnergy(qmol,opts):
     Print("Number of valance electrons: {0}".format(nel))
     Print("Number of occupied orbitals: {0} = Number of required eigenvalues".format(nocc))
     if checknnz:
-        stage = pt.getStage(stagename='getNnz', oldstage=stage)
+        stage = pt.getStage(stagename='Nonzero info', oldstage=stage)
         maxnnz,bandwidth = pt.getNnzInfo(basis, maxdist)
-    stage = pt.getStage(stagename='getGamma', oldstage=stage)
+    stage = pt.getStage(stagename='T', oldstage=stage)
     nnz, Enuke, T     = getT(basis, maxdist,maxnnz=maxnnz, bandwidth=bandwidth, comm=matcomm)
     dennnz = nnz / (nbf*(nbf+1)/2.0)  * 100.
     Print("Nonzero density percent : {0}".format(dennnz))
@@ -528,7 +535,7 @@ def getEnergy(qmol,opts):
     stage = pt.getStage(stagename='H', oldstage=stage)
     H     = getH(basis,T=G)
     pt.getWallTime(t0)
-    converged, Eelec = scf(opts,nocc,atomIDs,D0,F0,T,G,H)
+    converged, Eelec = scf(opts,nocc,atomIDs,D0,F0,T,G,H,stage)
     Etot   = Eelec + Enuke
     Efinal = Etot*const.ev2kcal+Eref
     Print("Enuc             = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Enuke*const.ev2kcal,Enuke,Enuke*const.ev2hartree))
