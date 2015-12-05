@@ -7,6 +7,7 @@ Print = PETSc.Sys.Print
 
 import numpy as np
 import constants as const
+from petsctools import getWallTime,getStage
 
 def getNumberOfSubIntervals(eps):
     return eps.getKrylovSchurPartitions()
@@ -131,7 +132,12 @@ def getDensityMatrixLocal(eps,T,nocc):
   #  Print("LUMO-HOMO      = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(gap*const.ev2kcal,gap,gap*const.ev2hartree))
     return D,eigarray
 
-def setupEPS(A,B=None):
+def setupEPS(A,B=None,interval=[0]):
+    """
+    If matrix B is not given, solves the standard eigenvalue problem for a Hermitian matrix A.
+    If matrix B (should be positive definite) is given, solve the generalized eigenvalue problem. 
+    EPS comm is the same as the comm of A.
+    """
     eps = SLEPc.EPS().create(comm=A.getComm())
     eps.setOperators(A,B)
     if B: problem_type=SLEPc.EPS.ProblemType.GHEP
@@ -148,17 +154,49 @@ def setupEPS(A,B=None):
     PETSc.Options().setValue('mat_mumps_icntl_13',1)
     PETSc.Options().setValue('mat_mumps_icntl_24',1)
     PETSc.Options().setValue('mat_mumps_cntl_3',1.e-12)
-    eps.setInterval(-500,500)
+    if len(interval)==2:
+        eps.setInterval(interval[0],interval[1])
     eps.setWhichEigenpairs(SLEPc.EPS.Which.ALL)
     eps.setFromOptions()
     eps.setUp()
     return eps
 
-def solveEPS(A,B=None,eps=None,printinfo=False,returnoption=0,checkerror=False,interval=[0],subintervals=[0],nocc=0):
+def updateEPS(eps,A,B=None,subintervals=[0]):
     """
-    If matrix B is not given, solves the standard eigenvalue problem for a Hermitian matrix A.
-    If matrix B (should be positive definite) is given, solve the generalized eigenvalue problem. 
-    EPS comm is the same as the comm of A.
+    Updates eps object for a new matrix.
+    Currently I need to recreate the eps object.
+    In the ideal case eps can be reused, and 
+    symbolic factorization is not performed if the nnz 
+    structure remains the same.
+    """
+    eps = SLEPc.EPS().create(comm=A.getComm())
+    eps.setOperators(A,B)
+    if B: problem_type=SLEPc.EPS.ProblemType.GHEP
+    else: problem_type=SLEPc.EPS.ProblemType.HEP
+    eps.setProblemType( problem_type )
+    st  = eps.getST()
+    st.setType(SLEPc.ST.Type.SINVERT)
+    st.setMatStructure(SLEPc.ST.MatStructure.SAME_NONZERO_PATTERN)
+    ksp=st.getKSP()
+    ksp.setType(PETSc.KSP.Type.PREONLY)
+    pc=ksp.getPC()
+    pc.setType(PETSc.PC.Type.CHOLESKY)
+    pc.setFactorSolverPackage('mumps')
+    PETSc.Options().setValue('mat_mumps_icntl_13',1)
+    PETSc.Options().setValue('mat_mumps_icntl_24',1)
+    PETSc.Options().setValue('mat_mumps_cntl_3',1.e-12)
+    eps.setInterval(subintervals[0],subintervals[-1])
+    if len(subintervals)>1:
+        eps.setInterval(subintervals[0],subintervals[-1])
+        eps.setKrylovSchurPartitions(len(subintervals)-1)
+        eps.setKrylovSchurSubintervals(subintervals)
+    eps.setWhichEigenpairs(SLEPc.EPS.Which.ALL)
+    eps.setFromOptions()
+    eps.setUp()
+    return eps
+
+def solveEPS(eps,printinfo=False,returnoption=0,checkerror=False,interval=[0],subintervals=[0],nocc=0):
+    """
     returnoption 0:
         Returns SLEPc EPS object, 
         Number of converged eigenvalues 
@@ -183,47 +221,23 @@ def solveEPS(A,B=None,eps=None,printinfo=False,returnoption=0,checkerror=False,i
         Or and maybe the best option is simply form the Density Matrix with 
         the converged eigenvectors and increase the interval for the next iter.     
     """
-    
-    if eps:
-        if any(subintervals):
-         #   del eps
-            eps=setupEPS(A, B=B)
-        else:
-            eps.setOperators(A,B)
-    else:    
-        eps=setupEPS(A, B=B)
-        
-    if len(interval)==2:
-        eps.setInterval(interval[0],interval[1])
-        eps.setWhichEigenpairs(SLEPc.EPS.Which.ALL)
 
-    if any(subintervals):
-        eps.setInterval(subintervals[0],subintervals[-1])
-        eps.setKrylovSchurPartitions(len(subintervals)-1)
-        eps.setKrylovSchurSubintervals(subintervals)
-        eps.setFromOptions()
-        eps.setInterval(subintervals[0],subintervals[-1])
-        eps.setWhichEigenpairs(SLEPc.EPS.Which.ALL)
-       # eps.setFromOptions()
-
-    if returnoption == -1: return eps 
     left , right = eps.getInterval()       
     Print("Interval: {0:5.3f}, {1:5.3f} ".format(left, right))
     eps.solve()
     nconv = eps.getConverged()
     Print("Number of converged and required eigenvalues: {0}, {1} ".format(nconv, nocc))
-
     if printinfo:
         its = eps.getIterationNumber()
         sol_type = eps.getType()
         nev, ncv, mpd = eps.getDimensions()
         tol, maxit = eps.getTolerances()
         
-        Print("Number of iterations of the method: %i" % its)
+        Print("Number of eps iterations: %i" % its)
         Print("Solution method: %s" % sol_type)
         Print("Stopping condition: tol=%.4g, maxit=%d" % (tol, maxit))
     if nconv < nocc:
-        Print("Continue with missing eigenvalues")
+        Print("Missing eigenvalues!")
     if returnoption==0:
         return eps, nconv
     elif returnoption == 1:

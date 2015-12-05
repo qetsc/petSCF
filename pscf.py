@@ -881,10 +881,10 @@ def main():
             basisset    = opts.getString('basis','sto-3g')
             rhf(qmol,basisset,spfilter,maxiter,scfthresh,maxdist=maxdist)
         elif method.startswith('mindo3'):
-            Print("MINDO/3 calculation starts...")
+            Print("MINDO3 calculation starts...")
             stage.pop()
             mindo3.getEnergy(qmol,opts)
-            Print("MINDO/3 calculation finishes.")
+            Print("MINDO3 calculation finishes.")
         else:
             Print("No valid method specified")
 

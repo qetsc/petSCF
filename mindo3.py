@@ -428,48 +428,63 @@ def scf(opts,nocc,atomIDs,D,F0,T,G,H,stage):
     maxiter     = opts.getInt('maxiter', 30)
     guess       = opts.getInt('guess', 0)
     scfthresh   = opts.getReal('scfthresh',1.e-5)
+    interval    = [opts.getReal('a',-500.) , opts.getReal('b', 500.)]
     staticsubint= opts.getInt('staticsubint',0)
     usesips     = opts.getBool('sips',False)
 
     Eel       = 0.
-    converged = False    
+    converged = False 
+    eps       = None   
+    subint    = [0]
     Print("{0:*^60s}".format("SELF-CONSISTENT-FIELD ITERATIONS"))
     Print("SCF threshold: {0:5.3e}".format(scfthresh))
     Print("Maximum number of SCF iterations: {0}".format(maxiter))
-    if staticsubint: Print("Fixed subintervals will be used")
-    else: Print("Subintervals will be adjusted at each iteration")
+    if staticsubint == 0: 
+        Print("Fixed subintervals will be used")
+    elif staticsubint == 1: 
+        Print("Subintervals will be adjusted at each iteration with fixed interval")
+    elif staticsubint == 2: 
+        Print("Subintervals will be adjusted at each iteration")
+    else:
+        Print("Not available")   
     if usesips:
         try:
             import SIPs.sips as sips
         except:
             Print("SIPs not found")
             usesips = False
-    for iter in xrange(1,maxiter):
-        Print("{0:*^60s}".format("Iteration "+str(iter)))
+    for k in xrange(1,maxiter+1):
+        Print("{0:*^60s}".format("Iteration "+str(k)))
+        t0 = pt.getWallTime()
         stage = pt.getStage(stagename='F',oldstage=stage)
         F    = getF(atomIDs, D, F0, T, G, H)
         F    = F0 + F
         Eold = Eel
         stage = pt.getStage(stagename='Trace',oldstage=stage)
-        if iter==1 and guess==0:
-            Eel  = 0.5 * pt.getTraceDiagProduct(D,F0+F)
+        if k==1:
+            if guess==0:
+                Eel  = 0.5 * pt.getTraceDiagProduct(D,F0+F)
+            else:
+                Eel  = 0.5 * pt.getTraceProductAIJ(D, F0+F)
+            stage = pt.getStage(stagename='SetupEPS',oldstage=stage)    
+            eps = st.setupEPS(F, B=None,interval=interval)  
+            stage = pt.getStage(stagename='SolveEPS',oldstage=stage)
+            eps, nconv, eigarray = st.solveEPS(eps,returnoption=1,nocc=nocc)
         else:
             Eel  = 0.5 * pt.getTraceProductAIJ(D, F0+F)
+            stage = pt.getStage(stagename='UpdateEPS',oldstage=stage)            
+            subint =interval
+            if staticsubint==1:
+                Print("subint 1")
+                nsubint=st.getNumberOfSubIntervals(eps)
+                subint = st.getSubIntervals(eigarray[0:nocc],nsubint,interval=interval) 
+            elif staticsubint==2:
+                nsubint=st.getNumberOfSubIntervals(eps)
+                subint = st.getSubIntervals(eigarray[0:nocc],nsubint)
+            eps = st.updateEPS(eps,F,subintervals=subint)
+            stage = pt.getStage(stagename='SolveEPS',oldstage=stage)
+            eps, nconv, eigarray = st.solveEPS(eps,returnoption=1,nocc=nocc)         
         Print("Eel            = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Eel*const.ev2kcal,Eel,Eel*const.ev2hartree))  
-        t0 = pt.getWallTime()
-        stage = pt.getStage(stagename='Solve', oldstage=stage)
-        if staticsubint==0 or iter<2:
-            eps, nconv, eigarray = st.solveEPS(F,returnoption=1,nocc=nocc)
-            left, right  = eps.getInterval()
-        elif staticsubint==1:
-            nsubint=st.getNumberOfSubIntervals(eps)
-            subint = st.getSubIntervals(eigarray[0:nocc],nsubint,interval=[left,right])
-            eps, nconv, eigarray = st.solveEPS(F,eps=eps,subintervals=subint,returnoption=1,nocc=nocc)   
-        else:
-            nsubint=st.getNumberOfSubIntervals(eps)
-            subint = st.getSubIntervals(eigarray[0:nocc],nsubint)
-            eps, nconv, eigarray = st.solveEPS(F,eps=eps,subintervals=subint,returnoption=1,nocc=nocc)   
-        
         pt.getWallTime(t0)    
         stage = pt.getStage(stagename='Density', oldstage=stage)
         t0 = pt.getWallTime()
@@ -480,9 +495,9 @@ def scf(opts,nocc,atomIDs,D,F0,T,G,H,stage):
             D = sips.getDensityMat(eps,0,nden)
         else:    
             D = st.getDensityMatrix(eps,T, nden)
-        t = pt.getWallTime(t0)
+        pt.getWallTime(t0)
         if abs(Eel-Eold) < scfthresh and nconv >= nocc:
-            Print("Converged at iteration %i" % (iter+1))
+            Print("Converged at iteration {0}".format(k))
             converged = True
             return converged, Eel
     return converged, Eel
@@ -567,7 +582,7 @@ def main(qmol,opts):
     Print("Distance cutoff: {0:5.3f}".format(maxdist))
     Print("SCF threshold: {0:5.3e}".format(scfthresh))
     Print("Maximum number of SCF iterations: {0}".format(maxiter))
-    if not staticsubint:
+    if staticsubint == 2:
         Print("Subintervals will be updated after the first iteration")
     if usesips:
         try:
