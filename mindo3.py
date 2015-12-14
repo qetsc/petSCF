@@ -4,11 +4,138 @@ from petsc4py import PETSc
 import numpy as np
 import petsctools as pt
 import slepctools as st
-import PyQuante
+#import PyQuante
 from mpi4py import MPI
 import constants as const
+#from PyQuante.MINDO3_Parameters import axy,Bxy,f03
+from PyQuante.MINDO3 import initialize
 
 Print = PETSc.Sys.Print
+"""
+MINDO/3 parameters taken from PyQuante
+"""
+#MINDO/3 Parameters: Thru Ar
+# in eV
+f03 = [ None, 12.848, 10.0, #averaged repulsion integral for use in gamma
+        10.0, 0.0, 8.958, 10.833, 12.377, 13.985, 16.250,
+        10.000, 10.000, 0.000, 0.000,7.57 ,  9.00 ,10.20 , 11.73]
+# Bxy resonance coefficients
+Bxy = {
+    (1,1) : 0.244770, (1,5) : 0.185347, (1,6) : 0.315011, (1,7) : 0.360776,
+    (1,8) : 0.417759, (1,9) : 0.195242, (1,14) : 0.289647, (1,15) : 0.320118,
+    (1,16) : 0.220654, (1,17) : 0.231653,
+    (5,5) : 0.151324, (5,6) : 0.250031, (5,7) : 0.310959, (5,8) : 0.349745,
+    (5,9) : 0.219591,
+    (6,6) : 0.419907, (6,7) : 0.410886, (6,8) : 0.464514, (6,9) : 0.247494,
+    (6,14) : 0.411377, (6,15) : 0.457816, (6,16) : 0.284620, (6,17) : 0.315480,
+    (7,7) : 0.377342, (7,8) : 0.458110, (7,9) : 0.205347,
+    (8,8) : 0.659407, (8,9) : 0.334044, (9,9) : 0.197464,
+    (14,14) : 0.291703, (15,15) : 0.311790, (16,16) : 0.202489,
+    (17,17) : 0.258969,
+    (7,15) : 0.457816, # Rick hacked this to be the same as 6,15
+    (8,15) : 0.457816, # Rick hacked this to be the same as 6,15
+    }
+
+# axy Core repulsion function terms
+axy = {     
+    (1,1) : 1.489450, (1,5) : 2.090352, (1,6) : 1.475836, (1,7) : 0.589380,
+    (1,8) : 0.478901, (1,9) : 3.771362, (1,14) : 0.940789, (1,15) : 0.923170,
+    (1,16) : 1.700689, (1,17) : 2.089404,
+    (5,5) : 2.280544, (5,6) : 2.138291, (5,7) : 1.909763, (5,8) : 2.484827,
+    (5,9) : 2.862183,
+    (6,6) : 1.371208, (6,7) : 1.635259, (6,8) : 1.820975, (6,9) : 2.725913,
+    (6,14) : 1.101382, (6,15) : 1.029693, (6,16) : 1.761370, (6,17) : 1.676222,
+    (7,7) : 2.209618, (7,8) : 1.873859, (7,9) : 2.861667,
+    (8,8) : 1.537190, (8,9) : 2.266949, (9,9) : 3.864997,
+    (14,14) : 0.918432, (15,15) : 1.186652, (16,16) : 1.751617,
+    (17,17) : 1.792125,
+    (7,15) : 1.029693, # Rick hacked this to be the same as 6,15
+    (8,15) : 1.029693, # Rick hacked this to be the same as 6,15
+    }
+
+def getAlphaij(atnoi,atnoj):
+    "PyQuante: Part of the scale factor for the nuclear repulsion"
+    return axy[(min(atnoi,atnoj),max(atnoi,atnoj))]
+
+def getBeta0ij(atnoi,atnoj):
+    "PyQuante: Resonanace integral for coupling between different atoms"
+    return Bxy[(min(atnoi,atnoj),max(atnoi,atnoj))]
+
+def getGij(bfi,bfj):
+    "PyQuante: Coulomb-like term for orbitals on the same atom"
+    i,j = bfi.type,bfj.type
+    assert bfi.atom is bfj.atom, "Incorrect call to get_g"
+    if i==0 and j==0:
+        return bfi.atom.gss
+    elif i==0 or j==0:
+        return bfi.atom.gsp
+    elif i==j:
+        return bfi.atom.gpp
+    return bfi.atom.gppp
+
+def getHij(bfi,bfj):
+    "PyQuante: Exchange-like term for orbitals on the same atom"
+    i,j = bfi.type,bfj.type
+    assert bfi.atom is bfj.atom, "Incorrect call to get_h"
+    if i==0 or j==0:
+        return bfi.atom.hsp
+    return bfi.atom.hppp
+
+def getScaleij(atnoi,atnoj,R):
+    "PyQuante: Prefactor from the nuclear repulsion term"
+    alpha = getAlphaij(atnoi,atnoj)
+    if atnoi == 1:
+        if atnoj == 7 or atnoj == 8:
+            return alpha*np.exp(-R)
+    elif atnoj == 1:
+        if atnoi == 7 or atnoi == 8:
+            return alpha*np.exp(-R)
+    return np.exp(-alpha*R)
+
+def getGammaij(rhoi,rhoj,rij2):
+    return const.e2 / np.sqrt(rij2 + 0.25 * (rhoi + rhoj)**2.)
+
+def getNelectrons(atoms,charge=0):
+    "PyQuante: Number of electrons in an atoms. Can be dependent on the charge"
+    nel = 0
+    for atom in atoms: nel += atom.Z
+    return nel-charge
+
+def getNbasis(atoms):
+    "Number of basis functions in an atom list"
+    nbf = 0
+    for atom in atoms: nbf += atom.nbf
+    return nbf
+
+def getEref(atoms):
+    "Ref = heat of formation - energy of atomization"
+    eat = 0
+    hfat = 0
+    for atom in atoms:
+        eat += atom.Eref
+        hfat += atom.Hf
+    return hfat-eat * const.ev2kcal
+
+def getEnukeij(atomi, atomj,Rij2=0):
+    """
+    Returns the nuclear repulsion energy between two atoms.
+    Rij2 is the square of the distance between the atoms given in bohr^2.
+    """
+    Zi      = atomi.Z
+    atnoi   = atomi.atno
+    rhoi    = atomi.rho
+    Zj      = atomj.Z
+    atnoj   = atomj.atno
+    rhoj    = atomj.rho
+    if not Rij2:
+        Rij2 = atomi.dist2(atomj)
+        if not Rij2:
+            return 0.
+    Rij2 = Rij2 * const.bohr2ang * const.bohr2ang   
+    Rij = np.sqrt(Rij2)
+    gammaij = getGammaij(rhoi, rhoj, Rij2)    
+    scaleij = getScaleij(atnoi,atnoj,Rij)
+    return ( Zi * Zj * gammaij +  abs(Zi * Zj * (const.e2 / Rij - gammaij) * scaleij) )
 
 def getBasis(atoms,nbf):
     """
@@ -29,7 +156,111 @@ def getAtomIDs(basis):
         tmp[i]=basis[i].atom.atid
     return tmp
 
+def getNuclearEnergySerial(nat,atoms,maxdist):
+    maxdist2 = maxdist * maxdist * const.ang2bohr * const.ang2bohr
+    enuke=0.0
+    for i in xrange(nat):
+        atomi=atoms[i]
+    #    for j in xrange(i+1,nat): # same as below
+        for j in xrange(i):
+            atomj=atoms[j]
+            distij2 = atomi.dist2(atomj) # (in bohr squared) * bohr2ang2
+            if distij2 < maxdist2:
+                enuke += getEnukeij(atomi, atomj, distij2)           
+    return enuke
+
+def getNuclearEnergy(Na,atoms,maxdist):
+    Np=MPI.COMM_WORLD.size
+    rank=MPI.COMM_WORLD.rank
+    Nc=Na/Np
+    remainder=Na%Np
+    maxdist2 = maxdist * maxdist * const.ang2bohr * const.ang2bohr
+    bohr2ang2 = const.bohr2ang * const.bohr2ang
+    e2        = const.e2
+    enuke = 0
+    for i in xrange(Nc):
+        atomi = atoms[rank*Nc+i]
+        for j in xrange(rank*Nc+i):
+            atomj = atoms[j]
+            distij2 = atomi.dist2(atomj) # (in bohr squared) * bohr2ang2
+            if distij2 < maxdist2:
+                enuke += getEnukeij(atomi, atomj, distij2)   
+    if remainder - rank > 0:
+        atomi = atoms[Na-rank-1]
+        for j in xrange(Na-rank-1):
+            atomj = atoms[j]
+            distij2 = atomi.dist2(atomj) # (in bohr squared) * bohr2ang2
+            if distij2 < maxdist2:
+                enuke += getEnukeij(atomi, atomj, distij2)   
+
+    return MPI.COMM_WORLD.allreduce(enuke)   
+        
 def getT(basis,maxdist,maxnnz=[0],bandwidth=[0],comm=PETSc.COMM_SELF):
+    """
+    Computes a matrix for the two-center two-electron integrals.
+    Assumes spherical symmetry, no dependence on basis function, only atom types.
+    Parametrized for pairs of atoms. (Two-atom parameters)
+    maxnnz: max number of nonzeros per row. If it is given performance might improve    
+    This matrix also determines the nonzero structure of the Fock matrix.
+    TODO:
+    Optimize preallocation based on diagonal and offdiagonal nonzeros.
+    Values are indeed based on atoms, not basis functions, so possible to improve performance by nbf/natom.
+    Cythonize
+    """
+
+    nbf      = len(basis)
+    maxdist2 = maxdist * maxdist * const.ang2bohr * const.ang2bohr
+    enuke=0.0
+    Vdiag = PETSc.Vec().create(comm=comm)
+    A        = PETSc.Mat().create(comm=comm)
+    A.setType('aij') #'sbaij'
+    A.setSizes([nbf,nbf]) 
+    if any(maxnnz): 
+        A.setPreallocationNNZ(maxnnz) 
+    else:
+        A.setPreallocationNNZ([nbf,nbf])
+    A.setUp()
+    A.setOption(A.Option.NEW_NONZERO_ALLOCATION_ERR,True)
+    rstart, rend = A.getOwnershipRange()
+    localsize = rend-rstart
+    Vdiag.setSizes((localsize,nbf))
+    Vdiag.setUp()
+    nnz = 0
+    bohr2ang2 = const.bohr2ang**2.
+    e2        = const.e2
+    if any(bandwidth):
+        if len(bandwidth)==1: bandwidth=np.array([bandwidth]*nbf)
+    else:
+        bandwidth=np.array([nbf]*nbf)    
+    for i in xrange(rstart,rend):
+        atomi   = basis[i].atom
+        atnoi   = atomi.atno
+        rhoi    = atomi.rho
+        gammaii = f03[atnoi]
+        Vdiag[i] = gammaii
+        for j in xrange(i+1,min(i+bandwidth[i],nbf)):
+            atomj = basis[j].atom
+            if atomi.atid == atomj.atid:
+                A[i,j] = gammaii
+                nnz += 1
+            else:                        
+                distij2 = atomi.dist2(atomj) # (in bohr squared) * bohr2ang2
+                if distij2 < maxdist2:
+                    rhoj    = atomj.rho 
+                    distij2 = distij2 * bohr2ang2
+                    gammaij = e2 / np.sqrt(distij2 + 0.25 * (rhoi + rhoj)**2.)
+                    A[i,j] = gammaij
+                    nnz += 1
+    A.setDiagonal(Vdiag) 
+    A.assemblyBegin()
+    nnz =  MPI.COMM_WORLD.allreduce(nnz)  + nbf 
+    A.assemblyEnd()
+    B = A.duplicate(copy=True)
+    B = B + A.transpose() 
+    B.setDiagonal(Vdiag) 
+    return  nnz, B
+
+def getTold(basis,maxdist,maxnnz=[0],bandwidth=[0],comm=PETSc.COMM_SELF):
     """
     Computes MINDO3 nuclear repulsion energy and gamma matrix
     Nuclear repulsion energy: Based on PyQuante MINDO3 get_enuke(atoms)
@@ -47,7 +278,7 @@ def getT(basis,maxdist,maxnnz=[0],bandwidth=[0],comm=PETSc.COMM_SELF):
     """
 
     nbf      = len(basis)
-    maxdist2 = maxdist * maxdist
+    maxdist2 = maxdist * maxdist * const.ang2bohr * const.ang2bohr
     enuke=0.0
     Vdiag = PETSc.Vec().create(comm=comm)
     A        = PETSc.Mat().create(comm=comm)
@@ -56,9 +287,9 @@ def getT(basis,maxdist,maxnnz=[0],bandwidth=[0],comm=PETSc.COMM_SELF):
     if any(maxnnz): 
         A.setPreallocationNNZ(maxnnz) 
     else:
-        A.setPreallocationNNZ(nbf)
+        A.setPreallocationNNZ([nbf,nbf])
     A.setUp()
-    A.setOption(A.Option.NEW_NONZERO_ALLOCATION_ERR,False)
+    A.setOption(A.Option.NEW_NONZERO_ALLOCATION_ERR,True)
     rstart, rend = A.getOwnershipRange()
     localsize = rend-rstart
     Vdiag.setSizes((localsize,nbf))
@@ -79,18 +310,18 @@ def getT(basis,maxdist,maxnnz=[0],bandwidth=[0],comm=PETSc.COMM_SELF):
         gammaii = PyQuante.MINDO3_Parameters.f03[atnoi]
         Vdiag[i] = gammaii
         for j in xrange(i+1,min(i+bandwidth[i],nbf)):
-        #for j in xrange(i+1,nbf):
             atomj = basis[j].atom
-            if atomi == atomj:
+            if atomi.atid == atomj.atid:
                 A[i,j] = gammaii
                 nnz += 1
             else:                        
-                distij2 = atomi.dist2(atomj) * bohr2ang2
+                distij2 = atomi.dist2(atomj) # (in bohr squared) * bohr2ang2
                 if distij2 < maxdist2:
                     Zj      = atomj.Z
                     nbfj    = atomj.nbf 
                     atnoj   = atomj.atno
                     rhoj    = atomj.rho 
+                    distij2 = distij2 * bohr2ang2
                     gammaij = e2 / np.sqrt(distij2 + 0.25 * (rhoi + rhoj)**2.)
                     R=np.sqrt(distij2)
                     scale = PyQuante.MINDO3.get_scale(atnoi,atnoj,R)
@@ -107,7 +338,7 @@ def getT(basis,maxdist,maxnnz=[0],bandwidth=[0],comm=PETSc.COMM_SELF):
     B.setDiagonal(Vdiag) 
     return  nnz,enuke, B
 
-def getGamma(basis,maxdist,maxnnz=[0],bandwidth=[0],comm=PETSc.COMM_SELF):
+def getGammaold(basis,maxdist,maxnnz=[0],bandwidth=[0],comm=PETSc.COMM_SELF):
     """
     Computes MINDO3 nuclear repulsion energy and gamma matrix
     Nuclear repulsion energy: Based on PyQuante MINDO3 get_enuke(atoms)
@@ -217,7 +448,7 @@ def getF0(atoms,basis,T):
                 tmp -= vals[k] * atomj.Z / atomj.nbf # Ref1, Ref2 adopted sum to be over orbitals rather than atoms
           #  if i != j: # According to Ref1, Ref2 and Ref3  atoms should be different, but PyQuante implementation ignores that, however this does not change any results since the overlap of different orbitals on the same atom is very small. (orthogonal) 
            #     if typei == basisj.type:
-                betaij = PyQuante.MINDO3.get_beta0(atomi.atno,atomj.atno)
+                betaij = getBeta0ij(atomi.atno,atomj.atno)
                 Sij = basisi.cgbf.overlap(basisj.cgbf)
                 IPij = ipi + basisj.ip
                 tmp2 =  betaij * IPij * Sij     # Ref1, Ref2 
@@ -293,7 +524,7 @@ def getG(basis, comm=PETSc.COMM_SELF, T=None):
         basisi  = basis[i]
         atomi   = basisi.atom
         nbfi    = atomi.nbf
-        A[i,i] = PyQuante.MINDO3.get_g(basisi,basisi)
+        A[i,i] = getGij(basisi,basisi)
         if atomi.atno > 1:
             minj = max(0,i-nbfi)
             maxj = min(nbf,i+nbfi) 
@@ -301,7 +532,7 @@ def getG(basis, comm=PETSc.COMM_SELF, T=None):
                 basisj = basis[j]
                 atomj   = basisj.atom
                 if atomi.atid == atomj.atid:
-                    A[i,j] = PyQuante.MINDO3.get_g(basisi,basisj)
+                    A[i,j] = getGij(basisi,basisj)
     A.assemble()
     return A
 
@@ -327,7 +558,7 @@ def getH(basis, comm=PETSc.COMM_SELF, T=None):
         basisi  = basis[i]
         atomi   = basisi.atom
         nbfi    = atomi.nbf
-        A[i,i] = PyQuante.MINDO3.get_g(basisi,basisi)
+        A[i,i] = getGij(basisi,basisi)
         if atomi.atno > 1:
             minj = max(0,i-nbfi)
             maxj = min(nbf,i+nbfi) 
@@ -335,7 +566,7 @@ def getH(basis, comm=PETSc.COMM_SELF, T=None):
                 basisj = basis[j]
                 atomj   = basisj.atom
                 if atomi.atid == atomj.atid and i != j:
-                    A[i,j] = PyQuante.MINDO3.get_h(basisi,basisj)
+                    A[i,j] = getHij(basisi,basisj)
     A.assemble()
     return A
 
@@ -402,17 +633,16 @@ def getF(atomIDs, D, F0, T, G, H):
                 tmpij = 0
                 Djj   = diagD[j] # D[j,j]
                 if len(valsD)>1:
-                    Dij   = valsD[k]
+                    Dij    = valsD[k]
                 else:
-                    Dij   = 0
+                    Dij    = 0
                 Tij   = valsT[k]
-                if atomj == atomi:
-                    idxG=np.where(colsG==j)
-                    Gij   = valsG[idxG]
-                    Hij   = valsH[idxG]
+                if atomj  == atomi:
+                    idxG   = np.where(colsG==j)
+                    Gij    = valsG[idxG]
+                    Hij    = valsH[idxG]
                     tmpii += Djj * ( Gij - 0.5 * Hij ) # Ref1 and PyQuante, In Ref2, Ref3, when i==j, g=h
-                    tmpij =  0.5 * Dij * ( 3. * Hij - Gij ) # Ref3, PyQuante, I think this term is an improvement to MINDO3 (it is in MNDO) so not found in Ref1 and Ref2  
-                  #  idxG  = idxG + 1
+                    tmpij  =  0.5 * Dij * ( 3. * Hij - Gij ) # Ref3, PyQuante, I think this term is an improvement to MINDO3 (it is in MNDO) so not found in Ref1 and Ref2  
                 else:
                     tmpii += Tij * Djj     # Ref1, Ref2, Ref3
                     tmpij = -0.5 * Tij * Dij   # Ref1, Ref2, Ref3  
@@ -433,6 +663,7 @@ def scf(opts,nocc,atomIDs,D,F0,T,G,H,stage):
     usesips     = opts.getBool('sips',False)
 
     Eel       = 0.
+    gap       = 0.
     converged = False 
     eps       = None   
     subint    = [0]
@@ -484,6 +715,9 @@ def scf(opts,nocc,atomIDs,D,F0,T,G,H,stage):
             eps = st.updateEPS(eps,F,subintervals=subint)
             stage = pt.getStage(stagename='SolveEPS',oldstage=stage)
             eps, nconv, eigarray = st.solveEPS(eps,returnoption=1,nocc=nocc)         
+        if (len(eigarray)>nocc+1):
+            gap = eigarray[nocc] - eigarray[nocc-1]              
+            Print("Gap            = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(gap*const.ev2kcal,gap,gap*const.ev2hartree))  
         Print("Eel            = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Eel*const.ev2kcal,Eel,Eel*const.ev2hartree))  
         pt.getWallTime(t0)    
         stage = pt.getStage(stagename='Density', oldstage=stage)
@@ -499,11 +733,10 @@ def scf(opts,nocc,atomIDs,D,F0,T,G,H,stage):
         if abs(Eel-Eold) < scfthresh and nconv >= nocc:
             Print("Converged at iteration {0}".format(k))
             converged = True
-            return converged, Eel
-    return converged, Eel
+            return converged, Eel, gap
+    return converged, Eel, gap
 
 def getEnergy(qmol,opts):
-    import PyQuante.MINDO3
 
     stage       = pt.getStage(stagename='MINDO\3')
     t0          = pt.getWallTime()
@@ -518,13 +751,13 @@ def getEnergy(qmol,opts):
     pyquante    = opts.getBool('pyquante',False) #TODO get Pyquante energy for testing
     Print("Distance cutoff: {0:5.3f}".format(maxdist))
 
-    qmol  = PyQuante.MINDO3.initialize(qmol)
-    if pyquante:
-        Epyquante = PyQuante.MINDO3.scf(qmol)
+    qmol  = initialize(qmol)
+#    if pyquante:
+#        Epyquante = PyQuante.MINDO3.scf(qmol)
     atoms   = qmol.atoms
-    Eref  = PyQuante.MINDO3.get_reference_energy(qmol)
-    nbf   = PyQuante.MINDO3.get_nbf(qmol)    
-    nel   = PyQuante.MINDO3.get_nel(atoms)
+    Eref  = getEref(qmol)
+    nbf   = getNbasis(qmol)    
+    nel   = getNelectrons(atoms)
     nocc  = nel/2
     basis = getBasis(qmol, nbf)
     atomIDs = getAtomIDs(basis)
@@ -536,7 +769,8 @@ def getEnergy(qmol,opts):
         stage = pt.getStage(stagename='Nonzero info', oldstage=stage)
         maxnnz,bandwidth = pt.getNnzInfo(basis, maxdist)
     stage = pt.getStage(stagename='T', oldstage=stage)
-    nnz, Enuke, T     = getT(basis, maxdist,maxnnz=maxnnz, bandwidth=bandwidth, comm=matcomm)
+    nnz, T            = getT(basis, maxdist,maxnnz=maxnnz, bandwidth=bandwidth, comm=matcomm)
+    Enuke             = getNuclearEnergy(len(atoms), atoms, maxdist)
     dennnz = nnz / (nbf*(nbf+1)/2.0)  * 100.
     Print("Nonzero density percent : {0}".format(dennnz))
     Print("Eref           = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Eref, Eref*const.kcal2ev, Eref*const.kcal2hartree))    
@@ -550,7 +784,7 @@ def getEnergy(qmol,opts):
     stage = pt.getStage(stagename='H', oldstage=stage)
     H     = getH(basis,T=G)
     pt.getWallTime(t0)
-    converged, Eelec = scf(opts,nocc,atomIDs,D0,F0,T,G,H,stage)
+    converged, Eelec, gap = scf(opts,nocc,atomIDs,D0,F0,T,G,H,stage)
     Etot   = Eelec + Enuke
     Efinal = Etot*const.ev2kcal+Eref
     Print("Enuc             = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Enuke*const.ev2kcal,Enuke,Enuke*const.ev2hartree))
@@ -558,6 +792,7 @@ def getEnergy(qmol,opts):
     Print("Eelec            = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Eelec*const.ev2kcal,Eelec,Eelec*const.ev2hartree))
     Print("Eelec+Enuc       = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Etot*const.ev2kcal,Etot,Etot*const.ev2hartree))
     Print("Eelec+Enuc+Eref  = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Efinal, Efinal*const.kcal2ev,Efinal*const.kcal2hartree))
+    Print("Gap              = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(gap*const.ev2kcal,gap,gap*const.ev2hartree))
     return Efinal
 
 def main(qmol,opts):
