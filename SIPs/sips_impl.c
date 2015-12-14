@@ -1,8 +1,8 @@
 #include "sips_impl.h"
 
-#include <../../petsc/src/mat/impls/sbaij/mpi/mpisbaij.h>
+#include <../src/mat/impls/sbaij/mpi/mpisbaij.h>
 #include <slepc/private/epsimpl.h>
-#include <../../slepc/src/eps/impls/krylov/krylovschur/krylovschur.h>
+#include <../src/eps/impls/krylov/krylovschur/krylovschur.h>
 
 #include <petsctime.h>
 #include <slepceps.h>
@@ -278,7 +278,6 @@ PetscErrorCode EPSCreateDensityMat(EPS eps,PetscInt idx_start,PetscInt idx_end,M
     PetscInt bs;
     ierr = MatGetBlockSize(Dmat,&bs);CHKERRQ(ierr);
     if (bs != 1) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_SUP,"Only block size 1 is supported");
-  } else{
   }
   if (nprocMat == 1) { /* P and evec are sequential */
     ierr = EPSCreateDensityMat_seqApart(eps,Dmat,myidx_start,myidx_end,evec,nprocEps,epsComm,isSBAIJ);CHKERRQ(ierr);
@@ -289,7 +288,6 @@ PetscErrorCode EPSCreateDensityMat(EPS eps,PetscInt idx_start,PetscInt idx_end,M
     VecScatter   Mvctx;
     mbs  = Dmat->rmap->n;
     if (isSBAIJ) {
-      PetscPrintf(PETSC_COMM_SELF,"SBAIJ");
       Mat_MPISBAIJ *pp =(Mat_MPISBAIJ*)Dmat->data;
       Mat_SeqBAIJ  *pB =(Mat_SeqBAIJ*)(pp->B->data);
       Aloc = pp->A; lvec  = pp->lvec; Mvctx = pp->Mvctx;
@@ -329,175 +327,6 @@ PetscErrorCode EPSCreateDensityMat(EPS eps,PetscInt idx_start,PetscInt idx_end,M
       } 
       ierr = VecRestoreArrayRead(evec,&evec_arr);CHKERRQ(ierr);
     } 
-    if (nprocEps >1 && nzB){ /* sum pB over commEps */
-      ierr = PetscMalloc((nzB+1)*sizeof(PetscScalar),&buf);CHKERRQ(ierr);
-      for (i=0; i<nzB; i++) buf[i] = pv[i];
-      ierr = MPI_Allreduce(buf,pv,nzB, MPI_DOUBLE,MPI_SUM, epsComm);CHKERRQ(ierr);
-      ierr = PetscFree(buf);CHKERRQ(ierr);
-    }
-  }
-  if (idMat == 0) {
-    nconv_loc = myidx_end-myidx_start;
-    if (nconv_loc < 0) nconv_loc = 0;
-    ierr = PetscPrintf(PETSC_COMM_SELF,"[%d] interval [%g, %g], inertia %d %d; nconv_loc %d\n",rank,myinterval[0],myinterval[1],myinertia[0],myinertia[1],nconv_loc);CHKERRQ(ierr);
-  }
-
-  *P = Dmat;
-  ierr = VecDestroy(&evec);CHKERRQ(ierr);
-  if (idEps == 100) {
-    ierr = MatView(Dmat,PETSC_VIEWER_STDOUT_(matComm));CHKERRQ(ierr);
-  }
-  PetscFunctionReturn(0);
-}
-/* --------------------------------------------------------------------------
-   Calculate a weighted density matrix P from eigenvectors.
-   P is in AIJ format ,
-   P(row,col) = sum_(i) { weight[i] * evec[i,row] * evec[i,col] }
- ----------------------------------------------------------------------------*/
-#undef __FUNCT__
-#define __FUNCT__ "EPSSolveCreateDensityMat"
-PetscErrorCode EPSSolveCreateDensityMat(EPS eps,PetscInt idx_start,PetscInt idx_end,Mat *P)
-{
-  PetscErrorCode    ierr;
-  MPI_Comm          matComm,epsComm;
-  PetscInt          v,nconv_loc,i,mbs;
-  PetscMPIInt       idMat,idEps,nprocMat,nprocEps;
-  Vec               evec;
-  Mat               A,Dmat;
-  PetscScalar       *pv,*buf,lambda;
-  PetscInt          *pi,*pj,ncols,row,j,col,ns,*inertias,myinertia[2];
-  PetscReal         *shifts,myinterval[2];
-  const PetscScalar *evec_arr;
-  EPS_KRYLOVSCHUR   *ctx=(EPS_KRYLOVSCHUR*)eps->data;
-  PetscMPIInt       size,rank;
-  MPI_Comm          comm;
-
-  PetscFunctionBegin;
-  /* create subcommunicators */
-  ierr = PetscObjectGetComm((PetscObject)eps,&comm);CHKERRQ(ierr);
-  ierr = MPI_Comm_rank(comm,&rank);CHKERRQ(ierr);
-  ierr = MPI_Comm_size(comm,&size);CHKERRQ(ierr);
-
-  if (!rank) printf("\nEPSCreateDensityMat: idx_start/end: %d, %d\n",idx_start,idx_end);
-  ierr = EPSKrylovSchurGetSubComm(eps,&matComm,&epsComm);CHKERRQ(ierr);
-  ierr = MPI_Comm_rank(matComm,&idMat);CHKERRQ(ierr);
-  ierr = MPI_Comm_size(matComm,&nprocMat);CHKERRQ(ierr);
-  ierr = MPI_Comm_rank(epsComm,&idEps);CHKERRQ(ierr);
-  ierr = MPI_Comm_size(epsComm,&nprocEps);CHKERRQ(ierr);
-  /* ierr = PetscPrintf(PETSC_COMM_SELF,"[%d] idMat %d, nprocMat %d; idEps %d, nprocEps %d\n",rank,idMat,nprocMat,idEps,nprocEps); */
-
-  ierr = EPSSolve(eps);CHKERRQ(ierr);
-
-  /* get num of local converged eigensolutions */
-  ierr = EPSKrylovSchurGetSubcommInfo(eps,&idEps,&nconv_loc,&evec);CHKERRQ(ierr);
-
-  /* get local operator A */
-  if (nprocEps == 1) {
-    ierr = EPSComputeVectors(eps);CHKERRQ(ierr);
-    ierr = EPSGetOperators(eps,&A,NULL);CHKERRQ(ierr);
-  } else {
-    ierr = EPSComputeVectors(ctx->eps);CHKERRQ(ierr);
-    ierr = EPSGetOperators(ctx->eps,&A,NULL);CHKERRQ(ierr);
-  }
-
-  /* get interval for this process */
-  if (nprocEps == 1) {
-    ierr = EPSGetInterval(eps,&myinterval[0],&myinterval[1]);CHKERRQ(ierr);
-  } else {
-    myinterval[0] = ctx->subintervals[idEps];
-    myinterval[1] = ctx->subintervals[idEps + 1];
-  }
-
-  /* get inertia for this process */
-  ierr = EPSKrylovSchurGetInertias(eps,&ns,&shifts,&inertias);CHKERRQ(ierr);
-  i = idEps;
-  while (i<ns) {
-    if (shifts[i] == myinterval[0]) {
-      myinertia[0] = inertias[i++];
-      break;
-    }
-    i++;
-  }
-  while (i<ns) {
-    if (shifts[i] == myinterval[1]) {
-      myinertia[1] = inertias[i++];
-      break;
-    }
-    i++;
-  }
-  ierr = PetscFree(shifts);CHKERRQ(ierr);
-  ierr = PetscFree(inertias);CHKERRQ(ierr);
-
-  PetscInt myidx_start,myidx_end;
-  myidx_start = idx_start - myinertia[0];
-  myidx_end   = idx_end - myinertia[0];
-  if (myidx_start < 0) myidx_start = 0;
-  if (myidx_end > nconv_loc) myidx_end = nconv_loc;
-
-  /* create Dmat which has same data structure as A */
-  ierr = MatDuplicate(A,MAT_DO_NOT_COPY_VALUES,&Dmat);CHKERRQ(ierr);
-
-  PetscBool      isSBAIJ;
-  if (nprocMat == 1) {
-    ierr = PetscObjectTypeCompare((PetscObject)Dmat,MATSEQSBAIJ,&isSBAIJ);CHKERRQ(ierr);
-  } else {
-    ierr = PetscObjectTypeCompare((PetscObject)Dmat,MATMPISBAIJ,&isSBAIJ);CHKERRQ(ierr);
-  }
-  if (isSBAIJ) {
-    PetscInt bs;
-    ierr = MatGetBlockSize(Dmat,&bs);CHKERRQ(ierr);
-    if (bs != 1) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_SUP,"Only block size 1 is supported");
-  } else{
-  }
-  if (nprocMat == 1) { /* P and evec are sequential */
-    ierr = EPSCreateDensityMat_seqApart(eps,Dmat,myidx_start,myidx_end,evec,nprocEps,epsComm,isSBAIJ);CHKERRQ(ierr);
-  } else { /* nprocMat > 1, P and evec are distributed */
-    PetscInt     nzB,lvec_size;
-    Mat          Aloc;
-    Vec          lvec;
-    VecScatter   Mvctx;
-    mbs  = Dmat->rmap->n;
-    if (isSBAIJ) {
-      PetscPrintf(PETSC_COMM_SELF,"SBAIJ");
-      Mat_MPISBAIJ *pp =(Mat_MPISBAIJ*)Dmat->data;
-      Mat_SeqBAIJ  *pB =(Mat_SeqBAIJ*)(pp->B->data);
-      Aloc = pp->A; lvec  = pp->lvec; Mvctx = pp->Mvctx;
-      pv = pB->a; pi = pB->i; pj = pB->j; nzB  = pB->nz;
-    } else {
-      Mat_MPIAIJ   *pp =(Mat_MPIAIJ*)Dmat->data;
-      Mat_SeqAIJ   *pB =(Mat_SeqAIJ*)(pp->B->data);
-      Aloc = pp->A; lvec  = pp->lvec; Mvctx = pp->Mvctx;
-      pv = pB->a; pi = pB->i; pj = pB->j; nzB  = pB->nz;
-    }
-
-    /* pA part */
-    ierr = EPSCreateDensityMat_seqApart(eps,Aloc,myidx_start,myidx_end,evec,nprocEps,epsComm,isSBAIJ);CHKERRQ(ierr);
-
-    /* pB part */
-    ierr = PetscMemzero(pv,nzB*sizeof(PetscScalar));CHKERRQ(ierr);
-    for (v=myidx_start; v<myidx_end; v++) {
-      ierr = EPSKrylovSchurGetSubcommPairs(eps,v,&lambda,evec);CHKERRQ(ierr);
-
-      /* get evec components from other processes */
-      ierr = VecGetSize(lvec,&lvec_size);CHKERRQ(ierr);
-      ierr = VecScatterBegin(Mvctx,evec,lvec,INSERT_VALUES,SCATTER_FORWARD);CHKERRQ(ierr);
-      ierr = VecScatterEnd(Mvctx,evec,lvec,INSERT_VALUES,SCATTER_FORWARD);CHKERRQ(ierr);
-
-      ierr = VecGetArrayRead(evec,&evec_arr);CHKERRQ(ierr);
-      if (lvec_size){
-        const PetscScalar *lvec_arr;
-        ierr = VecGetArrayRead(lvec,&lvec_arr);CHKERRQ(ierr);
-        for (row=0; row<mbs; row++) {
-          ncols = pi[row+1] - pi[row];
-          for (j=0; j<ncols; j++){
-            col = pj[pi[row]+j];     /* index of lvec */
-            pv[pi[row]+j] += 2.0 * evec_arr[row]*lvec_arr[col]; /* P(row,col) */
-          }
-        }
-        ierr = VecRestoreArrayRead(lvec,&lvec_arr);CHKERRQ(ierr);
-      }
-      ierr = VecRestoreArrayRead(evec,&evec_arr);CHKERRQ(ierr);
-    }
     if (nprocEps >1 && nzB){ /* sum pB over commEps */
       ierr = PetscMalloc((nzB+1)*sizeof(PetscScalar),&buf);CHKERRQ(ierr);
       for (i=0; i<nzB; i++) buf[i] = pv[i];

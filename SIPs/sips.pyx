@@ -5,7 +5,7 @@ from petsc4py.PETSc import Error
 
 cdef extern from "sips_impl.h":
     int EPSCreateDensityMat(SlepcEPS eps,int idx_start,int idx_end,PetscMat*);
-    int EPSSolveCreateDensityMat(SlepcEPS eps,int idx_start,int idx_end,PetscMat*);
+#    int EPSSolveCreateDensityMat(SlepcEPS eps,int idx_start,int idx_end,PetscMat*);
 
 
 def getDensityMat(EPS eps, int i, int j):
@@ -15,9 +15,9 @@ def getDensityMat(EPS eps, int i, int j):
     if ierr != 0: raise Error(ierr)
     return A
 
-def solveDensityMat(EPS eps, int i, int j):
-    cdef int ierr
-    cdef Mat A = Mat()
-    ierr = EPSSolveCreateDensityMat(eps.eps,i,j,&A.mat)
-    if ierr != 0: raise Error(ierr)
-    return A
+#def solveDensityMat(EPS eps, int i, int j):
+#    cdef int ierr
+#    cdef Mat A = Mat()
+#    ierr = EPSSolveCreateDensityMat(eps.eps,i,j,&A.mat)
+#    if ierr != 0: raise Error(ierr)
+#    return A
