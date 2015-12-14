@@ -211,7 +211,7 @@ PetscErrorCode EPSCreateDensityMat(EPS eps,PetscInt idx_start,PetscInt idx_end,M
   ierr = MPI_Comm_rank(comm,&rank);CHKERRQ(ierr);
   ierr = MPI_Comm_size(comm,&size);CHKERRQ(ierr);
  
-  if (!rank) printf("\nEPSCreateDensityMat: idx_start/end: %d, %d\n",idx_start,idx_end); 
+  /* if (!rank) printf("\nEPSCreateDensityMat: idx_start/end: %d, %d\n",idx_start,idx_end); */
   ierr = EPSKrylovSchurGetSubComm(eps,&matComm,&epsComm);CHKERRQ(ierr);
   ierr = MPI_Comm_rank(matComm,&idMat);CHKERRQ(ierr);
   ierr = MPI_Comm_size(matComm,&nprocMat);CHKERRQ(ierr);
@@ -334,11 +334,11 @@ PetscErrorCode EPSCreateDensityMat(EPS eps,PetscInt idx_start,PetscInt idx_end,M
       ierr = PetscFree(buf);CHKERRQ(ierr);
     }
   }
-  if (idMat == 0) {
+ /* if (idMat == 0) {
     nconv_loc = myidx_end-myidx_start;
     if (nconv_loc < 0) nconv_loc = 0;
     ierr = PetscPrintf(PETSC_COMM_SELF,"[%d] interval [%g, %g], inertia %d %d; nconv_loc %d\n",rank,myinterval[0],myinterval[1],myinertia[0],myinertia[1],nconv_loc);CHKERRQ(ierr);
-  }
+  }*/
 
   *P = Dmat;
   ierr = VecDestroy(&evec);CHKERRQ(ierr);
@@ -511,7 +511,7 @@ PetscErrorCode DFTBMonitor(EPS eps,PetscInt it,void *ctx)
   PetscFunctionBegin;
   ierr = PetscObjectGetComm((PetscObject)eps,&comm);CHKERRQ(ierr);
   ierr = MPI_Comm_rank(comm,&rank);CHKERRQ(ierr);
-  printf("[%d] it %d ..... time %g\n",rank,it,(PetscReal)appctx->time);
+ // printf("[%d] it %d ..... time %g\n",rank,it,(PetscReal)appctx->time);
 #if 0
   MPI_Comm    matComm;
   PetscMPIInt idMat;
