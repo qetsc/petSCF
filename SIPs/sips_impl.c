@@ -60,12 +60,10 @@ PetscErrorCode EPSGetEigenClusters(EPS eps,PetscReal eval_deg,PetscInt* necluste
 
   /* compute gaps */
   avegap = (eigr_max - eigr_min)/nconv;
-  //printf(" avegap = %g\n",avegap);
   ngaps = 0;
   for (i=1; i<neclusters; i++) {
     if (ecluster[i] - ecluster[i-1] > r*avegap) ngaps++;
   }
-  //printf("ngaps %d\n",ngaps);
 
   ierr = PetscMalloc1(2*ngaps,&dftbgap->gap);CHKERRQ(ierr);
   ngaps = 0;
@@ -74,7 +72,6 @@ PetscErrorCode EPSGetEigenClusters(EPS eps,PetscReal eval_deg,PetscInt* necluste
       dftbgap->gap[2*ngaps]   = ecluster[i-1];
       dftbgap->gap[2*ngaps+1] = ecluster[i];
       ngaps++;
-      //printf("%d - gap (%g, %g), %g\n",i,ecluster[i-1],ecluster[i],ecluster[i] - ecluster[i-1]);
     }
   }
   
@@ -211,13 +208,11 @@ PetscErrorCode EPSCreateDensityMat(EPS eps,PetscInt idx_start,PetscInt idx_end,M
   ierr = MPI_Comm_rank(comm,&rank);CHKERRQ(ierr);
   ierr = MPI_Comm_size(comm,&size);CHKERRQ(ierr);
  
-  /* if (!rank) printf("\nEPSCreateDensityMat: idx_start/end: %d, %d\n",idx_start,idx_end); */
   ierr = EPSKrylovSchurGetSubComm(eps,&matComm,&epsComm);CHKERRQ(ierr);
   ierr = MPI_Comm_rank(matComm,&idMat);CHKERRQ(ierr);
   ierr = MPI_Comm_size(matComm,&nprocMat);CHKERRQ(ierr);
   ierr = MPI_Comm_rank(epsComm,&idEps);CHKERRQ(ierr);
   ierr = MPI_Comm_size(epsComm,&nprocEps);CHKERRQ(ierr);
-  /* ierr = PetscPrintf(PETSC_COMM_SELF,"[%d] idMat %d, nprocMat %d; idEps %d, nprocEps %d\n",rank,idMat,nprocMat,idEps,nprocEps); */
 
   /* get num of local converged eigensolutions */
   ierr = EPSKrylovSchurGetSubcommInfo(eps,&idEps,&nconv_loc,&evec);CHKERRQ(ierr);
@@ -334,17 +329,10 @@ PetscErrorCode EPSCreateDensityMat(EPS eps,PetscInt idx_start,PetscInt idx_end,M
       ierr = PetscFree(buf);CHKERRQ(ierr);
     }
   }
- /* if (idMat == 0) {
-    nconv_loc = myidx_end-myidx_start;
-    if (nconv_loc < 0) nconv_loc = 0;
-    ierr = PetscPrintf(PETSC_COMM_SELF,"[%d] interval [%g, %g], inertia %d %d; nconv_loc %d\n",rank,myinterval[0],myinterval[1],myinertia[0],myinertia[1],nconv_loc);CHKERRQ(ierr);
-  }*/
 
   *P = Dmat;
   ierr = VecDestroy(&evec);CHKERRQ(ierr);
-  if (idEps == 100) {
-    ierr = MatView(Dmat,PETSC_VIEWER_STDOUT_(matComm));CHKERRQ(ierr);
-  }
+
   PetscFunctionReturn(0);
 }
 
@@ -481,14 +469,12 @@ PetscErrorCode GetSubIntsFromEvals(PetscInt neclusters,PetscReal *ecluster,Petsc
     j += nsubclusters[i];
 
     if (ngap && gap[2*k+1] < subint[i] && subint[i-1] < (gap[2*k] + gap[2*k+1])/2.0) { /* a gap falls into (subint[i-1], subint[i]) */
-      //printf("mv %g to %g\n",subint[i],(gap[2*k] + gap[2*k+1])/2.0);
       subint[i] = (gap[2*k] + gap[2*k+1])/2.0;
       ngap--; k++;
     }
   }
   /* if last subinterval contains a gap */
   if (ngap && gap[2*k] > subint[nintervals-1]) {
-    //printf("mv %g to %g\n",subint[nintervals-1],(gap[2*k] + gap[2*k+1])/2.0);
     subint[nintervals-1] = (gap[2*k] + gap[2*k+1])/2.0;
     ngap--; k++;
   }
@@ -511,24 +497,6 @@ PetscErrorCode DFTBMonitor(EPS eps,PetscInt it,void *ctx)
   PetscFunctionBegin;
   ierr = PetscObjectGetComm((PetscObject)eps,&comm);CHKERRQ(ierr);
   ierr = MPI_Comm_rank(comm,&rank);CHKERRQ(ierr);
- // printf("[%d] it %d ..... time %g\n",rank,it,(PetscReal)appctx->time);
-#if 0
-  MPI_Comm    matComm;
-  PetscMPIInt idMat;
-  ierr = SIPSGetSubComm(sips,&matComm,&epsComm);CHKERRQ(ierr);
-  ierr = MPI_Comm_rank(matComm,&idMat);CHKERRQ(ierr);
-  
-  if (!idMat) {
-    PetscReal time[2],time_extrem[2],time_max,time_min;
-    time[0] = (PetscReal)appctx->time;
-    time[1] = -time[0];
-    ierr = MPI_Allreduce(&time,&time_extrem,2,MPI_DOUBLE,MPI_MAX,epsComm);CHKERRQ(ierr);
-    time_max = time_extrem[0];
-    time_min = - time_extrem[1];
-    if (!rank) {
-      ierr = PetscPrintf(PETSC_COMM_SELF,"Iter %D,  intervType %d, SIPSSolve time(max/min) = %g/%g = %g\n",it,sips->inttype,time_max,time_min,time_max/time_min);CHKERRQ(ierr);
-    }
-  }
-#endif
+
   PetscFunctionReturn(0);
 }
