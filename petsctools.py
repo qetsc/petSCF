@@ -13,12 +13,12 @@ except:
     Print("no scipy modules")
     pass
 
-def getWallTime(t0=0):
+def getWallTime(t0=0, str=''):
     """
     Returns the walltime - t0 in seconds.
     """
     t = MPI.Wtime() - t0
-    if(t0): Print("{0:5.3f} seconds".format(t))
+    if(t0): Print("{0} {1:5.3f} seconds".format(str,t))
     return t
 
 def getStage(stagename='stage', oldstage=None, printstage=True):
@@ -389,8 +389,15 @@ def getTrace(A):
         temp += A[i,i]
     return MPI.COMM_WORLD.allreduce(temp,op=MPI.SUM)
 
-
-
+def getSeqMat(A):
+    """
+    If A is a MPIAIJ matrix returns a seqAIJ matrix identical to A.
+    Else returns A
+    """
+    myis=PETSc.IS().createStride(A.getSize()[0],first=0,step=1,comm=PETSc.COMM_SELF)    
+    (A,)=A.getSubMatrices(myis,myis)
+    return A
+   
 def getSeqAIJ(A):
     """
     If A is a MPIAIJ matrix returns a seqAIJ matrix identical to A.

@@ -801,7 +801,7 @@ def main():
     import os.path
     import xyztools as xt
     import mindo3
-    stage       = pt.getStage('PSCF')  
+    stage       = pt.getStage('Initialization')  
     opts        = PETSc.Options()
     mol         = opts.getString('mol','')
     xyzfile     = opts.getString('xyz','')
@@ -813,10 +813,12 @@ def main():
     guess       = opts.getInt('guess', 0)
     bandwidth   = opts.getInt('bw', 0)
     sort        = opts.getInt('sort', 0)
+    nsubint     = opts.getInt('eps_krylovschur_partitions', 1)
     method      = opts.getString('method','mindo3').lower()
     pyquante    = opts.getBool('pyquante',False)
     writeXYZ    = opts.getBool('writeXYZ',False)
     Print("Number of MPI ranks: {0}".format(PETSc.COMM_WORLD.size))
+    Print("Number of subintervals: {0}".format(nsubint))
     qmol=None
     if mol:
         import PyQuante.Molecule 
@@ -842,11 +844,12 @@ def main():
             Print('This method requires binary files for matrices')
             sys.exit()
     elif os.path.isfile(xyzfile):
-        Print('xyz read from file:{0}'.format(xyzfile))
+        Print('xyz file:{0}'.format(xyzfile))
         if sort > 0:
-            stage       = pt.getStage('Sort',oldstage=stage)  
+            t0          = pt.getWallTime() 
             xyz         = xt.readXYZ(xyzfile)
             sortedxyz   = xt.sortXYZ(xyz)
+            pt.getWallTime(t0,str='Sorted xyz in')
             if writeXYZ: 
                 sortedfile  = xt.writeXYZ(sortedxyz)
                 Print('sorted xyz file:{0}'.format(sortedfile))

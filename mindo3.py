@@ -652,6 +652,49 @@ def getF(atomIDs, D, F0, T, G, H):
     A.assemble()
     return A
 
+def getFDseq(atomIDs, Dseq, F0, T, G, H):
+    """
+    Density matrix dependent terms of the Fock matrix
+    """
+    diagG = G.getDiagonal()
+    diagD = pt.convert2SeqVec(D.getDiagonal()) 
+    A     = T.duplicate()
+    A.setUp()
+    rstart, rend = A.getOwnershipRange()
+    for i in xrange(rstart,rend):
+        atomi=atomIDs[i]
+        colsD,valsD = D.getRow(i)
+        colsG,valsG = G.getRow(i)
+        colsH,valsH = H.getRow(i)
+        colsT,valsT = T.getRow(i)
+        tmpii       = 0.5 * diagD[i] * diagG[i] # Since g[i,i]=h[i,i]
+        k=0
+        idxG=0
+        for j in colsT:
+            atomj=atomIDs[j]
+            if i != j:
+                tmpij = 0
+                Djj   = diagD[j] # D[j,j]
+                if len(valsD)>1:
+                    Dij    = valsD[k]
+                else:
+                    Dij    = 0
+                Tij   = valsT[k]
+                if atomj  == atomi:
+                    idxG   = np.where(colsG==j)
+                    Gij    = valsG[idxG]
+                    Hij    = valsH[idxG]
+                    tmpii += Djj * ( Gij - 0.5 * Hij ) # Ref1 and PyQuante, In Ref2, Ref3, when i==j, g=h
+                    tmpij  =  0.5 * Dij * ( 3. * Hij - Gij ) # Ref3, PyQuante, I think this term is an improvement to MINDO3 (it is in MNDO) so not found in Ref1 and Ref2  
+                else:
+                    tmpii += Tij * Djj     # Ref1, Ref2, Ref3
+                    tmpij = -0.5 * Tij * Dij   # Ref1, Ref2, Ref3  
+                A[i,j] = tmpij
+            k=k+1    
+        A[i,i] = tmpii        
+    A.assemble()
+    return A
+
 def scf(opts,nocc,atomIDs,D,F0,T,G,H,stage):
     """
     """
@@ -661,7 +704,7 @@ def scf(opts,nocc,atomIDs,D,F0,T,G,H,stage):
     interval    = [opts.getReal('a',-500.) , opts.getReal('b', 500.)]
     staticsubint= opts.getInt('staticsubint',0)
     usesips     = opts.getBool('sips',False)
-
+    
     Eel       = 0.
     gap       = 0.
     converged = False 
@@ -706,7 +749,6 @@ def scf(opts,nocc,atomIDs,D,F0,T,G,H,stage):
             stage = pt.getStage(stagename='UpdateEPS',oldstage=stage)            
             subint =interval
             if staticsubint==1:
-                Print("subint 1")
                 nsubint=st.getNumberOfSubIntervals(eps)
                 subint = st.getSubIntervals(eigarray[0:nocc],nsubint,interval=interval) 
             elif staticsubint==2:
@@ -719,9 +761,7 @@ def scf(opts,nocc,atomIDs,D,F0,T,G,H,stage):
             gap = eigarray[nocc] - eigarray[nocc-1]              
             Print("Gap            = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(gap*const.ev2kcal,gap,gap*const.ev2hartree))  
         Print("Eel            = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Eel*const.ev2kcal,Eel,Eel*const.ev2hartree))  
-        pt.getWallTime(t0)    
         stage = pt.getStage(stagename='Density', oldstage=stage)
-        t0 = pt.getWallTime()
         nden = nocc
         if nconv < nocc: 
             nden = nconv
@@ -729,7 +769,10 @@ def scf(opts,nocc,atomIDs,D,F0,T,G,H,stage):
             D = sips.getDensityMat(eps,0,nden)
         else:    
             D = st.getDensityMatrix(eps,T, nden)
-        pt.getWallTime(t0)
+        sizecommD = D.getComm().Get_size()    
+        if sizecommD > 1 and sizecommD < F.getComm().Get_size():   
+            D = pt.getSeqMat(D)
+        pt.getWallTime(t0,str='Iteration completed in')
         if abs(Eel-Eold) < scfthresh and nconv >= nocc:
             Print("Converged at iteration {0}".format(k))
             converged = True
@@ -738,7 +781,7 @@ def scf(opts,nocc,atomIDs,D,F0,T,G,H,stage):
 
 def getEnergy(qmol,opts):
 
-    stage       = pt.getStage(stagename='MINDO\3')
+    stage       = pt.getStage(stagename='MINDO3')
     t0          = pt.getWallTime()
     maxdist     = opts.getReal('maxdist', 1.e6)
     solve       = opts.getInt('solve', 0)
@@ -750,8 +793,8 @@ def getEnergy(qmol,opts):
     checknnz    = opts.getBool('checknnz',False) 
     pyquante    = opts.getBool('pyquante',False) #TODO get Pyquante energy for testing
     Print("Distance cutoff: {0:5.3f}".format(maxdist))
-
     qmol  = initialize(qmol)
+    pt.getWallTime(t0,str="MINDO3 initialized in")
 #    if pyquante:
 #        Epyquante = PyQuante.MINDO3.scf(qmol)
     atoms   = qmol.atoms
@@ -783,8 +826,10 @@ def getEnergy(qmol,opts):
     G     = getG(basis,comm=matcomm)    
     stage = pt.getStage(stagename='H', oldstage=stage)
     H     = getH(basis,T=G)
-    pt.getWallTime(t0)
+    pt.getWallTime(t0,str="Pre-SCF steps finished in")
+    t0          = pt.getWallTime()
     converged, Eelec, gap = scf(opts,nocc,atomIDs,D0,F0,T,G,H,stage)
+    pt.getWallTime(t0,str="SCF finished in")
     Etot   = Eelec + Enuke
     Efinal = Etot*const.ev2kcal+Eref
     Print("Enuc             = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Enuke*const.ev2kcal,Enuke,Enuke*const.ev2hartree))

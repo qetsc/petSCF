@@ -187,7 +187,7 @@ def updateEPS(eps,A,B=None,subintervals=[0]):
 #     PETSc.Options().setValue('mat_mumps_cntl_3',1.e-12)
 #     eps.setInterval(subintervals[0],subintervals[-1])
     if len(subintervals)>1:
-        Print("subintervals:{0}".format(subintervals))
+        #Print("subintervals:{0}".format(subintervals))
         eps.setInterval(subintervals[0],subintervals[-1])
         if len(subintervals)>2:
             eps.setKrylovSchurPartitions(len(subintervals)-1)
