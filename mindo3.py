@@ -194,149 +194,129 @@ def getNuclearEnergy(Na,atoms,maxdist):
                 enuke += getEnukeij(atomi, atomj, distij2)   
 
     return MPI.COMM_WORLD.allreduce(enuke)   
-        
-def getT(basis,maxdist,maxnnz=[0],bandwidth=[0],comm=PETSc.COMM_SELF):
+
+def getLocalNnzPerRowSym(basis,rstart,rend,maxdist2):
+    """
+    Returns an array containing local number of nonzeros per row based on distance between atoms.
+    Size depends on the number of rows per process.
+    Locality is based on a temporarily created AIJ matrix. Is there a better way?
+    I am not  sure if this is needed, I could do this for all processes since I only need to create a vector of size nbf
+    """
+    nbf=len(basis)
+    dnnz=np.ones(rend-rstart,dtype='int32')
+    onnz=np.zeros(rend-rstart,dtype='int32')
+    
+    for i in xrange(rstart,rend):
+        atomi=basis[i].atom
+        for j in xrange(i+1,rend):
+            distij2=atomi.dist2(basis[j].atom)
+            if distij2 < maxdist2: 
+                dnnz[i] += 1
+        for j in xrange(rend,nbf):
+            distij2=atomi.dist2(basis[j].atom)
+            if distij2 < maxdist2: 
+                onnz[i] += 1
+        Print(dnnz[i],onnz[i])        
+    return dnnz,onnz
+
+def getLocalNnzPerRow(basis,rstart,rend,maxdist2):
+    """
+    Returns three arrays that contains: 
+    dnnz: local numbers of nonzseros per row in diagonal blocks (square) 
+    onnz: local numbers of nonzeros per row in off-diagonal blocks (rectangular)
+    jmax: max column index that contains a nonzero.
+    Nonzeros are based on distance between atoms.
+    TODO: Exploit symmetry, not sure how to do that.
+    """
+    nbf=len(basis)
+    localsize=rend-rstart
+    dnnz=np.zeros(localsize,dtype='int32')
+    onnz=np.zeros(localsize,dtype='int32')
+    jmax=np.zeros(localsize,dtype='int32')
+    k=0
+    for i in xrange(rstart,rend):
+        atomi=basis[i].atom
+        for j in xrange(nbf):
+            distij2=atomi.dist2(basis[j].atom)
+            if distij2 < maxdist2:
+                if j in range(rstart,rend): 
+                    dnnz[k] += 1
+                else:
+                    onnz[k] += 1
+                if j > jmax[k]:
+                    jmax[k] = j 
+        k += 1               
+    return dnnz, onnz, jmax
+
+def getT(basis,maxdist,preallocate=False,maxnnz=[0],bandwidth=[0],comm=PETSc.COMM_SELF):
     """
     Computes a matrix for the two-center two-electron integrals.
     Assumes spherical symmetry, no dependence on basis function, only atom types.
     Parametrized for pairs of atoms. (Two-atom parameters)
     maxnnz: max number of nonzeros per row. If it is given performance might improve    
     This matrix also determines the nonzero structure of the Fock matrix.
+    Nuclear repulsion energy is also computed.
     TODO:
-    Optimize preallocation based on diagonal and offdiagonal nonzeros.
     Values are indeed based on atoms, not basis functions, so possible to improve performance by nbf/natom.
     Cythonize
     """
 
     nbf      = len(basis)
+    nnz = nbf*nbf
     maxdist2 = maxdist * maxdist * const.ang2bohr * const.ang2bohr
-    enuke=0.0
     Vdiag = PETSc.Vec().create(comm=comm)
     A        = PETSc.Mat().create(comm=comm)
     A.setType('aij') #'sbaij'
     A.setSizes([nbf,nbf]) 
-    if any(maxnnz): 
-        A.setPreallocationNNZ(maxnnz) 
-    else:
-        A.setPreallocationNNZ([nbf,nbf])
     A.setUp()
     A.setOption(A.Option.NEW_NONZERO_ALLOCATION_ERR,True)
     rstart, rend = A.getOwnershipRange()
-    localsize = rend-rstart
+    localsize = rend - rstart
+    if preallocate:
+        dnnz,onnz,jmax = getLocalNnzPerRow(basis,rstart,rend,maxdist2)
+        nnz = sum(dnnz) + sum(onnz)
+        A.setPreallocationNNZ((dnnz,onnz)) 
+    else:
+        A.setPreallocationNNZ([nbf,nbf])
+        jmax = np.array([localsize]*nbf)
     Vdiag.setSizes((localsize,nbf))
     Vdiag.setUp()
-    nnz = 0
     bohr2ang2 = const.bohr2ang**2.
     e2        = const.e2
-    if any(bandwidth):
-        if len(bandwidth)==1: bandwidth=np.array([bandwidth]*nbf)
-    else:
-        bandwidth=np.array([nbf]*nbf)    
+    k = 0   
+    enuke=0.0
     for i in xrange(rstart,rend):
         atomi   = basis[i].atom
         atnoi   = atomi.atno
         rhoi    = atomi.rho
         gammaii = f03[atnoi]
         Vdiag[i] = gammaii
-        for j in xrange(i+1,min(i+bandwidth[i],nbf)):
+    #    for j in xrange(i+1,min(i+bandwidth[i],nbf)):
+        for j in xrange(i+1,jmax[k]+1):
             atomj = basis[j].atom
             if atomi.atid == atomj.atid:
                 A[i,j] = gammaii
-                nnz += 1
             else:                        
                 distij2 = atomi.dist2(atomj) # (in bohr squared) * bohr2ang2
                 if distij2 < maxdist2:
-                    rhoj    = atomj.rho 
-                    distij2 = distij2 * bohr2ang2
-                    gammaij = e2 / np.sqrt(distij2 + 0.25 * (rhoi + rhoj)**2.)
-                    A[i,j] = gammaij
-                    nnz += 1
-    A.setDiagonal(Vdiag) 
-    A.assemblyBegin()
-    nnz =  MPI.COMM_WORLD.allreduce(nnz)  + nbf 
-    A.assemblyEnd()
-    B = A.duplicate(copy=True)
-    B = B + A.transpose() 
-    B.setDiagonal(Vdiag) 
-    return  nnz, B
-
-def getTold(basis,maxdist,maxnnz=[0],bandwidth=[0],comm=PETSc.COMM_SELF):
-    """
-    Computes MINDO3 nuclear repulsion energy and gamma matrix
-    Nuclear repulsion energy: Based on PyQuante MINDO3 get_enuke(atoms)
-    Gamma matrix: Based on PyQuante MINDO3 get_gamma(atomi,atomj)
-    "Coulomb repulsion that goes to the proper limit at R=0"
-    Corresponds to two-center two-electron integrals
-    Assumes spherical symmetry, no dependence on basis function, only atom types.
-    Parametrized for pairs of atoms. (Two-atom parameters)
-    maxnnz: max number of nonzeros per row. If it is given performance might improve    
-    Gamma matrix also determines the nonzero structure of the Fock matrix.
-    TODO:
-    Values are indeed based on atoms, not basis functions, so possible to improve performance by nbf/natom.
-    Better to preallocate based on diagonal and offdiagonal nonzeros.
-    Cythonize
-    """
-
-    nbf      = len(basis)
-    maxdist2 = maxdist * maxdist * const.ang2bohr * const.ang2bohr
-    enuke=0.0
-    Vdiag = PETSc.Vec().create(comm=comm)
-    A        = PETSc.Mat().create(comm=comm)
-    A.setType('aij') #'sbaij'
-    A.setSizes([nbf,nbf]) 
-    if any(maxnnz): 
-        A.setPreallocationNNZ(maxnnz) 
-    else:
-        A.setPreallocationNNZ([nbf,nbf])
-    A.setUp()
-    A.setOption(A.Option.NEW_NONZERO_ALLOCATION_ERR,True)
-    rstart, rend = A.getOwnershipRange()
-    localsize = rend-rstart
-    Vdiag.setSizes((localsize,nbf))
-    Vdiag.setUp()
-    nnz = 0
-    bohr2ang2 = const.bohr2ang**2.
-    e2        = const.e2
-    if any(bandwidth):
-        if len(bandwidth)==1: bandwidth=np.array([bandwidth]*nbf)
-    else:
-        bandwidth=np.array([nbf]*nbf)    
-    for i in xrange(rstart,rend):
-        atomi   = basis[i].atom
-        Zi      = atomi.Z
-        nbfi    = atomi.nbf 
-        atnoi   = atomi.atno
-        rhoi    = atomi.rho
-        gammaii = PyQuante.MINDO3_Parameters.f03[atnoi]
-        Vdiag[i] = gammaii
-        for j in xrange(i+1,min(i+bandwidth[i],nbf)):
-            atomj = basis[j].atom
-            if atomi.atid == atomj.atid:
-                A[i,j] = gammaii
-                nnz += 1
-            else:                        
-                distij2 = atomi.dist2(atomj) # (in bohr squared) * bohr2ang2
-                if distij2 < maxdist2:
-                    Zj      = atomj.Z
-                    nbfj    = atomj.nbf 
-                    atnoj   = atomj.atno
                     rhoj    = atomj.rho 
                     distij2 = distij2 * bohr2ang2
                     gammaij = e2 / np.sqrt(distij2 + 0.25 * (rhoi + rhoj)**2.)
                     R=np.sqrt(distij2)
-                    scale = PyQuante.MINDO3.get_scale(atnoi,atnoj,R)
-                    enuke += ( Zi * Zj * gammaij +  abs(Zi * Zj * (e2 / R - gammaij) * scale) ) / ( nbfi * nbfj )
                     A[i,j] = gammaij
-                    nnz += 1
+                    atnoj   = atomj.atno
+                    enuke += ( atomi.Z*atomj.Z*gammaij +  abs(atomi.Z*atomj.Z*(const.e2/R-gammaij)*getScaleij(atnoi, atnoj, R)) ) / ( atomi.nbf * atomj.nbf )
+        k += 1            
     A.setDiagonal(Vdiag) 
     A.assemblyBegin()
     enuke =  MPI.COMM_WORLD.allreduce(enuke)        
-    nnz =  MPI.COMM_WORLD.allreduce(nnz)  + nbf      
+    if preallocate:
+        nnz =  MPI.COMM_WORLD.allreduce(nnz) 
     A.assemblyEnd()
     B = A.duplicate(copy=True)
     B = B + A.transpose() 
     B.setDiagonal(Vdiag) 
-    return  nnz,enuke, B
+    return  nnz,enuke,B
 
 def getGammaold(basis,maxdist,maxnnz=[0],bandwidth=[0],comm=PETSc.COMM_SELF):
     """
@@ -757,7 +737,7 @@ def scf(opts,nocc,atomIDs,D,F0,T,G,H,stage):
             eps = st.updateEPS(eps,F,subintervals=subint)
             stage = pt.getStage(stagename='SolveEPS',oldstage=stage)
             eps, nconv, eigarray = st.solveEPS(eps,returnoption=1,nocc=nocc)         
-        if (len(eigarray)>nocc+1):
+        if (len(eigarray)>nocc):
             gap = eigarray[nocc] - eigarray[nocc-1]              
             Print("Gap            = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(gap*const.ev2kcal,gap,gap*const.ev2hartree))  
         Print("Eel            = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Eel*const.ev2kcal,Eel,Eel*const.ev2hartree))  
@@ -812,12 +792,13 @@ def getEnergy(qmol,opts):
         stage = pt.getStage(stagename='Nonzero info', oldstage=stage)
         maxnnz,bandwidth = pt.getNnzInfo(basis, maxdist)
     stage = pt.getStage(stagename='T', oldstage=stage)
-    nnz, T            = getT(basis, maxdist,maxnnz=maxnnz, bandwidth=bandwidth, comm=matcomm)
-    Enuke             = getNuclearEnergy(len(atoms), atoms, maxdist)
+    nnz, Enuke, T            = getT(basis, maxdist,preallocate=True,maxnnz=maxnnz, bandwidth=bandwidth, comm=matcomm)
+   # Enuke             = getNuclearEnergy(len(atoms), atoms, maxdist)
     dennnz = nnz / (nbf*(nbf+1)/2.0)  * 100.
     Print("Nonzero density percent : {0}".format(dennnz))
     Print("Eref           = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Eref, Eref*const.kcal2ev, Eref*const.kcal2hartree))    
     Print("Enuc           = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Enuke*const.ev2kcal,Enuke,Enuke*const.ev2hartree))
+    #Print("Enuc           = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Enuke2*const.ev2kcal,Enuke2,Enuke2*const.ev2hartree))
     stage = pt.getStage(stagename='F0', oldstage=stage)
     F0    = getF0(atoms, basis, T)
     stage = pt.getStage(stagename='D0', oldstage=stage)
