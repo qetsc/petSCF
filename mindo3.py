@@ -824,9 +824,9 @@ def getEnergy(qmol,opts):
     converged, Eelec, homo, lumo = scf(opts,nocc,atomids,D0,F0,T,G,H,stage)
     gap = lumo - homo
     if converged:
-        pt.getWallTime(t0,str="SCF converged")
+        pt.getWallTime(t0,str="SCF")
     else:    
-        pt.getWallTime(t0,str="SCF failed")
+        pt.getWallTime(t0,str="No convergence")
     Etot   = Eelec + Enuke
     Efinal = Etot*ut.ev2kcal+Eref
     writeEnergies(Eref, unit='kcal', enstr='Eref')
@@ -836,5 +836,4 @@ def getEnergy(qmol,opts):
     writeEnergies(lumo,unit='ev',enstr='LUMO')
     writeEnergies(gap,unit='ev',enstr='Gap')
     writeEnergies(Efinal, unit= 'kcal', enstr='Eref+Enuc+Eelec')
-    stage.pop()
     return Efinal

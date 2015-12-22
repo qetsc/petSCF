@@ -117,11 +117,11 @@ def main():
             basisset    = opts.getString('basis','sto-3g')
             rhf(qmol,basisset,spfilter,maxiter,scfthresh,maxdist=maxdist)
         elif method.startswith('mindo3'):
-            pt.write("MINDO3 calculation starts...")
+            t1 = pt.getWallTime()
             from mindo3 import getEnergy
             stage.pop()
             getEnergy(qmol,opts)
-            pt.write("MINDO3 calculation finishes.")
+            pt.getWallTime(t1,'MINDO3')
         else:
             pt.write("No valid method specified")
     pt.getWallTime(t0, str="PSCF")
