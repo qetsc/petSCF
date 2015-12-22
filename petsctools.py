@@ -18,8 +18,8 @@ def getWallTime(t0=0, str=''):
     Returns the walltime - t0 in seconds.
     """
     t = MPI.Wtime() - t0
-    if(t0): Print("{0} {1:5.3f} seconds".format(str,t))
-    return t
+    if(t0): Print("{0}: {1:5.3f} seconds".format(str,t))
+    return MPI.Wtime()
 
 def getStage(stagename='stage', oldstage=None, printstage=True):
     """
@@ -30,6 +30,18 @@ def getStage(stagename='stage', oldstage=None, printstage=True):
     stage = PETSc.Log.Stage(stagename); 
     stage.push();
     return stage
+
+def getStageTime(t0,oldstage='oldstagename',newstage='newstagename'):
+    """
+    PETSc staging tool, helps for profiling.
+    """
+    t = MPI.Wtime() - t0
+    Print("{0}: {1:5.3f} seconds".format(oldstage.name,t))
+    oldstage.pop()
+    Print("{0:*^30s}".format("Stage "+ newstage))
+    stage = PETSc.Log.Stage(newstage); 
+    stage.push();
+    return MPI.Wtime(),stage
 
 def printAIJ(A,text=''):
     rank         = MPI.COMM_WORLD.rank
@@ -55,7 +67,7 @@ def writeMat(A,filename='mat.bin'):
     filename:
     Returns
     ---------
-    0 if succseful
+    0 if successful
     """
     ext = filename[-3:]
     if ext == 'bin':
@@ -104,25 +116,84 @@ def getCSRBandwidth(A):
     return _sparse_bandwidth(A.indices, A.indptr, A.shape[0])
 
 
-def getLocalNnzPerRow(basis,nbf,maxdist=1E6):##D
+def getLocalNnzPerRow(basis,rstart,rend,maxdist2):
     """
     Returns an array containing local number of nonzeros per row based on distance between atoms.
     Size depends on the number of rows per process.
     Locality is based on a temporarily created AIJ matrix. Is there a better way?
     I am not  sure if this is needed, I could do this for all processes since I only need to create a vector of size nbf
     """
-    A = PETSc.Mat().createSBAIJ(nbf,1,comm=matcomm)
-    A.setUp()
-    rstart, rend = A.getOwnershipRange()
-    nnzarray=np.ones(rend-rstart)
+    nbf=len(basis)
+    dnnz=np.ones(rend-rstart)
+    onnz=np.zeros(rend-rstart)
+    
     for i in xrange(rstart,rend):
         atomi=basis[i].atom
-        for j in xrange(i+1,nbf):
-            distij=atomi.dist(basis[j].atom)
-            if distij < maxdist: nnzarray[i] += 1
-    return nnzarray
+        for j in xrange(i,rend):
+            distij2=atomi.dist2(basis[j].atom)
+            if distij2 < maxdist2: 
+                dnnz[i] += 2
+        for j in xrange(rend,nbf):
+            distij2=atomi.dist2(basis[j].atom)
+            if distij2 < maxdist2: 
+                onnz[i] += 2
+    return dnnz,onnz
 
-def getNnzPerRow(basis,maxdist):
+def getNnzVec(basis,maxdist):
+    """
+    Returns number of nonzeros per row based on distance between atoms.
+    This is based on basis set rather than atoms, so there is redundancy in the calculations.
+    TODO:
+    Parallel version with a PETSc vector.
+    Distance calculation loop should be over atoms indeed, which will improve performance by nbf/natom.
+    If atoms are ordered based on a distance from a pivot point, loop can be reduced to exclude far atoms.
+    """
+    nbf=len(basis)
+    maxdist2 = maxdist * maxdist
+    Vnnz        = PETSc.Vec().createMPI((None,nbf),comm=PETSc.COMM_WORLD)
+    rstart, rend = Vnnz.getOwnershipRange()
+    for i in xrange(rstart,rend):
+        atomi=basis[i].atom
+        nnz=1
+        for j in xrange(i):
+            distij2=atomi.dist2(basis[j].atom)
+            if distij2 < maxdist2: 
+                nnz += 1
+        Vnnz[i] = nnz
+    Vnnz.assemble()            
+    return Vnnz 
+
+def getMaxNnzPerRow(mol,nat,maxdist):
+    """
+    Returns number of nonzeros per row based on distance between atoms.
+    This is based on basis set rather than atoms, so there is redundancy in the calculations.
+    TODO:
+    Parallel version with a PETSc vector.
+    Distance calculation loop should be over atoms indeed, which will improve performance by nbf/natom.
+    If atoms are ordered based on a distance from a pivot point, loop can be reduced to exclude far atoms.
+    """
+    maxnnz=0
+    maxband=0
+    maxdist2 = maxdist * maxdist
+    Vnnz        = PETSc.Vec().createMPI((None,nat),comm=MPI.COMM_WORLD)
+    rstart, rend = Vnnz.getOwnershipRange()
+    for i in xrange(rstart,rend):
+        atomi=mol[i]
+        nnz=0
+        for j in xrange(i):
+            distij2=atomi.dist2(mol[j])
+            if distij2 < maxdist2: 
+                band  = i - j 
+                nnz += 1
+                if band > maxband:
+                    maxband = band
+        if nnz > maxnnz:
+            maxnnz = nnz        
+    maxnnz  = MPI.COMM_WORLD.allreduce(maxnnz,op=MPI.MAX)        
+    maxband = MPI.COMM_WORLD.allreduce(maxband,op=MPI.MAX)        
+    return maxnnz*2+1, 2 * maxband   
+
+def getNnzPerRowold(basis,maxdist):
     """
     Returns number of nonzeros per row based on distance between atoms.
     This is based on basis set rather than atoms, so there is redundancy in the calculations.

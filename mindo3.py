@@ -228,6 +228,7 @@ def getLocalNnzPerRow(basis,rstart,rend,maxdist2):
     Nonzeros are based on distance between atoms.
     TODO: Exploit symmetry, not sure how to do that.
     """
+    t0 = pt.getWallTime()
     nbf=len(basis)
     localsize=rend-rstart
     dnnz=np.zeros(localsize,dtype='int32')
@@ -239,16 +240,17 @@ def getLocalNnzPerRow(basis,rstart,rend,maxdist2):
         for j in xrange(nbf):
             distij2=atomi.dist2(basis[j].atom)
             if distij2 < maxdist2:
-                if j in range(rstart,rend): 
+                if j >= rstart and j < rend: 
                     dnnz[k] += 1
                 else:
                     onnz[k] += 1
                 if j > jmax[k]:
                     jmax[k] = j 
-        k += 1               
+        k += 1 
+    pt.getWallTime(t0=t0,str='Local nnz')                
     return dnnz, onnz, jmax
 
-def getT(basis,maxdist,preallocate=False,maxnnz=[0],bandwidth=[0],comm=PETSc.COMM_SELF):
+def getT(basis,maxdist,preallocate=False,comm=PETSc.COMM_SELF):
     """
     Computes a matrix for the two-center two-electron integrals.
     Assumes spherical symmetry, no dependence on basis function, only atom types.
@@ -260,7 +262,7 @@ def getT(basis,maxdist,preallocate=False,maxnnz=[0],bandwidth=[0],comm=PETSc.COM
     Values are indeed based on atoms, not basis functions, so possible to improve performance by nbf/natom.
     Cythonize
     """
-
+    t = pt.getWallTime()
     nbf      = len(basis)
     nnz = nbf*nbf
     maxdist2 = maxdist * maxdist * const.ang2bohr * const.ang2bohr
@@ -285,6 +287,7 @@ def getT(basis,maxdist,preallocate=False,maxnnz=[0],bandwidth=[0],comm=PETSc.COM
     e2        = const.e2
     k = 0   
     enuke=0.0
+    t = pt.getWallTime(t0=t,str='Prealloc')
     for i in xrange(rstart,rend):
         atomi   = basis[i].atom
         atnoi   = atomi.atno
@@ -307,6 +310,7 @@ def getT(basis,maxdist,preallocate=False,maxnnz=[0],bandwidth=[0],comm=PETSc.COM
                     atnoj   = atomj.atno
                     enuke += ( atomi.Z*atomj.Z*gammaij +  abs(atomi.Z*atomj.Z*(const.e2/R-gammaij)*getScaleij(atnoi, atnoj, R)) ) / ( atomi.nbf * atomj.nbf )
         k += 1            
+    t = pt.getWallTime(t0=t,str='For loop')
     A.setDiagonal(Vdiag) 
     A.assemblyBegin()
     enuke =  MPI.COMM_WORLD.allreduce(enuke)        
@@ -316,6 +320,7 @@ def getT(basis,maxdist,preallocate=False,maxnnz=[0],bandwidth=[0],comm=PETSc.COM
     B = A.duplicate(copy=True)
     B = B + A.transpose() 
     B.setDiagonal(Vdiag) 
+    t = pt.getWallTime(t0=t,str='Assembly')
     return  nnz,enuke,B
 
 def getGammaold(basis,maxdist,maxnnz=[0],bandwidth=[0],comm=PETSc.COMM_SELF):
@@ -589,7 +594,7 @@ def getFD( basis, D, T):
     A.assemble()
     return A
 
-def getF(atomIDs, D, F0, T, G, H):
+def getF(atomids, D, F0, T, G, H):
     """
     Density matrix dependent terms of the Fock matrix
     """
@@ -599,7 +604,7 @@ def getF(atomIDs, D, F0, T, G, H):
     A.setUp()
     rstart, rend = A.getOwnershipRange()
     for i in xrange(rstart,rend):
-        atomi=atomIDs[i]
+        atomi=atomids[i]
         colsD,valsD = D.getRow(i)
         colsG,valsG = G.getRow(i)
         colsH,valsH = H.getRow(i)
@@ -608,7 +613,7 @@ def getF(atomIDs, D, F0, T, G, H):
         k=0
         idxG=0
         for j in colsT:
-            atomj=atomIDs[j]
+            atomj=atomids[j]
             if i != j:
                 tmpij = 0
                 Djj   = diagD[j] # D[j,j]
@@ -632,7 +637,7 @@ def getF(atomIDs, D, F0, T, G, H):
     A.assemble()
     return A
 
-def getFDseq(atomIDs, Dseq, F0, T, G, H):
+def getFDseq(atomids, Dseq, F0, T, G, H):
     """
     Density matrix dependent terms of the Fock matrix
     """
@@ -642,7 +647,7 @@ def getFDseq(atomIDs, Dseq, F0, T, G, H):
     A.setUp()
     rstart, rend = A.getOwnershipRange()
     for i in xrange(rstart,rend):
-        atomi=atomIDs[i]
+        atomi=atomids[i]
         colsD,valsD = D.getRow(i)
         colsG,valsG = G.getRow(i)
         colsH,valsH = H.getRow(i)
@@ -651,7 +656,7 @@ def getFDseq(atomIDs, Dseq, F0, T, G, H):
         k=0
         idxG=0
         for j in colsT:
-            atomj=atomIDs[j]
+            atomj=atomids[j]
             if i != j:
                 tmpij = 0
                 Djj   = diagD[j] # D[j,j]
@@ -675,7 +680,7 @@ def getFDseq(atomIDs, Dseq, F0, T, G, H):
     A.assemble()
     return A
 
-def scf(opts,nocc,atomIDs,D,F0,T,G,H,stage):
+def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
     """
     """
     maxiter     = opts.getInt('maxiter', 30)
@@ -711,7 +716,7 @@ def scf(opts,nocc,atomIDs,D,F0,T,G,H,stage):
         Print("{0:*^60s}".format("Iteration "+str(k)))
         t0 = pt.getWallTime()
         stage = pt.getStage(stagename='F',oldstage=stage)
-        F    = getF(atomIDs, D, F0, T, G, H)
+        F    = getF(atomids, D, F0, T, G, H)
         F    = F0 + F
         Eold = Eel
         stage = pt.getStage(stagename='Trace',oldstage=stage)
@@ -774,7 +779,7 @@ def getEnergy(qmol,opts):
     pyquante    = opts.getBool('pyquante',False) #TODO get Pyquante energy for testing
     Print("Distance cutoff: {0:5.3f}".format(maxdist))
     qmol  = initialize(qmol)
-    pt.getWallTime(t0,str="MINDO3 initialized in")
+    pt.getWallTime(t0,str="MINDO3 initialization")
 #    if pyquante:
 #        Epyquante = PyQuante.MINDO3.scf(qmol)
     atoms   = qmol.atoms
@@ -783,7 +788,7 @@ def getEnergy(qmol,opts):
     nel   = getNelectrons(atoms)
     nocc  = nel/2
     basis = getBasis(qmol, nbf)
-    atomIDs = getAtomIDs(basis)
+    atomids = getAtomIDs(basis)
     matcomm = PETSc.COMM_WORLD
     Print("Number of basis functions  : {0} = Matrix size".format(nbf))
     Print("Number of valance electrons: {0}".format(nel))
@@ -791,26 +796,27 @@ def getEnergy(qmol,opts):
     if checknnz:
         stage = pt.getStage(stagename='Nonzero info', oldstage=stage)
         maxnnz,bandwidth = pt.getNnzInfo(basis, maxdist)
-    stage = pt.getStage(stagename='T', oldstage=stage)
-    nnz, Enuke, T            = getT(basis, maxdist,preallocate=True,maxnnz=maxnnz, bandwidth=bandwidth, comm=matcomm)
+    t,stage = pt.getStageTime(t0,newstage='T', oldstage=stage)
+    nnz, Enuke, T            = getT(basis, maxdist,preallocate=True, comm=matcomm)
    # Enuke             = getNuclearEnergy(len(atoms), atoms, maxdist)
-    dennnz = nnz / (nbf*(nbf+1)/2.0)  * 100.
+  #  dennnz = nnz / (nbf*(nbf+1)/2.0)  * 100.
+    dennnz = (100. * nnz) / (nbf*nbf) 
     Print("Nonzero density percent : {0}".format(dennnz))
     Print("Eref           = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Eref, Eref*const.kcal2ev, Eref*const.kcal2hartree))    
     Print("Enuc           = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Enuke*const.ev2kcal,Enuke,Enuke*const.ev2hartree))
     #Print("Enuc           = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Enuke2*const.ev2kcal,Enuke2,Enuke2*const.ev2hartree))
-    stage = pt.getStage(stagename='F0', oldstage=stage)
+    t, stage = pt.getStageTime(t,newstage='F0', oldstage=stage)
     F0    = getF0(atoms, basis, T)
-    stage = pt.getStage(stagename='D0', oldstage=stage)
+    t, stage = pt.getStageTime(t,newstage='D0', oldstage=stage)
     D0     = getD0(basis,guess=guess,T=T,comm=matcomm)
-    stage = pt.getStage(stagename='G', oldstage=stage)
+    t, stage = pt.getStageTime(t,newstage='G', oldstage=stage)
     G     = getG(basis,comm=matcomm)    
-    stage = pt.getStage(stagename='H', oldstage=stage)
+    t, stage = pt.getStageTime(t,newstage='H', oldstage=stage)
     H     = getH(basis,T=G)
-    pt.getWallTime(t0,str="Pre-SCF steps finished in")
+    pt.getWallTime(t0,str="Pre-SCF")
     t0          = pt.getWallTime()
-    converged, Eelec, gap = scf(opts,nocc,atomIDs,D0,F0,T,G,H,stage)
-    pt.getWallTime(t0,str="SCF finished in")
+    converged, Eelec, gap = scf(opts,nocc,atomids,D0,F0,T,G,H,stage)
+    pt.getWallTime(t0,str="SCF")
     Etot   = Eelec + Enuke
     Efinal = Etot*const.ev2kcal+Eref
     Print("Enuc             = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Enuke*const.ev2kcal,Enuke,Enuke*const.ev2hartree))
@@ -865,7 +871,7 @@ def main(qmol,opts):
     nel   = PyQuante.MINDO3.get_nel(atoms)
     nocc  = nel/2
     basis = getBasis(qmol, nbf)
-    atomIDs = getAtomIDs(basis)
+    atomids = getAtomIDs(basis)
     matcomm=PETSc.COMM_WORLD
     Print("Number of basis functions  : {0} = Matrix size".format(nbf))
     Print("Number of valance electrons: {0}".format(nel))
