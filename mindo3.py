@@ -1,16 +1,8 @@
-import sys, petsc4py
-petsc4py.init(sys.argv)
-from petsc4py import PETSc
 import numpy as np
 import petsctools as pt
 import slepctools as st
-#import PyQuante
-from mpi4py import MPI
-import constants as const
-#from PyQuante.MINDO3_Parameters import axy,Bxy,f03
-from PyQuante.MINDO3 import initialize
+import unittools as ut
 
-Print = PETSc.Sys.Print
 """
 MINDO/3 parameters taken from PyQuante
 """
@@ -53,6 +45,11 @@ axy = {
     (8,15) : 1.029693, # Rick hacked this to be the same as 6,15
     }
 
+def writeEnergies(en,unit='', enstr=''):
+    Ekcal, Eev, Ehart = ut.convertEnergy(en, unit)
+    pt.write("{0: <16s} = {1:20.10f} kcal/mol = {2:20.10f} ev = {3:20.10f} Hartree".format(enstr,Ekcal, Eev, Ehart))
+    return 0
+
 def getAlphaij(atnoi,atnoj):
     "PyQuante: Part of the scale factor for the nuclear repulsion"
     return axy[(min(atnoi,atnoj),max(atnoi,atnoj))]
@@ -93,7 +90,7 @@ def getScaleij(atnoi,atnoj,R):
     return np.exp(-alpha*R)
 
 def getGammaij(rhoi,rhoj,rij2):
-    return const.e2 / np.sqrt(rij2 + 0.25 * (rhoi + rhoj)**2.)
+    return ut.e2 / np.sqrt(rij2 + 0.25 * (rhoi + rhoj)**2.)
 
 def getNelectrons(atoms,charge=0):
     "PyQuante: Number of electrons in an atoms. Can be dependent on the charge"
@@ -114,7 +111,7 @@ def getEref(atoms):
     for atom in atoms:
         eat += atom.Eref
         hfat += atom.Hf
-    return hfat-eat * const.ev2kcal
+    return hfat-eat * ut.ev2kcal
 
 def getEnukeij(atomi, atomj,Rij2=0):
     """
@@ -131,11 +128,11 @@ def getEnukeij(atomi, atomj,Rij2=0):
         Rij2 = atomi.dist2(atomj)
         if not Rij2:
             return 0.
-    Rij2 = Rij2 * const.bohr2ang * const.bohr2ang   
+    Rij2 = Rij2 * ut.bohr2ang * ut.bohr2ang   
     Rij = np.sqrt(Rij2)
     gammaij = getGammaij(rhoi, rhoj, Rij2)    
     scaleij = getScaleij(atnoi,atnoj,Rij)
-    return ( Zi * Zj * gammaij +  abs(Zi * Zj * (const.e2 / Rij - gammaij) * scaleij) )
+    return ( Zi * Zj * gammaij +  abs(Zi * Zj * (ut.e2 / Rij - gammaij) * scaleij) )
 
 def getBasis(atoms,nbf):
     """
@@ -157,7 +154,7 @@ def getAtomIDs(basis):
     return tmp
 
 def getNuclearEnergySerial(nat,atoms,maxdist):
-    maxdist2 = maxdist * maxdist * const.ang2bohr * const.ang2bohr
+    maxdist2 = maxdist * maxdist * ut.ang2bohr * ut.ang2bohr
     enuke=0.0
     for i in xrange(nat):
         atomi=atoms[i]
@@ -169,14 +166,14 @@ def getNuclearEnergySerial(nat,atoms,maxdist):
                 enuke += getEnukeij(atomi, atomj, distij2)           
     return enuke
 
-def getNuclearEnergy(Na,atoms,maxdist):
-    Np=MPI.COMM_WORLD.size
-    rank=MPI.COMM_WORLD.rank
+def getNuclearEnergy(comm,Na,atoms,maxdist):
+    Np=comm.size
+    rank=comm.rank
     Nc=Na/Np
     remainder=Na%Np
-    maxdist2 = maxdist * maxdist * const.ang2bohr * const.ang2bohr
-    bohr2ang2 = const.bohr2ang * const.bohr2ang
-    e2        = const.e2
+    maxdist2 = maxdist * maxdist * ut.ang2bohr * ut.ang2bohr
+    bohr2ang2 = ut.bohr2ang * ut.bohr2ang
+    e2        = ut.e2
     enuke = 0
     for i in xrange(Nc):
         atomi = atoms[rank*Nc+i]
@@ -193,7 +190,7 @@ def getNuclearEnergy(Na,atoms,maxdist):
             if distij2 < maxdist2:
                 enuke += getEnukeij(atomi, atomj, distij2)   
 
-    return MPI.COMM_WORLD.allreduce(enuke)   
+    return comm.allreduce(enuke)   
 
 def getLocalNnzPerRowSym(basis,rstart,rend,maxdist2):
     """
@@ -216,7 +213,7 @@ def getLocalNnzPerRowSym(basis,rstart,rend,maxdist2):
             distij2=atomi.dist2(basis[j].atom)
             if distij2 < maxdist2: 
                 onnz[i] += 1
-        Print(dnnz[i],onnz[i])        
+        pt.write(dnnz[i],onnz[i])        
     return dnnz,onnz
 
 def getLocalNnzPerRow(basis,rstart,rend,maxdist2):
@@ -228,7 +225,7 @@ def getLocalNnzPerRow(basis,rstart,rend,maxdist2):
     Nonzeros are based on distance between atoms.
     TODO: Exploit symmetry, not sure how to do that.
     """
-    t0 = pt.getWallTime()
+   # t0 = pt.getWallTime()
     nbf=len(basis)
     localsize=rend-rstart
     dnnz=np.zeros(localsize,dtype='int32')
@@ -247,10 +244,10 @@ def getLocalNnzPerRow(basis,rstart,rend,maxdist2):
                 if j > jmax[k]:
                     jmax[k] = j 
         k += 1 
-    pt.getWallTime(t0=t0,str='Local nnz')                
+   # pt.getWallTime(t0=t0,str='Local nnz')                
     return dnnz, onnz, jmax
 
-def getT(basis,maxdist,preallocate=False,comm=PETSc.COMM_SELF):
+def getT(comm,basis,maxdist,preallocate=False):
     """
     Computes a matrix for the two-center two-electron integrals.
     Assumes spherical symmetry, no dependence on basis function, only atom types.
@@ -265,28 +262,30 @@ def getT(basis,maxdist,preallocate=False,comm=PETSc.COMM_SELF):
     t = pt.getWallTime()
     nbf      = len(basis)
     nnz = nbf*nbf
-    maxdist2 = maxdist * maxdist * const.ang2bohr * const.ang2bohr
-    Vdiag = PETSc.Vec().create(comm=comm)
-    A        = PETSc.Mat().create(comm=comm)
+    maxdist2 = maxdist * maxdist * ut.ang2bohr * ut.ang2bohr
+    Vdiag = pt.createVec(comm=comm)
+    A        = pt.createMat(comm=comm)
     A.setType('aij') #'sbaij'
     A.setSizes([nbf,nbf]) 
     A.setUp()
     A.setOption(A.Option.NEW_NONZERO_ALLOCATION_ERR,True)
     rstart, rend = A.getOwnershipRange()
     localsize = rend - rstart
+    Vdiag.setSizes((localsize,nbf))
+    Vdiag.setUp()
+    bohr2ang2 = ut.bohr2ang**2.
+    e2        = ut.e2
+    k = 0   
+    enuke=0.0
+    t = pt.getWallTime(t0=t,str='Initial')
     if preallocate:
         dnnz,onnz,jmax = getLocalNnzPerRow(basis,rstart,rend,maxdist2)
         nnz = sum(dnnz) + sum(onnz)
+        t = pt.getWallTime(t0=t,str='Local nnz')
         A.setPreallocationNNZ((dnnz,onnz)) 
     else:
         A.setPreallocationNNZ([nbf,nbf])
         jmax = np.array([localsize]*nbf)
-    Vdiag.setSizes((localsize,nbf))
-    Vdiag.setUp()
-    bohr2ang2 = const.bohr2ang**2.
-    e2        = const.e2
-    k = 0   
-    enuke=0.0
     t = pt.getWallTime(t0=t,str='Prealloc')
     for i in xrange(rstart,rend):
         atomi   = basis[i].atom
@@ -308,14 +307,14 @@ def getT(basis,maxdist,preallocate=False,comm=PETSc.COMM_SELF):
                     R=np.sqrt(distij2)
                     A[i,j] = gammaij
                     atnoj   = atomj.atno
-                    enuke += ( atomi.Z*atomj.Z*gammaij +  abs(atomi.Z*atomj.Z*(const.e2/R-gammaij)*getScaleij(atnoi, atnoj, R)) ) / ( atomi.nbf * atomj.nbf )
+                    enuke += ( atomi.Z*atomj.Z*gammaij +  abs(atomi.Z*atomj.Z*(ut.e2/R-gammaij)*getScaleij(atnoi, atnoj, R)) ) / ( atomi.nbf * atomj.nbf )
         k += 1            
     t = pt.getWallTime(t0=t,str='For loop')
     A.setDiagonal(Vdiag) 
     A.assemblyBegin()
-    enuke =  MPI.COMM_WORLD.allreduce(enuke)        
+    enuke =  comm.allreduce(enuke)        
     if preallocate:
-        nnz =  MPI.COMM_WORLD.allreduce(nnz) 
+        nnz =  comm.allreduce(nnz) 
     A.assemblyEnd()
     B = A.duplicate(copy=True)
     B = B + A.transpose() 
@@ -323,7 +322,7 @@ def getT(basis,maxdist,preallocate=False,comm=PETSc.COMM_SELF):
     t = pt.getWallTime(t0=t,str='Assembly')
     return  nnz,enuke,B
 
-def getGammaold(basis,maxdist,maxnnz=[0],bandwidth=[0],comm=PETSc.COMM_SELF):
+def getGammaold(comm,basis,maxdist,maxnnz=[0],bandwidth=[0]):
     """
     Computes MINDO3 nuclear repulsion energy and gamma matrix
     Nuclear repulsion energy: Based on PyQuante MINDO3 get_enuke(atoms)
@@ -344,7 +343,7 @@ def getGammaold(basis,maxdist,maxnnz=[0],bandwidth=[0],comm=PETSc.COMM_SELF):
     nbf      = len(basis)
     maxdist2 = maxdist * maxdist
     enuke=0.0
-    A        = PETSc.Mat().create(comm=comm)
+    A        = pt.createMat(comm=comm)
     A.setType('aij') #'sbaij'
     A.setSizes([nbf,nbf]) 
     if any(maxnnz): 
@@ -369,12 +368,12 @@ def getGammaold(basis,maxdist,maxnnz=[0],bandwidth=[0],comm=PETSc.COMM_SELF):
                     A[j,i] = gammaii
                     nnz += 1
                 else:                        
-                    distij2 = atomi.dist2(atomj) * const.bohr2ang**2.
+                    distij2 = atomi.dist2(atomj) * ut.bohr2ang**2.
                     if distij2 < maxdist2: 
-                        gammaij=const.e2/np.sqrt(distij2+0.25*(atomi.rho+atomj.rho)**2.)
+                        gammaij=ut.e2/np.sqrt(distij2+0.25*(atomi.rho+atomj.rho)**2.)
                         R=np.sqrt(distij2)
                         scale = PyQuante.MINDO3.get_scale(atomi.atno,atomj.atno,R)
-                        enuke += ( atomi.Z*atomj.Z*gammaij +  abs(atomi.Z*atomj.Z*(const.e2/R-gammaij)*scale) ) / ( atomi.nbf *atomj.nbf )
+                        enuke += ( atomi.Z*atomj.Z*gammaij +  abs(atomi.Z*atomj.Z*(ut.e2/R-gammaij)*scale) ) / ( atomi.nbf *atomj.nbf )
                         A[i,j] = gammaij
                         A[j,i] = gammaij
                         nnz += 1
@@ -390,18 +389,18 @@ def getGammaold(basis,maxdist,maxnnz=[0],bandwidth=[0],comm=PETSc.COMM_SELF):
                     A[j,i] = gammaii
                     nnz += 1
                 else:                        
-                    distij2 = atomi.dist2(atomj) * const.bohr2ang**2.
+                    distij2 = atomi.dist2(atomj) * ut.bohr2ang**2.
                     if distij2 < maxdist2: 
-                        gammaij=const.e2/np.sqrt(distij2+0.25*(atomi.rho+atomj.rho)**2.)
+                        gammaij=ut.e2/np.sqrt(distij2+0.25*(atomi.rho+atomj.rho)**2.)
                         R=np.sqrt(distij2)
                         scale = PyQuante.MINDO3.get_scale(atomi.atno,atomj.atno,R)
-                        enuke += ( atomi.Z*atomj.Z*gammaij +  abs(atomi.Z*atomj.Z*(const.e2/R-gammaij)*scale) ) / ( atomi.nbf *atomj.nbf )
+                        enuke += ( atomi.Z*atomj.Z*gammaij +  abs(atomi.Z*atomj.Z*(ut.e2/R-gammaij)*scale) ) / ( atomi.nbf *atomj.nbf )
                         A[i,j] = gammaij
                         A[j,i] = gammaij
                         nnz += 1
     A.assemblyBegin()
-    enuke =  MPI.COMM_WORLD.allreduce(enuke)        
-    nnz =  MPI.COMM_WORLD.allreduce(nnz)  + nbf      
+    enuke =  comm.allreduce(enuke)        
+    nnz =  comm.allreduce(nnz)  + nbf      
     A.assemblyEnd()
     return  nnz,enuke, A
        
@@ -443,7 +442,7 @@ def getF0(atoms,basis,T):
     A.assemble()
     return A
 
-def getD0(basis,guess=0,T=None,comm=PETSc.COMM_SELF):
+def getD0(comm,basis,guess=0,T=None):
     """
     Returns the guess (initial) density matrix.
     guess = 0 :
@@ -457,7 +456,7 @@ def getD0(basis,guess=0,T=None,comm=PETSc.COMM_SELF):
     nbf=len(basis)
 
     if guess==0: 
-        A= PETSc.Mat().create(comm=comm)
+        A= pt.createMat(comm=comm)
         A.setType('aij') 
         A.setSizes([nbf,nbf])        
         A.setPreallocationNNZ(1) 
@@ -484,10 +483,10 @@ def getD0(basis,guess=0,T=None,comm=PETSc.COMM_SELF):
                         A[i,j] = d * T[i,j]
             A.assemble()
         else:
-            Print("You need to give a template matrix for guess type {0}".format(guess))            
+            pt.write("You need to give a template matrix for guess type {0}".format(guess))            
     return  A 
 
-def getG(basis, comm=PETSc.COMM_SELF, T=None):
+def getG(comm, basis, T=None):
     """
     Returns the matrix for one-electron Coulomb term, (mu mu | nu nu) where mu and nu orbitals are centered on the same atom.
     Block diagonal matrix with 1x1 (Hydrogens) or 4x4 blocks.
@@ -498,11 +497,10 @@ def getG(basis, comm=PETSc.COMM_SELF, T=None):
         A = T.duplicate()
     else:        
         maxnnzperrow    = 4
-        A               = PETSc.Mat().create(comm=comm)
+        A               = pt.createMat(comm=comm)
         A.setType('aij') #'sbaij'
         A.setSizes([nbf,nbf]) 
         A.setPreallocationNNZ(maxnnzperrow) 
-    k=0
     A.setUp()
     rstart, rend = A.getOwnershipRange()
     for i in xrange(rstart,rend):
@@ -521,7 +519,7 @@ def getG(basis, comm=PETSc.COMM_SELF, T=None):
     A.assemble()
     return A
 
-def getH(basis, comm=PETSc.COMM_SELF, T=None):
+def getH(basis, T=None,comm=None):
     """
     Returns the matrix for one-electron exchange term, (mu nu | mu nu) where mu and nu orbitals are centered on the same atom. 
     Block diagonal matrix with 1x1 (Hydrogens) or 4x4 blocks.
@@ -532,7 +530,7 @@ def getH(basis, comm=PETSc.COMM_SELF, T=None):
         A = T.duplicate()
     else:        
         maxnnzperrow    = 4
-        A               = PETSc.Mat().create(comm=comm)
+        A               = pt.createMat(comm=comm)
         A.setType('aij') #'sbaij'
         A.setSizes([nbf,nbf]) 
         A.setPreallocationNNZ(maxnnzperrow) 
@@ -692,28 +690,30 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
     
     Eel       = 0.
     gap       = 0.
+    homo      = 0
+    lumo      = 0
     converged = False 
     eps       = None   
     subint    = [0]
-    Print("{0:*^60s}".format("SELF-CONSISTENT-FIELD ITERATIONS"))
-    Print("SCF threshold: {0:5.3e}".format(scfthresh))
-    Print("Maximum number of SCF iterations: {0}".format(maxiter))
+    pt.write("{0:*^60s}".format("SELF-CONSISTENT-FIELD ITERATIONS"))
+    pt.write("SCF threshold: {0:5.3e}".format(scfthresh))
+    pt.write("Maximum number of SCF iterations: {0}".format(maxiter))
     if staticsubint == 0: 
-        Print("Fixed subintervals will be used")
+        pt.write("Fixed subintervals will be used")
     elif staticsubint == 1: 
-        Print("Subintervals will be adjusted at each iteration with fixed interval")
+        pt.write("Subintervals will be adjusted at each iteration with fixed interval")
     elif staticsubint == 2: 
-        Print("Subintervals will be adjusted at each iteration")
+        pt.write("Subintervals will be adjusted at each iteration")
     else:
-        Print("Not available")   
+        pt.write("Not available")   
     if usesips:
         try:
             import SIPs.sips as sips
         except:
-            Print("SIPs not found")
+            pt.write("SIPs not found")
             usesips = False
     for k in xrange(1,maxiter+1):
-        Print("{0:*^60s}".format("Iteration "+str(k)))
+        pt.write("{0:*^60s}".format("Iteration "+str(k)))
         t0 = pt.getWallTime()
         stage = pt.getStage(stagename='F',oldstage=stage)
         F    = getF(atomids, D, F0, T, G, H)
@@ -742,10 +742,15 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
             eps = st.updateEPS(eps,F,subintervals=subint)
             stage = pt.getStage(stagename='SolveEPS',oldstage=stage)
             eps, nconv, eigarray = st.solveEPS(eps,returnoption=1,nocc=nocc)         
+        
         if (len(eigarray)>nocc):
-            gap = eigarray[nocc] - eigarray[nocc-1]              
-            Print("Gap            = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(gap*const.ev2kcal,gap,gap*const.ev2hartree))  
-        Print("Eel            = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Eel*const.ev2kcal,Eel,Eel*const.ev2hartree))  
+            homo = eigarray[nocc-1] 
+            lumo = eigarray[nocc]
+            gap = lumo - homo             
+            writeEnergies(homo,unit='ev',enstr='HOMO')
+            writeEnergies(lumo,unit='ev',enstr='LUMO')
+            writeEnergies(gap,unit='ev',enstr='Gap')
+        writeEnergies(Eel, unit='ev', enstr='Eel')
         stage = pt.getStage(stagename='Density', oldstage=stage)
         nden = nocc
         if nconv < nocc: 
@@ -757,17 +762,15 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
         sizecommD = D.getComm().Get_size()    
         if sizecommD > 1 and sizecommD < F.getComm().Get_size():   
             D = pt.getSeqMat(D)
-        pt.getWallTime(t0,str='Iteration completed in')
+        pt.getWallTime(t0,str='Iteration')
         if abs(Eel-Eold) < scfthresh and nconv >= nocc:
-            Print("Converged at iteration {0}".format(k))
+            pt.write("Converged at iteration {0}".format(k))
             converged = True
-            return converged, Eel, gap
-    return converged, Eel, gap
+            return converged, Eel, homo, lumo
+    return converged, Eel, homo, lumo
 
 def getEnergy(qmol,opts):
-
-    stage       = pt.getStage(stagename='MINDO3')
-    t0          = pt.getWallTime()
+    stage, t0   = pt.getStageTime(newstage='MINDO3')
     maxdist     = opts.getReal('maxdist', 1.e6)
     solve       = opts.getInt('solve', 0)
     maxnnz      = [opts.getInt('maxnnz', 0)]
@@ -777,11 +780,12 @@ def getEnergy(qmol,opts):
     debug       = opts.getBool('debug',False)
     checknnz    = opts.getBool('checknnz',False) 
     pyquante    = opts.getBool('pyquante',False) #TODO get Pyquante energy for testing
-    Print("Distance cutoff: {0:5.3f}".format(maxdist))
+    from PyQuante.MINDO3 import initialize
     qmol  = initialize(qmol)
     pt.getWallTime(t0,str="MINDO3 initialization")
-#    if pyquante:
-#        Epyquante = PyQuante.MINDO3.scf(qmol)
+    if pyquante:
+        from PyQuante.MINDO3 import scf as pyquantescf
+        Epyquante = pyquantescf(qmol)
     atoms   = qmol.atoms
     Eref  = getEref(qmol)
     nbf   = getNbasis(qmol)    
@@ -789,179 +793,48 @@ def getEnergy(qmol,opts):
     nocc  = nel/2
     basis = getBasis(qmol, nbf)
     atomids = getAtomIDs(basis)
-    matcomm = PETSc.COMM_WORLD
-    Print("Number of basis functions  : {0} = Matrix size".format(nbf))
-    Print("Number of valance electrons: {0}".format(nel))
-    Print("Number of occupied orbitals: {0} = Number of required eigenvalues".format(nocc))
+    matcomm = pt.getComm()
+    pt.write("Distance cutoff: {0:5.3f}".format(maxdist))
+    pt.write("Number of basis functions  : {0} = Matrix size".format(nbf))
+    pt.write("Number of valance electrons: {0}".format(nel))
+    pt.write("Number of occupied orbitals: {0} = Number of required eigenvalues".format(nocc))
     if checknnz:
-        stage = pt.getStage(stagename='Nonzero info', oldstage=stage)
+        stage,t = pt.getStageTime(newstage='Nonzero info', oldstage=stage,t0=t0)
         maxnnz,bandwidth = pt.getNnzInfo(basis, maxdist)
-    t,stage = pt.getStageTime(t0,newstage='T', oldstage=stage)
-    nnz, Enuke, T            = getT(basis, maxdist,preallocate=True, comm=matcomm)
-   # Enuke             = getNuclearEnergy(len(atoms), atoms, maxdist)
-  #  dennnz = nnz / (nbf*(nbf+1)/2.0)  * 100.
+        t0=t
+    stage, t = pt.getStageTime(newstage='T', oldstage=stage,t0=t0)
+    nnz, Enuke, T            = getT(matcomm, basis, maxdist,preallocate=True)
+#    Enuke             = getNuclearEnergy(len(atoms), atoms, maxdist)
+#    dennnz = nnz / (nbf*(nbf+1)/2.0)  * 100.
     dennnz = (100. * nnz) / (nbf*nbf) 
-    Print("Nonzero density percent : {0}".format(dennnz))
-    Print("Eref           = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Eref, Eref*const.kcal2ev, Eref*const.kcal2hartree))    
-    Print("Enuc           = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Enuke*const.ev2kcal,Enuke,Enuke*const.ev2hartree))
-    #Print("Enuc           = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Enuke2*const.ev2kcal,Enuke2,Enuke2*const.ev2hartree))
-    t, stage = pt.getStageTime(t,newstage='F0', oldstage=stage)
+    pt.write("Nonzero density percent : {0:6.3f}".format(dennnz))
+    writeEnergies(Eref, unit='kcal', enstr='Eref')
+    writeEnergies(Enuke, unit='ev', enstr='Enuc')
+    stage, t = pt.getStageTime(newstage='F0', oldstage=stage, t0=t)
     F0    = getF0(atoms, basis, T)
-    t, stage = pt.getStageTime(t,newstage='D0', oldstage=stage)
-    D0     = getD0(basis,guess=guess,T=T,comm=matcomm)
-    t, stage = pt.getStageTime(t,newstage='G', oldstage=stage)
-    G     = getG(basis,comm=matcomm)    
-    t, stage = pt.getStageTime(t,newstage='H', oldstage=stage)
+    stage, t = pt.getStageTime(newstage='D0', oldstage=stage ,t0=t)
+    D0     = getD0(matcomm,basis,guess=guess,T=T)
+    stage, t = pt.getStageTime(newstage='G', oldstage=stage, t0=t)
+    G     = getG(matcomm,basis)    
+    stage, t = pt.getStageTime(newstage='H', oldstage=stage, t0=t)
     H     = getH(basis,T=G)
+    pt.getStageTime(oldstage=stage, t0=t)
     pt.getWallTime(t0,str="Pre-SCF")
     t0          = pt.getWallTime()
-    converged, Eelec, gap = scf(opts,nocc,atomids,D0,F0,T,G,H,stage)
-    pt.getWallTime(t0,str="SCF")
+    converged, Eelec, homo, lumo = scf(opts,nocc,atomids,D0,F0,T,G,H,stage)
+    gap = lumo - homo
+    if converged:
+        pt.getWallTime(t0,str="SCF converged")
+    else:    
+        pt.getWallTime(t0,str="SCF failed")
     Etot   = Eelec + Enuke
-    Efinal = Etot*const.ev2kcal+Eref
-    Print("Enuc             = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Enuke*const.ev2kcal,Enuke,Enuke*const.ev2hartree))
-    Print("Eref             = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Eref, Eref*const.kcal2ev, Eref*const.kcal2hartree))
-    Print("Eelec            = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Eelec*const.ev2kcal,Eelec,Eelec*const.ev2hartree))
-    Print("Eelec+Enuc       = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Etot*const.ev2kcal,Etot,Etot*const.ev2hartree))
-    Print("Eelec+Enuc+Eref  = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Efinal, Efinal*const.kcal2ev,Efinal*const.kcal2hartree))
-    Print("Gap              = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(gap*const.ev2kcal,gap,gap*const.ev2hartree))
+    Efinal = Etot*ut.ev2kcal+Eref
+    writeEnergies(Eref, unit='kcal', enstr='Eref')
+    writeEnergies(Enuke, 'ev', 'Enuc')
+    writeEnergies(Eelec, unit='ev', enstr='Eel')
+    writeEnergies(homo,unit='ev',enstr='HOMO')
+    writeEnergies(lumo,unit='ev',enstr='LUMO')
+    writeEnergies(gap,unit='ev',enstr='Gap')
+    writeEnergies(Efinal, unit= 'kcal', enstr='Eref+Enuc+Eelec')
+    stage.pop()
     return Efinal
-
-def main(qmol,opts):
-    import PyQuante.MINDO3_Parameters
-    import PyQuante.MINDO3
-    import constants as const
- 
-    stage       = pt.getStage(stagename='Input')
-    maxdist     = opts.getReal('maxdist', 1.e6)
-    maxiter     = opts.getInt('maxiter', 30)
-    analysis    = opts.getInt('analysis', 0)
-    solve       = opts.getInt('solve', 0)
-    maxnnz      = [opts.getInt('maxnnz', 0)]
-    guess       = opts.getInt('guess', 0)
-    bandwidth   = [opts.getInt('bw', 0)]
-    sort        = opts.getInt('sort', 0)     
-    scfthresh   = opts.getReal('scfthresh',1.e-5)
-    spfilter    = opts.getReal('spfilter',0.)
-    staticsubint= opts.getBool('staticsubint',False)
-    debug       = opts.getBool('debug',False)
-    usesips     = opts.getBool('sips',False)
-    Print("Distance cutoff: {0:5.3f}".format(maxdist))
-    Print("SCF threshold: {0:5.3e}".format(scfthresh))
-    Print("Maximum number of SCF iterations: {0}".format(maxiter))
-    if staticsubint == 2:
-        Print("Subintervals will be updated after the first iteration")
-    if usesips:
-        try:
-            import SIPs.sips as sips
-        except:
-            Print("sips not found")
-            usesips = False
-    stage = pt.getStage(stagename='Initialize')
-    qmol  = PyQuante.MINDO3.initialize(qmol)
-    atoms = qmol.atoms
-    stage = pt.getStage(stagename='Enuclear', oldstage=stage)
-    Enuke = PyQuante.MINDO3.get_enuke(qmol)
-    Print("Enuc           = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Enuke*const.ev2kcal,Enuke,Enuke*const.ev2hartree))
-    stage = pt.getStage(stagename='Ereference', oldstage=stage)
-    Eref  = PyQuante.MINDO3.get_reference_energy(qmol)
-    Print("Eref           = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Eref, Eref*const.kcal2ev, Eref*const.kcal2hartree))
-    stage = pt.getStage(stagename='Basisset', oldstage=stage)
-    nbf   = PyQuante.MINDO3.get_nbf(qmol)    
-    nel   = PyQuante.MINDO3.get_nel(atoms)
-    nocc  = nel/2
-    basis = getBasis(qmol, nbf)
-    atomids = getAtomIDs(basis)
-    matcomm=PETSc.COMM_WORLD
-    Print("Number of basis functions  : {0} = Matrix size".format(nbf))
-    Print("Number of valance electrons: {0}".format(nel))
-    Print("Number of occupied orbitals: {0} = Number of required eigenvalues".format(nocc))
-    if not (all(maxnnz) or all(bandwidth)):
-        stage = pt.getStage(stagename='getNnz', oldstage=stage)
-        nnzarray,bwarray = pt.getNnzInfo(basis, maxdist)
-        maxnnz = max(nnzarray)
-        maxbw = max(bwarray)
-        sumnnz = sum(nnzarray)
-        avgnnz = sumnnz / float(nbf)
-        dennnz = sumnnz / (nbf*(nbf+1)/2.0)  * 100.
-        Print("Maximum nonzeros per row: {0}".format(maxnnz))
-        Print("Maximum bandwidth       : {0}".format(maxbw))
-        Print("Average nonzeros per row: {0}".format(avgnnz))
-        Print("Total number of nonzeros: {0}".format(sumnnz))
-        Print("Nonzero density percent : {0}".format(dennnz))
-        stage = pt.getStage(stagename='getGamma', oldstage=stage)
-        nnz,Enuke, T     = getGamma(basis, maxdist,maxnnz=nnzarray, bandwidth=bwarray, comm=matcomm)
-        dennnz = nnz / (nbf*(nbf+1)/2.0)  * 100.
-        Print("Nonzero density percent : {0}".format(dennnz))
-        Print("Enuc2          = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Enuke*const.ev2kcal,Enuke,Enuke*const.ev2hartree))
-    else:
-        stage = pt.getStage(stagename='getGamma', oldstage=stage)
-        nnz, Enuke, T     = getGamma(basis, maxdist,maxnnz=maxnnz, bandwidth=bandwidth, comm=matcomm)
-        dennnz = nnz / (nbf*(nbf+1)/2.0)  * 100.
-        Print("Nonzero density percent : {0}".format(dennnz))
-        Print("Enuc3          = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Enuke*const.ev2kcal,Enuke,Enuke*const.ev2hartree))
-    stage = pt.getStage(stagename='F0', oldstage=stage)
-    F0    = getF0(atoms, basis, T)
-    stage = pt.getStage(stagename='D0', oldstage=stage)
-    D     = getD0(basis,guess=1,T=T,comm=matcomm)
-    stage = pt.getStage(stagename='Ddiag', oldstage=stage)
-    Ddiag = pt.convert2SeqVec(D.getDiagonal()) 
-        
-    Eel   = 0.    
-    Print("{0:*^60s}".format("SELF-CONSISTENT-FIELD ITERATIONS"))
-    for iter in xrange(1,maxiter):
-        Print("{0:*^60s}".format("Iteration "+str(iter)))
-        stage = pt.getStage(stagename='FD', oldstage=stage)
-        FD    = getFD(basis, D, T)
-        F     = F0 + FD
-        Eold = Eel
-
-        if solve > 0: 
-            stage = pt.getStage(stagename='Trace', oldstage=stage)
-            Eel   = 0.5*pt.getTraceProductAIJ(D,F0+F)
-            Print("Eel            = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Eel*const.ev2kcal,Eel,Eel*const.ev2hartree))     
-            t0 = pt.getWallTime()
-            stage = pt.getStage(stagename='Solve', oldstage=stage)
-            if staticsubint or iter<2:
-                if solve==2: 
-                    eps = st.solveEPS(F,returnoption=-1,nocc=nocc)
-                else:  
-                    eps, nconv, eigarray = st.solveEPS(F,returnoption=1,nocc=nocc)  
-            else:
-                if solve==2: 
-                    eps = st.solveEPS(F,returnoption=-1,nocc=nocc)  
-                else:                  
-                    nsubint=st.getNumberOfSubIntervals(eps)
-                    subint = st.getSubIntervals(eigarray[0:nocc],nsubint) 
-                    eps, nconv, eigarray = st.solveEPS(F,subintervals=subint,returnoption=1,nocc=nocc)   
-            pt.getWallTime(t0)    
-            stage = pt.getStage(stagename='Density', oldstage=stage)
-            t0 = pt.getWallTime()
-            if usesips:
-                if solve==2: 
-                    D = sips.solveDensityMat(eps,0,nocc)
-                else: 
-                    D = sips.getDensityMat(eps,0,nocc)
-            else:    
-                D = st.getDensityMatrix(eps,T, nocc)
-            t = pt.getWallTime(t0)
-        
-        if abs(Eel-Eold) < scfthresh:
-            Print("Converged at iteration %i" % (iter+1))
-            break
-        Ddiag=pt.convert2SeqVec(D.getDiagonal()) 
-
-
-    Etot   = Eel+Enuke
-    Efinal = Etot*const.ev2kcal+Eref
-    Print("Enuc           = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Enuke*const.ev2kcal,Enuke,Enuke*const.ev2hartree))
-    Print("Eref           = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Eref, Eref*const.kcal2ev, Eref*const.kcal2hartree))
-    Print("Eel            = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Eel*const.ev2kcal,Eel,Eel*const.ev2hartree))
-    Print("Eel+Enuke      = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Etot*const.ev2kcal,Etot,Etot*const.ev2hartree))
-    Print("Eel+Enuke+Eref = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Efinal, Efinal*const.kcal2ev,Efinal*const.kcal2hartree))
-    if debug:
-        stage = PETSc.Log.Stage('PyQuante');
-        Print('%f' % (PyQuante.MINDO3.scf(qmol)))
-    return
-
-       

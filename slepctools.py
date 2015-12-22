@@ -1,13 +1,11 @@
-import sys, slepc4py
-slepc4py.init(sys.argv)
+#import slepc4py
+#slepc4py.init(sys.argv)
 from petsc4py import PETSc
 from slepc4py import SLEPc
 
 Print = PETSc.Sys.Print
 
 import numpy as np
-import constants as const
-from petsctools import getWallTime,getStage
 
 def getNumberOfSubIntervals(eps):
     return eps.getKrylovSchurPartitions()

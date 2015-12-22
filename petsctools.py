@@ -4,21 +4,28 @@ import sys, petsc4py
 petsc4py.init(sys.argv)
 from petsc4py import PETSc
 
-Print = PETSc.Sys.Print
+write = PETSc.Sys.Print
 
 import numpy as np
 try:
     import scipy.sparse
 except:
-    Print("no scipy modules")
+    write("no scipy modules")
     pass
 
+def getComm():
+    return MPI.COMM_WORLD
+
+def getOptions():
+    return PETSc.Options()
+    
 def getWallTime(t0=0, str=''):
     """
     Returns the walltime - t0 in seconds.
     """
     t = MPI.Wtime() - t0
-    if(t0): Print("{0}: {1:5.3f} seconds".format(str,t))
+    str = str + ' time'
+    if(t0): write("{0: <14s}: {1:5.3f} seconds".format(str,t))
     return MPI.Wtime()
 
 def getStage(stagename='stage', oldstage=None, printstage=True):
@@ -26,22 +33,27 @@ def getStage(stagename='stage', oldstage=None, printstage=True):
     Easy PETSc staging tool, helps for profiling.
     """
     if oldstage: oldstage.pop()
-    if printstage: Print("{0:*^30s}".format("Stage "+stagename))
+    if printstage: write("{0:*^30s}".format("Stage "+stagename))
     stage = PETSc.Log.Stage(stagename); 
     stage.push();
     return stage
 
-def getStageTime(t0,oldstage='oldstagename',newstage='newstagename'):
+def getStageTime(newstage='',oldstage='',t0=0):
     """
     PETSc staging tool, helps for profiling.
     """
     t = MPI.Wtime() - t0
-    Print("{0}: {1:5.3f} seconds".format(oldstage.name,t))
-    oldstage.pop()
-    Print("{0:*^30s}".format("Stage "+ newstage))
-    stage = PETSc.Log.Stage(newstage); 
-    stage.push();
-    return MPI.Wtime(),stage
+    if oldstage:
+        str1 = oldstage.name + ' time'
+        write("{0: <14s}: {1:5.3f} seconds".format(str1,t))
+        oldstage.pop()
+    if newstage:    
+        write("{0:*^30s}".format("Stage "+ newstage))
+        newstage = PETSc.Log.Stage(newstage); 
+        newstage.push();
+        return newstage, MPI.Wtime()
+    else:
+        return
 
 def printAIJ(A,text=''):
     rank         = MPI.COMM_WORLD.rank
@@ -77,7 +89,7 @@ def writeMat(A,filename='mat.bin'):
     elif ext == 'mtx':
         pass        
     else:
-        Print("Use bin, or txt extension")
+        write("Use bin, or txt extension")
     writer(A)
     return 0
      
@@ -87,6 +99,12 @@ def printVec(V,text=''):
     for i in xrange(rstart,rend):
         print rank,':',text,V[i]
     return 0
+
+def createVec(comm):
+    return PETSc.Vec().create(comm=comm)
+
+def createMat(comm):
+    return PETSc.Mat().create(comm=comm)
         
 def getCSRBandwidth(A):
     """
@@ -238,11 +256,11 @@ def getNnzInfo(basis,maxdist):
     sumnnz = sum(nnzarray)
     avgnnz = sumnnz / float(nbf)
     dennnz = sumnnz / (nbf*(nbf+1)/2.0)  * 100.
-    Print("Maximum nonzeros per row: {0}".format(maxnnz))
-    Print("Maximum bandwidth       : {0}".format(maxbw))
-    Print("Average nonzeros per row: {0}".format(avgnnz))
-    Print("Total number of nonzeros: {0}".format(sumnnz))
-    Print("Nonzero density percent : {0}".format(dennnz))            
+    write("Maximum nonzeros per row: {0}".format(maxnnz))
+    write("Maximum bandwidth       : {0}".format(maxbw))
+    write("Average nonzeros per row: {0}".format(avgnnz))
+    write("Total number of nonzeros: {0}".format(sumnnz))
+    write("Nonzero density percent : {0}".format(dennnz))            
     return nnzarray, bwarray   
 
 def getSparsityInfo(BCSR, nbf, maxdensity, savefig=True):
@@ -251,9 +269,9 @@ def getSparsityInfo(BCSR, nbf, maxdensity, savefig=True):
     nnz = BCSR.nnz
     density = 100.*nnz / nbf / nbf
     bw = pt.getCSRBandwidth(BCSR)
-    Print("Number of basis functions: %i" % (nbf))
-    Print("Nonzero density: %i" % (100.*nnz / nbf / nbf))
-    Print("Bandwidth: %i" % (bw[1]))
+    write("Number of basis functions: %i" % (nbf))
+    write("Nonzero density: %i" % (100.*nnz / nbf / nbf))
+    write("Bandwidth: %i" % (bw[1]))
     plt.title(("N={0}, nnz={1}, density={2:.1f}, maxd={3:.2f}".format(nbf, nnz, density, maxdist)))
     plt.spy(BCSR, precision='present', marker='.', markersize=4, mec='black', mfc='black')  # , marker='.', markersize=1)
     frame1 = plt.gca()
@@ -343,8 +361,8 @@ def getMatComm(n,comm=MPI.COMM_WORLD,debug=False):
     orig_group = MPI.COMM_WORLD.group
     rank       = MPI.COMM_WORLD.rank
     size       = MPI.COMM_WORLD.size
-    if size%n != 0: Print("Comm problem, %d not commensurate with %d:" % (size,n))
-    if    n > size: Print("Comm problem, %d < %d:" % (size,n))
+    if size%n != 0: write("Comm problem, %d not commensurate with %d:" % (size,n))
+    if    n > size: write("Comm problem, %d < %d:" % (size,n))
     pn         = size / n
     firstrank  = rank - rank%pn
     matgroupranks = xrange(firstrank, firstrank+pn)
@@ -571,7 +589,7 @@ def compareAIJB(Aij,B,N,thresh=1.e-5,comment='Comparison'):
             if abs(Aij[i,j]-B[i,j]) > thresh: 
                 k += 1
                 print('{0}, Rank: {1},!!!!!!!!Differs in {2} {3}: {4} vs {5}'.format(comment,rank,i,j, Aij[i,j],B[i,j]))
-    if k==0: Print("{0} ok  within {1}".format(comment,thresh))
+    if k==0: write("{0} ok  within {1}".format(comment,thresh))
     return
 
 def compareAB(A,B,N,thresh=1.e-5):
@@ -584,8 +602,8 @@ def compareAB(A,B,N,thresh=1.e-5):
         for j in xrange(N):
             if abs(A[i,j]-B[i,j]) > thresh: 
                 k += 1
-                Print('!!!!!!!!Differs in %i,%i,%i,%i' % (i,j, A[i,j],B[i,j]))
-    if k==0: Print("No difference within %f" % thresh)
+                write('!!!!!!!!Differs in %i,%i,%i,%i' % (i,j, A[i,j],B[i,j]))
+    if k==0: write("No difference within %f" % thresh)
     return      
 
 def convertA2CSR(A,spfilter=0):
@@ -598,7 +616,7 @@ def convertA2CSR(A,spfilter=0):
     if spfilter>0: 
         Acsr=scipy.sparse.csr_matrix(A)
         Acsr=Acsr.multiply(abs(Acsr)>spfilter)
-        Print("Nonzero density: %3g:" % (float(Acsr.nnz*100)/float(Acsr.shape[0]*Acsr.shape[0])))
+        write("Nonzero density: %3g:" % (float(Acsr.nnz*100)/float(Acsr.shape[0]*Acsr.shape[0])))
     else: 
         Acsr=scipy.sparse.csr_matrix(A)
     return Acsr
@@ -670,7 +688,7 @@ def main():
         A[i,:]=np.arange(N)+i
     for i in xrange(N):
         for j in xrange(N):
-            Print(' %i,%i:%f' % (i,j, A[i,j]) )
+            write(' %i,%i:%f' % (i,j, A[i,j]) )
     x = PETSc.Vec()
     x.create(comm=PETSc.COMM_WORLD)
     x.setSizes((rank+1,None))
@@ -681,14 +699,14 @@ def main():
     x.assemble()
     y=convert2seqVec(x) 
     for i in xrange(N*(N+1)/2):
-        Print(y[i])      
+        write(y[i])      
     Acsr = convert2csr(A)
     Aij = convert2Aij(Acsr)
     Aijseq = getSeqAIJ2(Aij)
     B = getAij()
-    Print('Compare Aij to Acsr')
+    write('Compare Aij to Acsr')
     compareAijB(Aij,Acsr,N)
-    Print('Compare Aijseq to A')
+    write('Compare Aijseq to A')
     compareAijB(Aijseq,A,N)
     """
 if __name__ == '__main__':

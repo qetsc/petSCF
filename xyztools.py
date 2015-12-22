@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import logging
 import numpy as np
-import constants as const
+import unittools as const
 
 def initializeLog(debug=False,warning=False,silent=False):
     import sys
@@ -32,6 +32,15 @@ def getArgs():
     parser.add_argument('-s', '--silent', action='store_true', help='Print only errors.')
     parser.add_argument("-f", dest="filename", required=False, help=" input file", metavar="FILE")
     return parser.parse_args() 
+
+def getChainMol(N=8,Z=1,d=1.):
+    import PyQuante.Molecule
+    """
+    Generates the coordinates of a simple chain of $N$ atoms (with an atomic number $Z$)  separated by the given distance $d$ in Angstroms.
+    Creates a PyQuante Molecule object with the generated coordinates.
+    """
+    mol=[[Z,(0.,0.,i*d)] for i in range(N)]
+    return PyQuante.Molecule('chain',mol,units='Bohr')
 
 def getCenter(xyz):
     """
