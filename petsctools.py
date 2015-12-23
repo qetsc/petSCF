@@ -54,6 +54,49 @@ def getStageTime(newstage='',oldstage='',t0=0):
         return newstage, MPI.Wtime()
     else:
         return
+    
+def distributeN(comm,N):
+    """
+    Distribute N consecutive things (rows of a matrix , blocks of a 1D array) 
+    as evenly as possible over a given communicator.
+    Uneven workload (differs by 1 at most) is on the initial ranks.
+    
+    Parameters
+    ----------
+    comm: MPI communicator
+    N:  int
+        Total number of the things to be ditributed.
+    
+    Returns
+    ----------
+    rstart: index of first local row
+    rend: 1 + index of last row
+    
+    Notes
+    ----------
+    Index is zero based.
+    """
+    P      = comm.size
+    rank   = comm.rank
+    rstart = 0
+    rend   = 0
+    if P >= N:
+        if rank < N:
+            rstart = rank
+            rend   = rank + 1
+    else:
+        n = N/P
+        remainder = N%P
+        rstart    = n * rank
+        rend      = n * (rank+1)
+        if remainder:
+            if rank >= remainder:
+                rstart += remainder
+                rend   += remainder
+            else: 
+                rstart += rank
+                rend   += rank + 1    
+    return rstart, rend
 
 def printAIJ(A,text=''):
     rank         = MPI.COMM_WORLD.rank
