@@ -259,40 +259,37 @@ def getT(comm,basis,maxdist,preallocate=False):
     Values are indeed based on atoms, not basis functions, so possible to improve performance by nbf/natom.
     Cythonize
     """
-    t = pt.getWallTime()
-    nbf      = len(basis)
+    t            = pt.getWallTime()
+    nbf          = len(basis)
+    nnz          = nbf*nbf
+    maxdist2     = maxdist * maxdist * ut.ang2bohr * ut.ang2bohr    
+    bohr2ang2    = ut.bohr2ang**2.
+    e2           = ut.e2
+    k            = 0   
+    enuke        = 0.0
     rstart, rend = pt.distributeN(comm, nbf)
-    localsize = rend - rstart
-    nnz = nbf*nbf
-    maxdist2 = maxdist * maxdist * ut.ang2bohr * ut.ang2bohr
-    Vdiag = pt.createVec(comm=comm)
-    A        = pt.createMat(comm=comm)
+    localsize    = rend - rstart
+    t            = pt.getWallTime(t0=t,str='Initial')
+    A            = pt.createMat(comm=comm)
     A.setType('aij') #'sbaij'
-    A.setSizes([(localsize,nbf),(localsize,nbf)]) 
-    A.setFromOptions()
-    Vdiag.setSizes((localsize,nbf))
-    Vdiag.setUp()
-    bohr2ang2 = ut.bohr2ang**2.
-    e2        = ut.e2
-    k = 0   
-    enuke=0.0
-    t = pt.getWallTime(t0=t,str='Initial')
+    A.setSizes([(localsize,None),(localsize,None)]) 
+#   A.setFromOptions()
+    t = pt.getWallTime(t0=t,str='MatSetSizes')
     if preallocate:
         dnnz,onnz,jmax = getLocalNnzPerRow(basis,rstart,rend,maxdist2)
-        nnz = sum(dnnz) + sum(onnz)
-        t = pt.getWallTime(t0=t,str='Local nnz')
+        nnz            = sum(dnnz) + sum(onnz)
+        t              = pt.getWallTime(t0=t,str='Local nnz')
         A.setPreallocationNNZ((dnnz,onnz)) 
     else:
         A.setPreallocationNNZ([nbf,nbf])
-        jmax = np.array([localsize]*nbf)
+        jmax           = np.array([nbf-1]*localsize)
     t = pt.getWallTime(t0=t,str='Prealloc')
     for i in xrange(rstart,rend):
         atomi   = basis[i].atom
         atnoi   = atomi.atno
         rhoi    = atomi.rho
         gammaii = f03[atnoi]
-        Vdiag[i] = gammaii
-    #    for j in xrange(i+1,min(i+bandwidth[i],nbf)):
+        A[i,i]  = gammaii / 2.
         for j in xrange(i+1,jmax[k]+1):
             atomj = basis[j].atom
             if atomi.atid == atomj.atid:
@@ -303,13 +300,12 @@ def getT(comm,basis,maxdist,preallocate=False):
                     rhoj    = atomj.rho 
                     distij2 = distij2 * bohr2ang2
                     gammaij = e2 / np.sqrt(distij2 + 0.25 * (rhoi + rhoj)**2.)
-                    R=np.sqrt(distij2)
-                    A[i,j] = gammaij
+                    R       = np.sqrt(distij2)
+                    A[i,j]  = gammaij
                     atnoj   = atomj.atno
-                    enuke += ( atomi.Z*atomj.Z*gammaij +  abs(atomi.Z*atomj.Z*(ut.e2/R-gammaij)*getScaleij(atnoi, atnoj, R)) ) / ( atomi.nbf * atomj.nbf )
+                    enuke  += ( atomi.Z*atomj.Z*gammaij +  abs(atomi.Z*atomj.Z*(ut.e2/R-gammaij)*getScaleij(atnoi, atnoj, R)) ) / ( atomi.nbf * atomj.nbf )
         k += 1            
     t = pt.getWallTime(t0=t,str='For loop')
-    A.setDiagonal(Vdiag) 
     A.assemblyBegin()
     enuke =  comm.allreduce(enuke)        
     if preallocate:
@@ -317,9 +313,9 @@ def getT(comm,basis,maxdist,preallocate=False):
     A.assemblyEnd()
     B = A.duplicate(copy=True)
     B = B + A.transpose() 
-    B.setDiagonal(Vdiag) 
     t = pt.getWallTime(t0=t,str='Assembly')
-    return  nnz,enuke,B
+    A.destroy()
+    return  nnz,enuke, B
 
 def getT2(comm,basis,maxdist,preallocate=False):
     """
@@ -853,19 +849,20 @@ def getEnergy(qmol,opts):
     spfilter    = opts.getReal('spfilter',0.)
     debug       = opts.getBool('debug',False)
     checknnz    = opts.getBool('checknnz',False) 
+    prealloc    = opts.getBool('prealloc',True) 
     pyquante    = opts.getBool('pyquante',False) #TODO get Pyquante energy for testing
     from PyQuante.MINDO3 import initialize
     qmol  = initialize(qmol)
     pt.getWallTime(t0,str="MINDO3 initialization")
     if pyquante:
         from PyQuante.MINDO3 import scf as pyquantescf
-        Epyquante = pyquantescf(qmol)
+        pyquantescf(qmol)
     atoms   = qmol.atoms
-    Eref  = getEref(qmol)
-    nbf   = getNbasis(qmol)    
-    nel   = getNelectrons(atoms)
-    nocc  = nel/2
-    basis = getBasis(qmol, nbf)
+    Eref    = getEref(qmol)
+    nbf     = getNbasis(qmol)    
+    nel     = getNelectrons(atoms)
+    nocc    = nel/2
+    basis   = getBasis(qmol, nbf)
     atomids = getAtomIDs(basis)
     matcomm = pt.getComm()
     pt.write("Distance cutoff: {0:5.3f}".format(maxdist))
@@ -877,9 +874,7 @@ def getEnergy(qmol,opts):
         maxnnz,bandwidth = pt.getNnzInfo(basis, maxdist)
         t0=t
     stage, t = pt.getStageTime(newstage='T', oldstage=stage,t0=t0)
-    nnz, Enuke, T            = getT(matcomm, basis, maxdist,preallocate=True)
-#    Enuke             = getNuclearEnergy(len(atoms), atoms, maxdist)
-#    dennnz = nnz / (nbf*(nbf+1)/2.0)  * 100.
+    nnz, Enuke, T            = getT(matcomm, basis, maxdist,preallocate=prealloc)
     dennnz = (100. * nnz) / (nbf*nbf) 
     pt.write("Nonzero density percent : {0:6.3f}".format(dennnz))
     writeEnergies(Eref, unit='kcal', enstr='Eref')
