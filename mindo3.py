@@ -2,7 +2,7 @@ import numpy as np
 import petsctools as pt
 import slepctools as st
 import unittools as ut
-
+import scftools as ft
 """
 MINDO/3 parameters taken from PyQuante
 """
@@ -271,9 +271,8 @@ def getT(comm,basis,maxdist,preallocate=False):
     localsize    = rend - rstart
     t            = pt.getWallTime(t0=t,str='Initial')
     A            = pt.createMat(comm=comm)
-    A.setType('aij') #'sbaij'
+    A.setType('aij')
     A.setSizes([(localsize,None),(localsize,None)]) 
-#   A.setFromOptions()
     t = pt.getWallTime(t0=t,str='MatSetSizes')
     if preallocate:
         dnnz,onnz,jmax = getLocalNnzPerRow(basis,rstart,rend,maxdist2)
@@ -752,7 +751,10 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
     """
     """
     maxiter     = opts.getInt('maxiter', 30)
+    scfacc      = opts.getInt('scfacc', 0)
     guess       = opts.getInt('guess', 0)
+    sizediis    = opts.getInt('diissize', 4)
+    errdiis     = opts.getReal('diiserr', 1.e-2)
     scfthresh   = opts.getReal('scfthresh',1.e-5)
     interval    = [opts.getReal('a',-500.) , opts.getReal('b', 500.)]
     staticsubint= opts.getInt('staticsubint',0)
@@ -782,12 +784,52 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
         except:
             pt.write("SIPs not found")
             usesips = False
+    if  scfacc == 1:
+        pt.write("Pulay's DIIS for F with sizediis: {0}",format(sizediis))
+        pt.write("                   with errdiis: {0}".format(errdiis))
+        Flist  = [F0] * sizediis
+        Elist  = [F0] * sizediis
+        idiis  = 0
+    elif scfacc == 2:    
+        pt.write("Pulay's DIIS for D with sizediis: {0}",format(sizediis))
+        pt.write("                   with errdiis: {0}".format(errdiis))
+        Dlist  = [D] * sizediis 
+        Elist  = [F0] * sizediis
+        idiis  = 0
+    elif scfacc == 3:
+        pt.write("Aitken 3-point extrapolation for F")
+        Flist = [F0] * 3
+    elif scfacc == 4:
+        pt.write("Aitken 3-point extrapolation for D")
+        Dlist = [D] * 3
+        
     for k in xrange(1,maxiter+1):
         pt.write("{0:*^60s}".format("Iteration "+str(k)))
         t0 = pt.getWallTime()
         stage = pt.getStage(stagename='F',oldstage=stage)
         F    = getF(atomids, D, F0, T, G, H)
         F    = F0 + F
+        if scfacc == 3:
+            kmod3 = (k-1)%3
+            Flist[kmod3] = F
+            if kmod3==0  and k > 4:
+                F = ft.extrapolate3(Flist[0], Flist[1], Flist[2])
+                pt.write('3-point extrapolation for F applied')  
+        elif scfacc == 1:
+            FDcommutator = pt.getCommutator(F, D)
+            maxerr = pt.getMaxAbsAIJ(FDcommutator)
+            pt.write('max(abs([F,D])) = {0}'.format(maxerr))           
+            if maxerr < errdiis:
+                idiis += 1
+                imod  = idiis%sizediis
+                Flist[imod] = F
+                Elist[imod] = FDcommutator
+                if idiis > sizediis: 
+                    c = ft.getDIISSolution(sizediis, Elist)
+                    F = 0 
+                    for i in range(sizediis):
+                        F += c[i] * Flist[i]
+                    pt.write('DIIS extrapolation for F applied')
         Eold = Eel
         stage = pt.getStage(stagename='Trace',oldstage=stage)
         if k==1:
@@ -829,7 +871,28 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
             D = sips.getDensityMat(eps,0,nden)
         else:    
             D = st.getDensityMatrix(eps,T, nden)
-        sizecommD = D.getComm().Get_size()    
+        sizecommD = D.getComm().Get_size()
+        if scfacc == 4:
+            kmod3 = (k-1)%3
+            Dlist[kmod3] = D
+            if kmod3==0  and k > 4:
+                D = ft.extrapolate3(Dlist[0], Dlist[1], Dlist[2])
+                pt.write('3-point extrapolation')  
+        elif scfacc == 2:
+            FDcommutator = pt.getCommutator(F, D)
+            maxerr = pt.getMaxAbsAIJ(FDcommutator)
+            pt.write('max(abs([F,D])) = {0}'.format(maxerr))           
+            if maxerr < errdiis:
+                idiis += 1
+                imod  = idiis%sizediis
+                Dlist[imod] = D
+                Elist[imod] = FDcommutator
+                if idiis > sizediis: 
+                    c = ft.getDIISSolution(sizediis, Elist)
+                    D = 0 
+                    for i in range(sizediis):
+                        D += c[i] * Dlist[i]
+                    pt.write('DIIS extrapolation for D applied')
         if sizecommD > 1 and sizecommD < F.getComm().Get_size():   
             D = pt.getSeqMat(D)
         pt.getWallTime(t0,str='Iteration')

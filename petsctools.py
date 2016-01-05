@@ -98,8 +98,114 @@ def distributeN(comm,N):
                 rend   += rank + 1    
     return rstart, rend
 
+def divideWithoutNan(a,b):
+    """
+    From http://stackoverflow.com/questions/26248654/numpy-return-0-with-divide-by-zero
+    Parameters
+    ---------
+    a, b: numpy arrays
+    
+    Returns
+    -------
+    a /b
+    
+    Notes
+    -------
+    0/0 handling by adding invalid='ignore' to numpy.errstate()
+    introducing numpy.nan_to_num() to convert np.nan to 0.
+    """
+    with np.errstate(divide='ignore', invalid='ignore'):
+        c = np.true_divide(a,b)
+        c[c == np.inf] = 0
+        c = np.nan_to_num(c)
+    return c    
+
+def getCommutator(A,B):
+    """
+    Parameters
+    ---------
+    A, B: mat
+    
+    Returns
+    -------
+    [A,B] = A * B - B * A
+    """
+    return A * B - B * A
+
+def getMaxAbsAIJ(A):
+    """
+    Parameters
+    ---------
+    A: mat
+    
+    Returns
+    -------
+    Maximum absolute value of A.
+    
+    Notes
+    -----
+    Collective
+    """
+    comm = A.getComm().tompi4py()
+    rstart, rend = A.getOwnershipRange()
+    maxval=0.0
+    for i in xrange(rstart,rend):
+        cols,vals = A.getRow(i)
+        tmpmax = max(np.absolute(vals))
+        if tmpmax > maxval:
+            maxval = tmpmax
+    return comm.allreduce(maxval,op=MPI.MAX)
+
+def getLocalNNZ(A):
+    """
+    Parameters
+    ---------
+    A: mat
+    
+    Returns
+    -------
+    Number of nonzeros in the local portion of A.
+    """
+    rstart, rend = A.getOwnershipRange()
+    nnz = 0
+    for i in xrange(rstart,rend):
+        cols, vals = A.getRow(i)
+        nnz += len(cols)
+    return nnz    
+
+def getLocalNonZeroArray(A):
+    """
+    Parameters
+    ---------
+    A: mat
+    
+    Returns
+    -------
+    A numpy array of nonzeros of the local portion of A.
+    """
+    nnzstart = 0
+    nnzend = 0
+    nnz = getLocalNNZ(A)
+    tmp = np.zeros(nnz)
+    rstart, rend = A.getOwnershipRange()
+    for i in xrange(rstart,rend):
+        cols,vals = A.getRow(i)
+        nnzend += len(cols)
+        tmp[nnzstart:nnzend] = vals
+        nnzstart = nnzend    
+    return tmp
+      
 def printAIJ(A,text=''):
-    rank         = MPI.COMM_WORLD.rank
+    """
+    Parameters
+    ---------
+    A: mat
+    text: string
+    
+    Returns
+    -------
+    """
+    rank         = A.getComm().rank
     rstart, rend = A.getOwnershipRange()
     for i in xrange(rstart,rend):
         cols,vals = A.getRow(i)
@@ -121,7 +227,7 @@ def writeMat(A,filename='mat.bin'):
     A: PETSc mat object
     filename:
     Returns
-    ---------
+    -------
     0 if successful
     """
     ext = filename[-3:]
