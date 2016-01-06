@@ -1,11 +1,8 @@
-#import slepc4py
-#slepc4py.init(sys.argv)
 from petsc4py import PETSc
 from slepc4py import SLEPc
+import numpy as np
 
 Print = PETSc.Sys.Print
-
-import numpy as np
 
 def getNumberOfSubIntervals(eps):
     return eps.getKrylovSchurPartitions()

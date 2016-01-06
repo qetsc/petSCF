@@ -1,17 +1,11 @@
-from mpi4py import MPI
-
 import sys, petsc4py
 petsc4py.init(sys.argv)
 from petsc4py import PETSc
+from mpi4py import MPI
 
 write = PETSc.Sys.Print
 
 import numpy as np
-try:
-    import scipy.sparse
-except:
-    write("no scipy modules")
-    pass
 
 def getComm():
     return MPI.COMM_WORLD
@@ -715,6 +709,7 @@ def getDistAIJfast(N):
     return A
 
 def convertAIJ2CSR(A):
+    import scipy.sparse
     N=A.getSize()[0]
     B=np.zeros((N,N))
 
@@ -762,6 +757,7 @@ def convertA2CSR(A,spfilter=0):
     if spfilter > 0:
         A < spfilter = 0
     """
+    import scipy.sparse
     if spfilter>0: 
         Acsr=scipy.sparse.csr_matrix(A)
         Acsr=Acsr.multiply(abs(Acsr)>spfilter)
