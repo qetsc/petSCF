@@ -1,8 +1,8 @@
 #include "sips_impl.h"
 
 #include <../src/mat/impls/sbaij/mpi/mpisbaij.h>
-#include <slepc/private/epsimpl.h>
-#include <../src/eps/impls/krylov/krylovschur/krylovschur.h>
+/* #include <slepc/private/epsimpl.h> */
+/* #include <../src/eps/impls/krylov/krylovschur/krylovschur.h> */
 
 #include <petsctime.h>
 #include <slepceps.h>
@@ -80,8 +80,8 @@ PetscErrorCode EPSGetEigenClusters(EPS eps,PetscReal eval_deg,PetscInt* necluste
 }
 
 #include <../../petsc/src/mat/impls/sbaij/mpi/mpisbaij.h>
-#include <slepc/private/epsimpl.h>  
-#include <../../slepc/src/eps/impls/krylov/krylovschur/krylovschur.h>
+/* #include <slepc/private/epsimpl.h>  CC: Removed */
+/* #include <../../slepc/src/eps/impls/krylov/krylovschur/krylovschur.h> CC: Removed */
 
 #undef __FUNCT__
 #define __FUNCT__ "EPSKrylovSchurGetLocalInterval"
@@ -97,14 +97,16 @@ PetscErrorCode EPSKrylovSchurGetSubComm(EPS eps,MPI_Comm *matComm,MPI_Comm *epsC
 {
   PetscErrorCode    ierr;
   PetscMPIInt       npart; 
-  EPS_KRYLOVSCHUR   *ctx=(EPS_KRYLOVSCHUR*)eps->data;
+  /*  EPS_KRYLOVSCHUR   *ctx=(EPS_KRYLOVSCHUR*)eps->data; CC: Removed */
   PetscMPIInt       size;
   MPI_Comm          comm;
+  Mat               A;
 
   PetscFunctionBegin;
   ierr = PetscObjectGetComm((PetscObject)eps,&comm);CHKERRQ(ierr);
   ierr = MPI_Comm_size(comm,&size);CHKERRQ(ierr);
-  npart = ctx->npart;
+  /* npart = ctx->npart; CC: Substituted */
+  ierr = EPSKrylovSchurGetPartitions(eps,&npart);CHKERRQ(ierr);
 
   /* create subcommunicators */
   if (npart == 1) {
@@ -113,10 +115,12 @@ PetscErrorCode EPSKrylovSchurGetSubComm(EPS eps,MPI_Comm *matComm,MPI_Comm *epsC
   } else {
     PetscMPIInt     dims[2],periods[2],belongs[2];
     MPI_Comm        commCart;
-    PetscSubcomm    subc = ctx->subc;
+    /* PetscSubcomm    subc = ctx->subc; CC: Removed */
 
-    *matComm = PetscSubcommChild(subc);CHKERRQ(ierr);
-      
+    /* *matComm = PetscSubcommChild(subc);CHKERRQ(ierr); CC: Substituted*/
+    ierr = EPSKrylovSchurGetSubcommMats(eps,&A,NULL);CHKERRQ(ierr);
+    *matComm = PetscObjectComm((PetscObject)A);
+
     dims[0] = npart;      /* nprocCol */
     dims[1] = size/npart; /* nprocMat */
     if (dims[0]*dims[1] != size) {
@@ -196,9 +200,9 @@ PetscErrorCode EPSCreateDensityMat(EPS eps,PetscInt idx_start,PetscInt idx_end,M
   Mat               A,Dmat;
   PetscScalar       *pv,*buf,lambda;
   PetscInt          *pi,*pj,ncols,row,j,col,ns,*inertias,myinertia[2];
-  PetscReal         *shifts,myinterval[2]; 
+  PetscReal         *shifts,myinterval[2],*subintervals; 
   const PetscScalar *evec_arr;
-  EPS_KRYLOVSCHUR   *ctx=(EPS_KRYLOVSCHUR*)eps->data;
+  /* EPS_KRYLOVSCHUR   *ctx=(EPS_KRYLOVSCHUR*)eps->data; CC: Removed */
   PetscMPIInt       size,rank;
   MPI_Comm          comm;
 
@@ -218,6 +222,7 @@ PetscErrorCode EPSCreateDensityMat(EPS eps,PetscInt idx_start,PetscInt idx_end,M
   ierr = EPSKrylovSchurGetSubcommInfo(eps,&idEps,&nconv_loc,&evec);CHKERRQ(ierr);
 
   /* get local operator A */
+  /* CC: Substituted
   if (nprocEps == 1) {
     ierr = EPSComputeVectors(eps);CHKERRQ(ierr);
     ierr = EPSGetOperators(eps,&A,NULL);CHKERRQ(ierr);
@@ -225,13 +230,21 @@ PetscErrorCode EPSCreateDensityMat(EPS eps,PetscInt idx_start,PetscInt idx_end,M
     ierr = EPSComputeVectors(ctx->eps);CHKERRQ(ierr);
     ierr = EPSGetOperators(ctx->eps,&A,NULL);CHKERRQ(ierr);
   }
-
+  */
+  ierr = EPSKrylovSchurGetSubcommMats(eps,&A,NULL);CHKERRQ(ierr);
+  
   /* get interval for this process */
   if (nprocEps == 1) {
     ierr = EPSGetInterval(eps,&myinterval[0],&myinterval[1]);CHKERRQ(ierr);
   } else {
+    /* CC: Substituted
     myinterval[0] = ctx->subintervals[idEps];
     myinterval[1] = ctx->subintervals[idEps + 1];
+    */
+    ierr = EPSKrylovSchurGetSubintervals(eps,&subintervals);CHKERRQ(ierr);
+    myinterval[0] = subintervals[idEps];
+    myinterval[1] = subintervals[idEps + 1];
+    ierr = PetscFree(subintervals);CHKERRQ(ierr);
   }
   
   /* get inertia for this process */
@@ -360,9 +373,9 @@ PetscErrorCode MatMatMultGetTrace(EPS eps,Mat P,Mat A,PetscInt sgn,Vec vdiag,Pet
   PetscReal         *rsum,pb,*buf;
   PetscInt          rsign,csign,dsign;
   MPI_Comm          matComm;
-  EPS_KRYLOVSCHUR   *ctx=(EPS_KRYLOVSCHUR*)eps->data;
+  /* EPS_KRYLOVSCHUR   *ctx=(EPS_KRYLOVSCHUR*)eps->data; CC: Removed */
   PetscMPIInt       nprocA;
-  PetscInt          npart=ctx->npart;
+  PetscInt          npart;/* =ctx->npart; CC: */
   Mat               myA;
   PetscBool         isSBAIJ;
 
@@ -375,6 +388,8 @@ PetscErrorCode MatMatMultGetTrace(EPS eps,Mat P,Mat A,PetscInt sgn,Vec vdiag,Pet
  
   ierr = MatGetOwnershipRange(P,&rstart,&rend);CHKERRQ(ierr);
   ierr = PetscObjectGetComm((PetscObject)eps,&matComm);CHKERRQ(ierr);
+  ierr = EPSKrylovSchurGetPartitions(eps,&npart);CHKERRQ(ierr);
+/* CC: Substituted
   if (npart == 1) {
     myA = A;
     ierr = MPI_Comm_size(matComm,&nprocA);CHKERRQ(ierr);
@@ -383,7 +398,10 @@ PetscErrorCode MatMatMultGetTrace(EPS eps,Mat P,Mat A,PetscInt sgn,Vec vdiag,Pet
     ierr = MPI_Comm_size(matComm,&nprocA);CHKERRQ(ierr);
     ierr = EPSGetOperators(ctx->eps,&myA,NULL);CHKERRQ(ierr);
   }
-  
+*/
+  ierr = EPSKrylovSchurGetSubcommMats(eps,&myA,NULL);CHKERRQ(ierr);
+  matComm = PetscObjectComm((PetscObject)myA);
+  ierr = MPI_Comm_size(matComm,&nprocA);CHKERRQ(ierr);
   if (nprocA == 1) {
     ierr = PetscObjectTypeCompare((PetscObject)P,MATSEQSBAIJ,&isSBAIJ);CHKERRQ(ierr);
   } else {
