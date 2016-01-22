@@ -51,6 +51,8 @@ def main():
     method      = opts.getString('method','mindo3').lower()
     pyquante    = opts.getBool('pyquante',False)
     writeXYZ    = opts.getBool('writeXYZ',False)
+    scfthresh   = opts.getReal('scfthresh',1.e-5)
+    checkenergy = opts.getReal('checkenergy',0) #
     comm = pt.getComm()
     pt.write("Number of MPI ranks: {0}".format(comm.size))
     pt.write("Number of subintervals: {0}".format(nsubint))
@@ -122,7 +124,13 @@ def main():
             t1 = pt.getWallTime()
             from mindo3 import getEnergy
             stage.pop()
-            getEnergy(qmol,opts)
+            finalenergy = getEnergy(qmol,opts)
+            if checkenergy:
+                energydiff = abs(finalenergy-checkenergy)
+                if energydiff < scfthresh:
+                    pt.write("Passed final energy test with difference (kcal/mol): {0:20.10f}".format(energydiff))
+                else:
+                    pt.write("Failed final energy test with difference (kcal/mol): {0:20.10f}".format(energydiff))
             pt.getWallTime(t1,'MINDO3')
         else:
             pt.write("No valid method specified")
