@@ -34,6 +34,7 @@ import os.path
 
 def main():
     pt.write("{0:*^72s}".format("  PSCF  "))
+    pt.writeGitHash()
     stage, t0   = pt.getStageTime(newstage='Read input')  
     opts        = pt.getOptions()
     mol         = opts.getString('mol','')

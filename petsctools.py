@@ -12,6 +12,16 @@ def getComm():
 
 def getOptions():
     return PETSc.Options()
+
+def writeGitHash():
+    """
+    """
+    if not PETSc.COMM_WORLD.rank:
+        import subprocess
+#        githash = subprocess.check_output(["git", "describe", "--always"]) # short hash or tag
+        githash = subprocess.check_output(["git", "rev-parse", "HEAD"])  #long hasg
+        write("Git hash: {0}".format(githash.strip()))
+    return
     
 def getWallTime(t0=0, str=''):
     """
@@ -248,6 +258,27 @@ def createVec(comm):
 
 def createMat(comm):
     return PETSc.Mat().create(comm=comm)
+
+def createSquareMat(comm, localsize,globalsize, opt=0):
+    A = PETSc.Mat().create(comm=comm)
+    A.setType('aij')
+    A.setSizes([(localsize,globalsize),(localsize,globalsize)])
+    A.setUp()
+    A.setOption(A.Option.NEW_NONZERO_ALLOCATION_ERR,True)
+    if opt == 1:
+        rstart, rend = A.getOwnershipRange()
+        for i in range(rstart,rend):
+            A[i,i] = i + 1.0
+        A.assemble()    
+    return A
+
+def perturbMat(A,pert=0.1):
+    rstart, rend = A.getOwnershipRange()
+    for i in range(rstart,rend):
+        A.setValue(i,i,pert,addv=PETSc.InsertMode.ADD_VALUES)    
+    A.assemble()
+    return A    
+
         
 def getCSRBandwidth(A):
     """
