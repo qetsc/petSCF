@@ -26,6 +26,22 @@ PSCF is developed to perform Parameterized Self-Consistend-Field calculations su
   * PT-SCOTCH
   * SCALAPACK
 
+### petsc installation on BG/Q
+* The following configure options work:
+CC=/soft/compilers/wrappers/gcc/mpicc CXX=/soft/compilers/wrappers/gcc/mpicxx FC=/soft/compilers/wrappers/gcc/mpif90 PETSC_ARCH=arch-gccpetsc4py --with-shared-libraries=1 --with-clanguage=c --with-python=1 --with-debugging=0 --download-chaco=0 --download-cmake=0 --download-hypre=0 --download-plapack=0 --download-prometheus=0 --download-mpich=0 --download-fblaslapack=1 --download-scalapack=1 --download-mumps=1 --download-ptscotch=1 --download-spai=0 --download-spooles=0 --download-superlu=0 --download-superlu_dist=0 --download-triangle=0 -COPTFLAGS=" -O3 -g" -CXXOPTFLAGS=" -O3 -g" -FOPTFLAGS=" -O3 -g"
+* But it produces a static library (.a) instead of a shared one (.so). One solution is  (suggested by Satish Balay):
+cd $PETSC_DIR/$PETSC_ARCH/lib
+ar x libpetsc.a
+mpicc -shared -Wl,-soname,libpetsc.so -o libpetsc.so *.o
+mkdir obj; mv *.o obj
+mv libpetsc.a staticlibpetsc.a
+Do the same for slepc.
+
+make ex1 CFLAGS="-Wl,-dy -Wl,-rpath,/home/keceli/petsc/arch-gccpetsc4py"
+For slepc4py
+edit slepc4py/conf/slepcconf.py: look for  BUILDSHAREDLIB, and
+coment-out that block of code
+
 ## How to run?
 * mpirun -n 2 python pscf.py -options_file options.txt
 * You can modify options.txt file or add command-line options to override options.txt 
