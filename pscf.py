@@ -118,8 +118,14 @@ def main():
             stage.pop()
     
         elif method.startswith('hf'):
-            basisset    = opts.getString('basis','sto-3g')
-            rhf(qmol,basisset,spfilter,maxiter,scfthresh,maxdist=maxdist)
+            from hf import getEnergy
+            finalenergy = getEnergy(qmol,opts)
+            if checkenergy:
+                energydiff = abs(finalenergy-checkenergy)
+                if energydiff < scfthresh:
+                    pt.write("Passed final energy test with difference (kcal/mol): {0:20.10f}".format(energydiff))
+                else:
+                    pt.write("Failed final energy test with difference (kcal/mol): {0:20.10f}".format(energydiff))
         elif method.startswith('mindo3'):
             t1 = pt.getWallTime()
             from mindo3 import getEnergy
