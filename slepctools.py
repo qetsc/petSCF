@@ -64,7 +64,7 @@ def getDensityMatrix(eps,T,nocc):
             D.setValues(i,cols,values,addv=PETSc.InsertMode.ADD_VALUES)
         D.assemble()
         error = eps.computeError(m)
-        if error > 1.e-6: Print(" %12g" % ( error)) 
+        if error > 1.e-6: Print("Error: %12g" % ( error)) 
     if k.imag != 0.0:
           Print("Complex eigenvalue dedected: %9f%+9f j  %12g" % (k.real, k.imag, error))
   #  HOMO = k.real
@@ -140,7 +140,7 @@ def setupEPS(A,B=None,interval=[0]):
     eps.setProblemType( problem_type )
     st  = eps.getST()
     st.setType(SLEPc.ST.Type.SINVERT)
-    st.setMatStructure(SLEPc.ST.MatStructure.SAME_NONZERO_PATTERN)
+    st.setMatStructure(PETSc.Mat.Structure.SAME_NONZERO_PATTERN)
     ksp=st.getKSP()
     ksp.setType(PETSc.KSP.Type.PREONLY)
     pc=ksp.getPC()
@@ -188,8 +188,8 @@ def updateEPS(eps,A,B=None,subintervals=[0]):
             eps.setKrylovSchurPartitions(len(subintervals)-1)
             eps.setKrylovSchurSubintervals(subintervals)
 #     eps.setWhichEigenpairs(SLEPc.EPS.Which.ALL)
-#     eps.setFromOptions()
-#     eps.setUp()
+    eps.setFromOptions()
+    eps.setUp()
     return eps
 
 def solveEPS(eps,printinfo=False,returnoption=0,checkerror=False,interval=[0],subintervals=[0],nocc=0):
@@ -223,13 +223,14 @@ def solveEPS(eps,printinfo=False,returnoption=0,checkerror=False,interval=[0],su
     Print("Interval: {0:5.3f}, {1:5.3f} ".format(left, right))
     eps.solve()
     nconv = eps.getConverged()
-    Print("Number of converged and required eigenvalues: {0}, {1} ".format(nconv, nocc))
+    if nocc :
+        Print("Number of converged and required eigenvalues: {0}, {1} ".format(nconv, nocc))
     if printinfo:
         its = eps.getIterationNumber()
         sol_type = eps.getType()
         nev, ncv, mpd = eps.getDimensions()
         tol, maxit = eps.getTolerances()
-        
+        Print("EPS dimensions (nev,ncv,mpd): {0},{1},{2}".format(nev,ncv,mpd))
         Print("Number of eps iterations: %i" % its)
         Print("Solution method: %s" % sol_type)
         Print("Stopping condition: tol=%.4g, maxit=%d" % (tol, maxit))
