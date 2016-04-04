@@ -1,7 +1,7 @@
-import numpy as np
 import petsctools as pt
 import slepctools as st
 import unittools as ut
+import numpy as np
 import scftools as ft
 """
 MINDO/3 parameters taken from PyQuante
@@ -622,44 +622,44 @@ def getH(basis, T=None,comm=None):
     A.assemble()
     return A
 
-def getFD( basis, D, T):
-    """
-    Density matrix dependent terms of the Fock matrix
-    """
-    diagD = pt.convert2SeqVec(D.getDiagonal()) 
-    A = T.duplicate()
-    A.setUp()
-    rstart, rend = A.getOwnershipRange()
-    for i in xrange(rstart,rend):
-        basisi=basis[i]
-        atomi=basisi.atom
-        colsT,valsT = T.getRow(i)
-        colsD,valsD = D.getRow(i)
-        tmpii = 0.5 * diagD[i] * PyQuante.MINDO3.get_g(basisi,basisi) # Since g[i,i]=h[i,i] 
-        k=0
-        for j in colsT:
-            basisj=basis[j]
-            atomj=basisj.atom
-            if i != j:
-                tmpij=0
-                Djj=diagD[j] # D[j,j]
-                Dij=valsD[k]
-                Tij=valsT[k]
-                if atomj == atomi:
-                    gij=PyQuante.MINDO3.get_g(basisi,basisj)
-                    hij=PyQuante.MINDO3.get_h(basisi,basisj)
-                #    tmpii += Djj * gij - 0.5 * Dij * hij # as given in Eq 2 in Ref1 and page 54 in Ref2
-                    tmpii += Djj * ( gij - 0.5 * hij )#Ref1 and PyQuante, In Ref2, Ref3, when i==j, g=h
-                 #   tmpij  = -0.5 * Dij * PyQuante.MINDO3.get_h(basisi,basisj) # Eq 3 in Ref1 but not in Ref2 and PyQuante
-                    tmpij =  0.5 * Dij * ( 3. * hij - gij ) #Ref3, PyQuante, I think this term is an improvement to MINDO3 (it is in MNDO) so not found in Ref1 and Ref2  
-                else:
-                    tmpii += Tij * Djj     # Ref1, Ref2, Ref3
-                    tmpij = -0.5 * Tij * Dij   # Ref1, Ref2, Ref3  
-                A[i,j] = tmpij
-            k=k+1    
-        A[i,i] = tmpii        
-    A.assemble()
-    return A
+# def getFD( basis, D, T):
+#     """
+#     Density matrix dependent terms of the Fock matrix
+#     """
+#     diagD = pt.convert2SeqVec(D.getDiagonal()) 
+#     A = T.duplicate()
+#     A.setUp()
+#     rstart, rend = A.getOwnershipRange()
+#     for i in xrange(rstart,rend):
+#         basisi=basis[i]
+#         atomi=basisi.atom
+#         colsT,valsT = T.getRow(i)
+#         colsD,valsD = D.getRow(i)
+#         tmpii = 0.5 * diagD[i] * PyQuante.MINDO3.get_g(basisi,basisi) # Since g[i,i]=h[i,i] 
+#         k=0
+#         for j in colsT:
+#             basisj=basis[j]
+#             atomj=basisj.atom
+#             if i != j:
+#                 tmpij=0
+#                 Djj=diagD[j] # D[j,j]
+#                 Dij=valsD[k]
+#                 Tij=valsT[k]
+#                 if atomj == atomi:
+#                     gij=PyQuante.MINDO3.get_g(basisi,basisj)
+#                     hij=PyQuante.MINDO3.get_h(basisi,basisj)
+#                 #    tmpii += Djj * gij - 0.5 * Dij * hij # as given in Eq 2 in Ref1 and page 54 in Ref2
+#                     tmpii += Djj * ( gij - 0.5 * hij )#Ref1 and PyQuante, In Ref2, Ref3, when i==j, g=h
+#                  #   tmpij  = -0.5 * Dij * PyQuante.MINDO3.get_h(basisi,basisj) # Eq 3 in Ref1 but not in Ref2 and PyQuante
+#                     tmpij =  0.5 * Dij * ( 3. * hij - gij ) #Ref3, PyQuante, I think this term is an improvement to MINDO3 (it is in MNDO) so not found in Ref1 and Ref2  
+#                 else:
+#                     tmpii += Tij * Djj     # Ref1, Ref2, Ref3
+#                     tmpij = -0.5 * Tij * Dij   # Ref1, Ref2, Ref3  
+#                 A[i,j] = tmpij
+#             k=k+1    
+#         A[i,i] = tmpii        
+#     A.assemble()
+#     return A
 
 def getF(atomids, D, F0, T, G, H):
     """
@@ -749,6 +749,8 @@ def getFDseq(atomids, Dseq, F0, T, G, H):
 
 def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
     """
+    Performs, self-consistent field  iterations until convergence, or max
+    number of iterations reached.
     """
     maxiter     = opts.getInt('maxiter', 30)
     scfacc      = opts.getInt('scfacc', 0)
@@ -756,7 +758,106 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
     sizediis    = opts.getInt('diissize', 4)
     errdiis     = opts.getReal('diiserr', 1.e-2)
     scfthresh   = opts.getReal('scfthresh',1.e-5)
-    interval    = [opts.getReal('a',-500.) , opts.getReal('b', 500.)]
+    interval    = [opts.getReal('a',-50.) , opts.getReal('b', -10.)]
+    staticsubint= opts.getInt('staticsubint',0)
+    usesips     = opts.getBool('sips',False)
+    
+    Eel       = 0.
+    gap       = 0.
+    homo      = 0
+    lumo      = 0
+    converged = False 
+    eps       = None   
+    subint    = [0]
+    pt.write("{0:*^60s}".format("SELF-CONSISTENT-FIELD ITERATIONS"))
+    pt.write("SCF threshold: {0:5.3e}".format(scfthresh))
+    pt.write("Maximum number of SCF iterations: {0}".format(maxiter))
+    if staticsubint == 0: 
+        pt.write("Fixed subintervals will be used")
+    elif staticsubint == 1: 
+        pt.write("Subintervals will be adjusted at each iteration with fixed interval")
+    elif staticsubint == 2: 
+        pt.write("Subintervals will be adjusted at each iteration")
+    else:
+        pt.write("Not available")   
+    if usesips:
+        try:
+            import SIPs.sips as sips
+        except:
+            pt.write("SIPs not found")
+            usesips = False
+    F = None
+    for k in xrange(1,maxiter+1):
+        pt.write("{0:*^60s}".format("Iteration "+str(k)))
+        t0 = pt.getWallTime()
+        stage = pt.getStage(stagename='F',oldstage=stage)
+        Ftmp = getF(atomids, D, F0, T, G, H)
+        Ftmp = F0 + Ftmp
+        F = Ftmp.copy(F,None)
+        Eold = Eel
+        stage = pt.getStage(stagename='Trace',oldstage=stage)
+        if k==1:
+            if guess==0:
+                Eel  = 0.5 * pt.getTraceDiagProduct(D,F0+F)
+            else:
+                Eel  = 0.5 * pt.getTraceProductAIJ(D, F0+F)
+            stage = pt.getStage(stagename='SetupEPS',oldstage=stage)    
+            eps = st.setupEPS(F, B=None,interval=interval)  
+            stage = pt.getStage(stagename='SolveEPS',oldstage=stage)
+            eps, nconv, eigarray = st.solveEPS(eps,returnoption=1,nocc=nocc)
+        else:
+            Eel  = 0.5 * pt.getTraceProductAIJ(D, F0+F)
+            stage = pt.getStage(stagename='UpdateEPS',oldstage=stage)            
+            subint =interval
+            if staticsubint==1:
+                nsubint=st.getNumberOfSubIntervals(eps)
+                subint = st.getSubIntervals(eigarray[0:nocc],nsubint,interval=interval) 
+            elif staticsubint==2:
+                nsubint=st.getNumberOfSubIntervals(eps)
+                subint = st.getSubIntervals(eigarray[0:nocc],nsubint)
+            eps = st.updateEPS(eps,F,subintervals=subint)
+            stage = pt.getStage(stagename='SolveEPS',oldstage=stage)
+            eps, nconv, eigarray = st.solveEPS(eps,returnoption=1,nocc=nocc)         
+        
+        if (len(eigarray)>nocc):
+            homo = eigarray[nocc-1] 
+            lumo = eigarray[nocc]
+            gap = lumo - homo             
+            writeEnergies(homo,unit='ev',enstr='HOMO')
+            writeEnergies(lumo,unit='ev',enstr='LUMO')
+            writeEnergies(gap,unit='ev',enstr='Gap')
+        writeEnergies(Eel, unit='ev', enstr='Eel')
+        stage = pt.getStage(stagename='Density', oldstage=stage)
+        nden = nocc
+        if nconv < nocc: 
+            nden = nconv
+        if usesips:
+            D = sips.getDensityMat(eps,0,nden)
+        else:    
+            D = st.getDensityMatrix(eps,T, nden)
+        sizecommD = D.getComm().getSize()
+
+        if sizecommD > 1 and sizecommD < F.getComm().getSize():   
+            D = pt.getSeqMat(D)
+        pt.getWallTime(t0,str='Iteration')
+        if abs(Eel-Eold) < scfthresh and nconv >= nocc:
+            pt.write("Converged at iteration {0}".format(k))
+            converged = True
+            return converged, Eel, homo, lumo
+    return converged, Eel, homo, lumo
+
+def oldscf(opts,nocc,atomids,D,F0,T,G,H,stage):
+    """
+    Performs, self-consistent field  iterations until convergence, or max
+    number of iterations reached.
+    """
+    maxiter     = opts.getInt('maxiter', 30)
+    scfacc      = opts.getInt('scfacc', 0)
+    guess       = opts.getInt('guess', 0)
+    sizediis    = opts.getInt('diissize', 4)
+    errdiis     = opts.getReal('diiserr', 1.e-2)
+    scfthresh   = opts.getReal('scfthresh',1.e-5)
+    interval    = [opts.getReal('a',-50.) , opts.getReal('b', -10.)]
     staticsubint= opts.getInt('staticsubint',0)
     usesips     = opts.getBool('sips',False)
     
@@ -808,7 +909,8 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
         t0 = pt.getWallTime()
         stage = pt.getStage(stagename='F',oldstage=stage)
         F    = getF(atomids, D, F0, T, G, H)
-        F    = F0 + F
+        F    = F0 + F 
+#        F.axpy(1.0,F0,structure=F.Structure.SAME_NONZERO_PATTERN) # same as above, addidtional symbolic factorizations
         if scfacc == 3:
             kmod3 = (k-1)%3
             Flist[kmod3] = F
@@ -871,7 +973,7 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
             D = sips.getDensityMat(eps,0,nden)
         else:    
             D = st.getDensityMatrix(eps,T, nden)
-        sizecommD = D.getComm().Get_size()
+        sizecommD = D.getComm().getSize()
         if scfacc == 4:
             kmod3 = (k-1)%3
             Dlist[kmod3] = D
@@ -893,7 +995,7 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
                     for i in range(sizediis):
                         D += c[i] * Dlist[i]
                     pt.write('DIIS extrapolation for D applied')
-        if sizecommD > 1 and sizecommD < F.getComm().Get_size():   
+        if sizecommD > 1 and sizecommD < F.getComm().getSize():   
             D = pt.getSeqMat(D)
         pt.getWallTime(t0,str='Iteration')
         if abs(Eel-Eold) < scfthresh and nconv >= nocc:
