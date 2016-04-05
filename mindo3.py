@@ -760,6 +760,7 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
     interval    = [opts.getReal('a',-50.) , opts.getReal('b', -10.)]
     staticsubint= opts.getInt('staticsubint',0)
     usesips     = opts.getBool('sips',False)
+    local       = opts.getBool('local',True)
     nslices     = opts.getInt('eps_krylovschur_partitions',1)
     Eel       = 0.
     gap       = 0.
@@ -787,11 +788,12 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
             usesips = False
     F = None
     F0loc = None
-    Floc = None
-    Tloc = None
-    Gloc = None
-    Hloc = None
-    np = pt.getWorldSize()
+    Floc  = None
+    Tloc  = None
+    Gloc  = None
+    Hloc  = None
+    np    = pt.getWorldSize() # total number of ranks
+    npmat = np / nslices # number of ranks for each slice
     for k in xrange(1,maxiter+1):
         pt.write("{0:*^60s}".format("Iteration "+str(k)))
         t0 = pt.getWallTime()
@@ -812,13 +814,20 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
             stage = pt.getStage(stagename='SolveEPS',oldstage=stage)
             eps, nconv, eigarray = st.solveEPS(eps,returnoption=1,nocc=nocc)
         else:
-            stage = pt.getStage(stagename='F',oldstage=stage)
-            Ftmp = getF(atomids, D, F0loc, Tloc, Gloc, Hloc)
-            Ftmp = F0loc + Ftmp
-            Floc = Ftmp.copy(Floc,None)
             Eold = Eel
-            stage = pt.getStage(stagename='Trace',oldstage=stage)            
-            Eel  = 0.5 * pt.getTraceProductAIJ(D, F0loc+Floc)
+            stage = pt.getStage(stagename='F',oldstage=stage)
+            if local:
+                Ftmp = getF(atomids, D, F0loc, Tloc, Gloc, Hloc)
+                Ftmp = F0loc + Ftmp
+                Floc = Ftmp.copy(Floc,None)
+                stage = pt.getStage(stagename='Trace',oldstage=stage)            
+                Eel  = 0.5 * pt.getTraceProductAIJ(D, F0loc+Floc)
+            else:
+                Ftmp = getF(atomids, D, F0, T, G, H)
+                Ftmp = F0 + Ftmp
+                F = Ftmp.copy(F,None)
+                stage = pt.getStage(stagename='Trace',oldstage=stage)            
+                Eel  = 0.5 * pt.getTraceProductAIJ(D, F0+F)
             stage = pt.getStage(stagename='UpdateEPS',oldstage=stage)            
             subint =interval
             if staticsubint==1:
@@ -827,7 +836,10 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
             elif staticsubint==2:
                 nsubint=st.getNumberOfSubIntervals(eps)
                 subint = st.getSubIntervals(eigarray[0:nocc],nsubint)
-            eps = st.updateEPS(eps,Floc,subintervals=subint)
+            if local:
+                eps = st.updateEPS(eps,Floc,subintervals=subint,local=local)
+            else:
+                eps = st.updateEPS(eps,F,subintervals=subint,local=local)                
             stage = pt.getStage(stagename='SolveEPS',oldstage=stage)
             eps, nconv, eigarray = st.solveEPS(eps,returnoption=1,nocc=nocc)         
         
@@ -847,15 +859,15 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
             D = sips.getDensityMat(eps,0,nden)
         else:    
             D = st.getDensityMatrix(eps,T, nden)
-        if k==1: 
+        if k==1 and local: 
             matcomm = D.getComm()
             F0loc = pt.getRedundantMat(F0, nslices, matcomm, out=F0loc)
-            Floc  = pt.getRedundantMat(F, nslices, matcomm, out=Floc)
-            Tloc  = pt.getRedundantMat(T, nslices, matcomm, out=Tloc)
-            Gloc  = pt.getRedundantMat(G, nslices, matcomm, out=Gloc)
-            Hloc  = pt.getRedundantMat(H, nslices, matcomm, out=Hloc)
-#        if  npmat < np:   
-#            D = pt.getSeqMat(D)
+            Floc  = pt.getRedundantMat( F, nslices, matcomm, out=Floc)
+            Tloc  = pt.getRedundantMat( T, nslices, matcomm, out=Tloc)
+            Gloc  = pt.getRedundantMat( G, nslices, matcomm, out=Gloc)
+            Hloc  = pt.getRedundantMat( H, nslices, matcomm, out=Hloc)
+        elif  npmat < np:   
+            D = pt.getSeqMat(D)
         pt.getWallTime(t0,str='Iteration')
         if abs(Eel-Eold) < scfthresh and nconv >= nocc:
             pt.write("Converged at iteration {0}".format(k))

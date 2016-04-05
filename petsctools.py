@@ -621,7 +621,7 @@ def getTraceProductAIJ(A,B):
     """
     temp=0.0
     rstart, rend = B.getOwnershipRange()
-    comm = A.getComm().tompi4py()
+    comm = B.getComm().tompi4py()
     for i in xrange(rstart,rend):
         cols,a = A.getRow(i)
         cols,b = B.getRow(i)

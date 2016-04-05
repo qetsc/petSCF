@@ -1,15 +1,23 @@
 #PSCF options
 
 -method mindo3AIJ 
+#-method hf
 -scfthresh 1.e-6
--maxdist 10 #unit: Angstrom
--maxiter 4
+-maxdist 5 #unit: Angstrom
+-maxiter 40
 -solve 1
 -debug 0
 -staticsubint 1 # subintervals optimized after first iteration
 -xyz "./XYZ/002.xyz"
+#-xyz "./obabel/p24.xyz"
+#-xyz "../../xyz/polyethylene/pe4.xyz"
+#-xyz "/Volumes/u/kecelim/Dropbox/work/xyz/glu-ala/0002.xyz"
+-a -300
+-b 100
+#-checkenergy -49.5887998935
 -sips True
-
+-sort 1
+-local True #If true updates matrices locally in the subcommunciators
 # A chain of identical atoms (instead of an xyz file) can be specified with the following options 
 #-N 10 # Number of atoms
 #-Z 8 # Atomic number

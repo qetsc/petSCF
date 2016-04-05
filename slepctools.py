@@ -156,7 +156,7 @@ def setupEPS(A,B=None,interval=[0]):
     eps.setUp()
     return eps
 
-def updateEPS(eps,A,B=None,subintervals=[0]):
+def updateEPS(eps,A,B=None,subintervals=[0],local=True, globalupdate=False,):
     """
     Updates eps object for a new matrix.
     Currently I need to recreate the eps object.
@@ -164,10 +164,12 @@ def updateEPS(eps,A,B=None,subintervals=[0]):
     symbolic factorization is not performed if the nnz 
     structure remains the same.
     """
-#    eps.setOperators(A,B)
-    eps.updateKrylovSchurSubcommMats(s=0.0, a=1.0, Au=A, t=1.0, b=1.0, Bu=B, 
-                                     structure=A.Structure.SAME_NONZERO_PATTERN, 
-                                     globalup=False)
+    if local:
+        eps.updateKrylovSchurSubcommMats(s=0.0, a=1.0, Au=A, t=1.0, b=1.0, Bu=B, 
+                                         structure=A.Structure.SAME_NONZERO_PATTERN, 
+                                         globalup=globalupdate)
+    else:
+        eps.setOperators(A,B)    
     if len(subintervals)>1:
         #Print("subintervals:{0}".format(subintervals))
         eps.setInterval(subintervals[0],subintervals[-1])
