@@ -853,7 +853,7 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
             Floc  = pt.getRedundantMat(F, nslices, matcomm, out=Floc)
             Tloc  = pt.getRedundantMat(T, nslices, matcomm, out=Tloc)
             Gloc  = pt.getRedundantMat(G, nslices, matcomm, out=Gloc)
-            Hloc  = pt.getRedundantMat(G, nslices, matcomm, out=Hloc)
+            Hloc  = pt.getRedundantMat(H, nslices, matcomm, out=Hloc)
 #        if  npmat < np:   
 #            D = pt.getSeqMat(D)
         pt.getWallTime(t0,str='Iteration')
