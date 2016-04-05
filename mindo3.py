@@ -665,18 +665,17 @@ def getF(atomids, D, F0, T, G, H):
     """
     Density matrix dependent terms of the Fock matrix
     """
-    diagG = G.getDiagonal()
     diagD = pt.convert2SeqVec(D.getDiagonal()) 
     A     = T.duplicate()
     A.setUp()
     rstart, rend = A.getOwnershipRange()
     for i in xrange(rstart,rend):
-        atomi=atomids[i]
-        colsD,valsD = D.getRow(i)
-        colsG,valsG = G.getRow(i)
-        colsH,valsH = H.getRow(i)
-        colsT,valsT = T.getRow(i)
-        tmpii       = 0.5 * diagD[i] * diagG[i] # Since g[i,i]=h[i,i]
+        atomi        = atomids[i]
+        colsT, valsT = T.getRow(i)
+        colsG, valsG = G.getRow(i)
+        valsD        = D.getRow(i)[1] # cols same as T
+        valsH        = H.getRow(i)[1] # cols same as G
+        tmpii = 0.5 * diagD[i] * G[i,i] # Since g[i,i]=h[i,i]
         k=0
         idxG=0
         for j in colsT:
@@ -761,7 +760,7 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
     interval    = [opts.getReal('a',-50.) , opts.getReal('b', -10.)]
     staticsubint= opts.getInt('staticsubint',0)
     usesips     = opts.getBool('sips',False)
-    
+    nslices     = opts.getInt('eps_krylovschur_partitions',1)
     Eel       = 0.
     gap       = 0.
     homo      = 0
@@ -787,16 +786,23 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
             pt.write("SIPs not found")
             usesips = False
     F = None
+    F0loc = None
+    Floc = None
+    Tloc = None
+    Gloc = None
+    Hloc = None
+    np = pt.getWorldSize()
     for k in xrange(1,maxiter+1):
         pt.write("{0:*^60s}".format("Iteration "+str(k)))
         t0 = pt.getWallTime()
-        stage = pt.getStage(stagename='F',oldstage=stage)
-        Ftmp = getF(atomids, D, F0, T, G, H)
-        Ftmp = F0 + Ftmp
-        F = Ftmp.copy(F,None)
-        Eold = Eel
-        stage = pt.getStage(stagename='Trace',oldstage=stage)
+
         if k==1:
+            stage = pt.getStage(stagename='F',oldstage=stage)
+            Ftmp = getF(atomids, D, F0, T, G, H)
+            Ftmp = F0 + Ftmp
+            F = Ftmp.copy(F,None)
+            Eold = Eel
+            stage = pt.getStage(stagename='Trace',oldstage=stage)
             if guess==0:
                 Eel  = 0.5 * pt.getTraceDiagProduct(D,F0+F)
             else:
@@ -806,7 +812,13 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
             stage = pt.getStage(stagename='SolveEPS',oldstage=stage)
             eps, nconv, eigarray = st.solveEPS(eps,returnoption=1,nocc=nocc)
         else:
-            Eel  = 0.5 * pt.getTraceProductAIJ(D, F0+F)
+            stage = pt.getStage(stagename='F',oldstage=stage)
+            Ftmp = getF(atomids, D, F0loc, Tloc, Gloc, Hloc)
+            Ftmp = F0loc + Ftmp
+            Floc = Ftmp.copy(Floc,None)
+            Eold = Eel
+            stage = pt.getStage(stagename='Trace',oldstage=stage)            
+            Eel  = 0.5 * pt.getTraceProductAIJ(D, F0loc+Floc)
             stage = pt.getStage(stagename='UpdateEPS',oldstage=stage)            
             subint =interval
             if staticsubint==1:
@@ -815,7 +827,7 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
             elif staticsubint==2:
                 nsubint=st.getNumberOfSubIntervals(eps)
                 subint = st.getSubIntervals(eigarray[0:nocc],nsubint)
-            eps = st.updateEPS(eps,F,subintervals=subint)
+            eps = st.updateEPS(eps,Floc,subintervals=subint)
             stage = pt.getStage(stagename='SolveEPS',oldstage=stage)
             eps, nconv, eigarray = st.solveEPS(eps,returnoption=1,nocc=nocc)         
         
@@ -835,10 +847,15 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
             D = sips.getDensityMat(eps,0,nden)
         else:    
             D = st.getDensityMatrix(eps,T, nden)
-        sizecommD = D.getComm().getSize()
-
-        if sizecommD > 1 and sizecommD < F.getComm().getSize():   
-            D = pt.getSeqMat(D)
+        if k==1: 
+            matcomm = D.getComm()
+            F0loc = pt.getRedundantMat(F0, nslices, matcomm, out=F0loc)
+            Floc  = pt.getRedundantMat(F, nslices, matcomm, out=Floc)
+            Tloc  = pt.getRedundantMat(T, nslices, matcomm, out=Tloc)
+            Gloc  = pt.getRedundantMat(G, nslices, matcomm, out=Gloc)
+            Hloc  = pt.getRedundantMat(G, nslices, matcomm, out=Hloc)
+#        if  npmat < np:   
+#            D = pt.getSeqMat(D)
         pt.getWallTime(t0,str='Iteration')
         if abs(Eel-Eold) < scfthresh and nconv >= nocc:
             pt.write("Converged at iteration {0}".format(k))
@@ -973,7 +990,7 @@ def oldscf(opts,nocc,atomids,D,F0,T,G,H,stage):
             D = sips.getDensityMat(eps,0,nden)
         else:    
             D = st.getDensityMatrix(eps,T, nden)
-        sizecommD = D.getComm().getSize()
+        npmat = D.getComm().getSize()
         if scfacc == 4:
             kmod3 = (k-1)%3
             Dlist[kmod3] = D
@@ -995,7 +1012,7 @@ def oldscf(opts,nocc,atomids,D,F0,T,G,H,stage):
                     for i in range(sizediis):
                         D += c[i] * Dlist[i]
                     pt.write('DIIS extrapolation for D applied')
-        if sizecommD > 1 and sizecommD < F.getComm().getSize():   
+        if npmat > 1 and npmat < F.getComm().getSize():   
             D = pt.getSeqMat(D)
         pt.getWallTime(t0,str='Iteration')
         if abs(Eel-Eold) < scfthresh and nconv >= nocc:

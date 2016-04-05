@@ -164,30 +164,16 @@ def updateEPS(eps,A,B=None,subintervals=[0]):
     symbolic factorization is not performed if the nnz 
     structure remains the same.
     """
-   # eps = SLEPc.EPS().create(comm=A.getComm())
-    eps.setOperators(A,B)
-#     if B: problem_type=SLEPc.EPS.ProblemType.GHEP
-#     else: problem_type=SLEPc.EPS.ProblemType.HEP
-#     eps.setProblemType( problem_type )
-#     st  = eps.getST()
-#     st.setType(SLEPc.ST.Type.SINVERT)
-#     st.setMatStructure(SLEPc.ST.MatStructure.SAME_NONZERO_PATTERN)
-#     ksp=st.getKSP()
-#     ksp.setType(PETSc.KSP.Type.PREONLY)
-#     pc=ksp.getPC()
-#     pc.setType(PETSc.PC.Type.CHOLESKY)
-#     pc.setFactorSolverPackage('mumps')
-#     PETSc.Options().setValue('mat_mumps_icntl_13',1)
-#     PETSc.Options().setValue('mat_mumps_icntl_24',1)
-#     PETSc.Options().setValue('mat_mumps_cntl_3',1.e-12)
-#     eps.setInterval(subintervals[0],subintervals[-1])
+#    eps.setOperators(A,B)
+    eps.updateKrylovSchurSubcommMats(s=0.0, a=1.0, Au=A, t=1.0, b=1.0, Bu=B, 
+                                     structure=A.Structure.SAME_NONZERO_PATTERN, 
+                                     globalup=False)
     if len(subintervals)>1:
         #Print("subintervals:{0}".format(subintervals))
         eps.setInterval(subintervals[0],subintervals[-1])
         if len(subintervals)>2:
             eps.setKrylovSchurPartitions(len(subintervals)-1)
             eps.setKrylovSchurSubintervals(subintervals)
-#     eps.setWhichEigenpairs(SLEPc.EPS.Which.ALL)
     eps.setFromOptions()
     eps.setUp()
     return eps

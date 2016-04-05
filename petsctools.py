@@ -567,6 +567,9 @@ def writeMatToBinFile(A,filename):
         pass
     return 0
 
+def getWorldSize():
+    return PETSc.COMM_WORLD.size
+
 def getTraceProduct(A,B):
     """
     Returns the trace of the product of A and B where A and B are same shape 2D numpy arrays.
@@ -618,11 +621,12 @@ def getTraceProductAIJ(A,B):
     """
     temp=0.0
     rstart, rend = B.getOwnershipRange()
+    comm = A.getComm().tompi4py()
     for i in xrange(rstart,rend):
         cols,a = A.getRow(i)
         cols,b = B.getRow(i)
         temp += a.dot(b)
-    return MPI.COMM_WORLD.allreduce(temp,op=MPI.SUM)
+    return comm.allreduce(temp,op=MPI.SUM)
 
 def getTraceProductAIJslow(A,B):
     """
@@ -660,6 +664,12 @@ def getSeqMat(A):
     myis=PETSc.IS().createStride(A.getSize()[0],first=0,step=1,comm=PETSc.COMM_SELF)    
     (A,)=A.getSubMatrices(myis,myis)
     return A
+
+def getRedundantMat(A,nsubcomm, subcomm=None, out=None):
+    """
+    Create copies of the matrix in subcommunicators
+    """
+    return A.createRedundantMatrix(nsubcomm,subcomm=subcomm, out=out)
    
 def getSeqAIJ(A):
     """
