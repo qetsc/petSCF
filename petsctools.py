@@ -602,16 +602,14 @@ def getTraceProductCSR(A,B):
             tmp+= A.data[i]*B[A.row[i],A.col[i]]
     return tmp
 
-def getTraceDiagProduct(A,B):
+def getTraceProductDiag(A,B):
     """
-    Returns the trace of the product which is:
-    sum_i sum_j A(i,j) B(j,i), 
-    so it is simpler than taking the product first and then computing the trace.
+    Returns the trace of the product of A,B when one of them is a diagonal matrix
+    getDiagonal returns a parallel Vec so no need to reduce.
     """
     a = A.getDiagonal()
     b = B.getDiagonal()
-    temp = a.dot(b)
-    return MPI.COMM_WORLD.allreduce(temp,op=MPI.SUM)
+    return a.dot(b)
 
 def getTraceProductAIJ(A,B):
     """
@@ -623,8 +621,8 @@ def getTraceProductAIJ(A,B):
     rstart, rend = B.getOwnershipRange()
     comm = B.getComm().tompi4py()
     for i in xrange(rstart,rend):
-        cols,a = A.getRow(i)
-        cols,b = B.getRow(i)
+        a = A.getRow(i)[1]
+        b = B.getRow(i)[1]
         temp += a.dot(b)
     return comm.allreduce(temp,op=MPI.SUM)
 

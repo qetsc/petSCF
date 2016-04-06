@@ -806,7 +806,8 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
             Eold = Eel
             stage = pt.getStage(stagename='Trace',oldstage=stage)
             if guess==0:
-                Eel  = 0.5 * pt.getTraceDiagProduct(D,F0+F)
+                Eel  = 0.5 * pt.getTraceProductDiag(D,F0+F)
+                print "here"
             else:
                 Eel  = 0.5 * pt.getTraceProductAIJ(D, F0+F)
             stage = pt.getStage(stagename='SetupEPS',oldstage=stage)    
@@ -965,7 +966,7 @@ def oldscf(opts,nocc,atomids,D,F0,T,G,H,stage):
         stage = pt.getStage(stagename='Trace',oldstage=stage)
         if k==1:
             if guess==0:
-                Eel  = 0.5 * pt.getTraceDiagProduct(D,F0+F)
+                Eel  = 0.5 * pt.getTraceProductDiag(D,F0+F)
             else:
                 Eel  = 0.5 * pt.getTraceProductAIJ(D, F0+F)
             stage = pt.getStage(stagename='SetupEPS',oldstage=stage)    
