@@ -807,7 +807,6 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
             stage = pt.getStage(stagename='Trace',oldstage=stage)
             if guess==0:
                 Eel  = 0.5 * pt.getTraceProductDiag(D,F0+F)
-                print "here"
             else:
                 Eel  = 0.5 * pt.getTraceProductAIJ(D, F0+F)
             stage = pt.getStage(stagename='SetupEPS',oldstage=stage)    
@@ -876,10 +875,12 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
             return converged, Eel, homo, lumo
     return converged, Eel, homo, lumo
 
-def oldscf(opts,nocc,atomids,D,F0,T,G,H,stage):
+def scfwithaccelerators(opts,nocc,atomids,D,F0,T,G,H,stage):
     """
     Performs, self-consistent field  iterations until convergence, or max
-    number of iterations reached.
+    number of iterations reached. 
+    Used Pulay's DIIS or Aitken's 3-point extrapolation for the acceleration
+    of convergence.
     """
     maxiter     = opts.getInt('maxiter', 30)
     scfacc      = opts.getInt('scfacc', 0)

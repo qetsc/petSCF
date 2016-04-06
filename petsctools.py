@@ -22,7 +22,17 @@ def writeGitHash():
         githash = subprocess.check_output(["git", "rev-parse", "HEAD"])  #long hasg
         write("Git hash: {0}".format(githash.strip()))
     return
-    
+
+def getHostName():
+    """
+    """
+    if not PETSc.COMM_WORLD.rank:
+        import socket
+        host = socket.gethostname()
+        write("PSCF running on host {0}".format(host))
+        return host
+    return 'host'
+
 def getWallTime(t0=0, str=''):
     """
     Returns the walltime - t0 in seconds.
