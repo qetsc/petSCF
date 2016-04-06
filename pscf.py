@@ -35,26 +35,10 @@ import os.path
 def main():
     pt.write("{0:*^72s}".format("  PSCF  "))
     host        = pt.getHostName()
-    # vesta gives the following error :
-    #Traceback (most recent call last):
-    #  File "pscf.py", line 145, in <module>
-    #    main()
-    #  File "pscf.py", line 37, in main
-    #    pt.writeGitHash()
-    #  File "/gpfs/vesta-fs0/projects/SEMO/qetsc/pscf/petsctools.py", line 22, in writeGitHash
-    #    githash = subprocess.check_output(["git", "rev-parse", "HEAD"])  #long hasg
-    #  File "/bgsys/tools/python2.7.5-gnu-20130730/lib64/python2.7/subprocess.py", line 568, in check_output
-    #    process = Popen(stdout=PIPE, *popenargs, **kwargs)
-    #  File "/bgsys/tools/python2.7.5-gnu-20130730/lib64/python2.7/subprocess.py", line 703, in __init__
-    #    errread, errwrite) = self._get_handles(stdin, stdout, stderr)
-    #  File "/bgsys/tools/python2.7.5-gnu-20130730/lib64/python2.7/subprocess.py", line 1110, in _get_handles
-    #    c2pread, c2pwrite = self.pipe_cloexec()
-    #  File "/bgsys/tools/python2.7.5-gnu-20130730/lib64/python2.7/subprocess.py", line 1153, in pipe_cloexec
-    #    r, w = os.pipe()
-    #OSError: [Errno 38] Function not implemented
-    if 'vesta' not in host:
+    if 'vesta' in host or 'mira' in host:
+        pt.write("Could not get git info...")
+    else:
         pt.writeGitHash()
-        
     stage, t0   = pt.getStageTime(newstage='Read input')  
     opts        = pt.getOptions()
     mol         = opts.getString('mol','')

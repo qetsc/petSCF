@@ -2,4 +2,3 @@
 rm -f __init__.py*
 python setup.py build_ext --inplace
 touch __init__.py
-#cp -i sips.pyx sips.so ../

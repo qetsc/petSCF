@@ -27,16 +27,23 @@ def configuration(parent_package='',top_path=None):
 
     # PETSc
     import os
+    import socket
     PETSC_DIR  = os.environ['PETSC_DIR']
     SLEPC_DIR  = os.environ['SLEPC_DIR']
     PETSC_ARCH = os.environ.get('PETSC_ARCH', '')
     from os.path import join, isdir
     if PETSC_ARCH and isdir(join(PETSC_DIR, PETSC_ARCH)) and isdir(join(SLEPC_DIR, PETSC_ARCH)):
         INCLUDE_DIRS += [join(PETSC_DIR, PETSC_ARCH, 'include'),join(PETSC_DIR, 'include')]
-	INCLUDE_DIRS +=	[join(SLEPC_DIR, PETSC_ARCH, 'include'),join(SLEPC_DIR, 'include')]
+        INCLUDE_DIRS +=	[join(SLEPC_DIR, PETSC_ARCH, 'include'),join(SLEPC_DIR, 'include')]
         LIBRARY_DIRS += [join(PETSC_DIR, PETSC_ARCH, 'lib')]
         LIBRARY_DIRS += [join(SLEPC_DIR, PETSC_ARCH, 'lib')]
-        print 'ok'
+        host = socket.gethostname()
+        if 'vesta' in host or 'mira' in host:
+            INCLUDE_DIRS += ['/bgsys/drivers/V1R2M2/ppc64/comm/include', 
+                             '/bgsys/drivers/V1R2M2/ppc64/comm/lib/gnu',
+                             '/bgsys/drivers/V1R2M2/ppc64', 
+                             '/bgsys/drivers/V1R2M2/ppc64/comm/sys/include', 
+                             '/bgsys/drivers/V1R2M2/ppc64/spi/include']
     else:
         if PETSC_ARCH: pass # XXX should warn ...
         INCLUDE_DIRS += [join(PETSC_DIR, 'include'),join(SLEPC_DIR, 'include')]
