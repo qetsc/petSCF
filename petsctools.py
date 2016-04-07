@@ -3,15 +3,35 @@ petsc4py.init(sys.argv)
 from petsc4py import PETSc
 from mpi4py import MPI
 
-write = PETSc.Sys.Print
-
+write  = PETSc.Sys.Print
+INSERT = PETSc.InsertMode.INSERT
 import numpy as np
 
 def getComm():
     return MPI.COMM_WORLD
 
+def getPetscComm():
+    return PETSc.COMM_WORLD
+
 def getOptions():
     return PETSc.Options()
+
+def getCommSum(comm,x,integer=False):
+    """
+    Sum integers or floats over the communicator.
+    Should be faster than comm.reduce()
+    """
+    if integer:        
+        sum=np.zeros(1,dtype='int32')
+        send=np.array(x,dtype='int32')
+        comm.Reduce([send, MPI.INT ], [sum, MPI.INT],
+                op=MPI.SUM, root=0)
+    else:    
+        sum=np.zeros(1)
+        send=np.array(x)
+        comm.Reduce([send, MPI.DOUBLE ], [sum, MPI.DOUBLE],
+                op=MPI.SUM, root=0)
+    return sum[0]
 
 def writeGitHash():
     """

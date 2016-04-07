@@ -225,7 +225,6 @@ def getLocalNnzPerRow(basis,rstart,rend,maxdist2):
     Nonzeros are based on distance between atoms.
     TODO: Exploit symmetry, not sure how to do that.
     """
-   # t0 = pt.getWallTime()
     nbf=len(basis)
     localsize=rend-rstart
     dnnz=np.zeros(localsize,dtype='int32')
@@ -244,10 +243,91 @@ def getLocalNnzPerRow(basis,rstart,rend,maxdist2):
                 if j > jmax[k]:
                     jmax[k] = j 
         k += 1 
-   # pt.getWallTime(t0=t0,str='Local nnz')                
     return dnnz, onnz, jmax
 
 def getT(comm,basis,maxdist,preallocate=False):
+    """
+    Computes a matrix for the two-center two-electron integrals.
+    Assumes spherical symmetry, no dependence on basis function, only atom types.
+    Parametrized for pairs of atoms. (Two-atom parameters)
+    This matrix also determines the nonzero structure of the Fock matrix.
+    Nuclear repulsion energy is also computed.
+    TODO:
+    Values are indeed based on atoms, not basis functions, so possible to improve performance by nbf/natom.
+    Cythonize
+    """
+    t            = pt.getWallTime()
+    nbf          = len(basis)
+    nnz          = nbf*nbf
+    maxdist2     = maxdist * maxdist * ut.ang2bohr * ut.ang2bohr    
+    bohr2ang2    = ut.bohr2ang**2.
+    e2           = ut.e2
+    k            = 0   
+    enuke        = 0.0
+    rstart, rend = pt.distributeN(comm, nbf)
+    localsize    = rend - rstart
+    t            = pt.getWallTime(t0=t,str='Initial')
+    A            = pt.createMat(comm=comm)
+    A.setType('aij')
+    A.setSizes([(localsize,nbf),(localsize,nbf)]) 
+    t = pt.getWallTime(t0=t,str='MatSetSizes')
+    if preallocate:
+        dnnz,onnz,jmax = getLocalNnzPerRow(basis,rstart,rend,maxdist2)
+        nnz            = sum(dnnz) + sum(onnz)
+        t              = pt.getWallTime(t0=t,str='Local nnz')
+        A.setPreallocationNNZ((dnnz,onnz)) 
+    else:
+        A.setPreallocationNNZ([nbf,nbf])
+        jmax           = np.array([nbf-1]*localsize)
+    t = pt.getWallTime(t0=t,str='Prealloc')
+    for i in xrange(rstart,rend):
+        atomi   = basis[i].atom
+        atnoi   = atomi.atno
+        rhoi    = atomi.rho
+        gammaii = f03[atnoi]
+        nnzrow  = dnnz[k] + onnz[k]
+        cols    = np.zeros((nnzrow,), dtype=np.int32)
+        vals    = np.zeros(nnzrow)
+        #A[i,i]  = gammaii / 2.
+        cols[0] = i
+        vals[0] = gammaii / 2.
+        n       = 1
+        for j in xrange(i+1,jmax[k]+1):
+            atomj = basis[j].atom
+            if atomi.atid == atomj.atid:
+                #A[i,j] = gammaii
+                cols[n] = j
+                vals[n] = gammaii
+            else:                        
+                distij2 = atomi.dist2(atomj) # (in bohr squared) * bohr2ang2
+                if distij2 < maxdist2:
+                    rhoj    = atomj.rho 
+                    distij2 = distij2 * bohr2ang2
+                    gammaij = e2 / np.sqrt(distij2 + 0.25 * (rhoi + rhoj)**2.)
+                    R       = np.sqrt(distij2)
+                    #A[i,j]  = gammaij
+                    cols[n] = j
+                    vals[n] = gammaij
+                    atnoj   = atomj.atno
+                    enuke  += ( atomi.Z*atomj.Z*gammaij +  abs(atomi.Z*atomj.Z*(ut.e2/R-gammaij)*getScaleij(atnoi, atnoj, R)) ) / ( atomi.nbf * atomj.nbf )
+            n += 1        
+        A.setValues(i,cols,vals,addv=pt.INSERT)
+        k += 1            
+    t = pt.getWallTime(t0=t,str='For loop')
+    A.assemblyBegin()
+    #enuke =  comm.allreduce(enuke)
+    enuke = pt.getCommSum(comm, enuke)
+    if preallocate:
+        #nnz =  comm.allreduce(nnz) 
+        nnz =  pt.getCommSum(comm, nnz, integer=True) 
+    A.assemblyEnd()
+    B = A.duplicate(copy=True)
+    B = B + A.transpose() 
+    t = pt.getWallTime(t0=t,str='Assembly')
+    A.destroy()
+    return  nnz,enuke, B
+
+def getTold(comm,basis,maxdist,preallocate=False):
     """
     Computes a matrix for the two-center two-electron integrals.
     Assumes spherical symmetry, no dependence on basis function, only atom types.
@@ -272,7 +352,7 @@ def getT(comm,basis,maxdist,preallocate=False):
     t            = pt.getWallTime(t0=t,str='Initial')
     A            = pt.createMat(comm=comm)
     A.setType('aij')
-    A.setSizes([(localsize,None),(localsize,None)]) 
+    A.setSizes([(localsize,nbf),(localsize,nbf)]) 
     t = pt.getWallTime(t0=t,str='MatSetSizes')
     if preallocate:
         dnnz,onnz,jmax = getLocalNnzPerRow(basis,rstart,rend,maxdist2)
@@ -315,81 +395,6 @@ def getT(comm,basis,maxdist,preallocate=False):
     t = pt.getWallTime(t0=t,str='Assembly')
     A.destroy()
     return  nnz,enuke, B
-
-def getT2(comm,basis,maxdist,preallocate=False):
-    """
-    Computes a matrix for the two-center two-electron integrals.
-    Assumes spherical symmetry, no dependence on basis function, only atom types.
-    Parametrized for pairs of atoms. (Two-atom parameters)
-    maxnnz: max number of nonzeros per row. If it is given performance might improve    
-    This matrix also determines the nonzero structure of the Fock matrix.
-    Nuclear repulsion energy is also computed.
-    TODO:
-    Values are indeed based on atoms, not basis functions, so possible to improve performance by nbf/natom.
-    Cythonize
-    """
-    t = pt.getWallTime()
-    nbf      = len(basis)
-    nnz = nbf*nbf
-    maxdist2 = maxdist * maxdist * ut.ang2bohr * ut.ang2bohr
-    Vdiag = pt.createVec(comm=comm)
-    A        = pt.createMat(comm=comm)
-    A.setType('aij') #'sbaij'
-    A.setSizes([nbf,nbf]) 
-    A.setUp()
-    A.setOption(A.Option.NEW_NONZERO_ALLOCATION_ERR,True)
-    rstart, rend = A.getOwnershipRange()
-    localsize = rend - rstart
-    Vdiag.setSizes((localsize,nbf))
-    Vdiag.setUp()
-    bohr2ang2 = ut.bohr2ang**2.
-    e2        = ut.e2
-    k = 0   
-    enuke=0.0
-    t = pt.getWallTime(t0=t,str='Initial')
-    if preallocate:
-        dnnz,onnz,jmax = getLocalNnzPerRow(basis,rstart,rend,maxdist2)
-        nnz = sum(dnnz) + sum(onnz)
-        t = pt.getWallTime(t0=t,str='Local nnz')
-        A.setPreallocationNNZ((dnnz,onnz)) 
-    else:
-        A.setPreallocationNNZ([nbf,nbf])
-        jmax = np.array([localsize]*nbf)
-    t = pt.getWallTime(t0=t,str='Prealloc')
-    for i in xrange(rstart,rend):
-        atomi   = basis[i].atom
-        atnoi   = atomi.atno
-        rhoi    = atomi.rho
-        gammaii = f03[atnoi]
-        Vdiag[i] = gammaii
-    #    for j in xrange(i+1,min(i+bandwidth[i],nbf)):
-        for j in xrange(i+1,jmax[k]+1):
-            atomj = basis[j].atom
-            if atomi.atid == atomj.atid:
-                A[i,j] = gammaii
-            else:                        
-                distij2 = atomi.dist2(atomj) # (in bohr squared) * bohr2ang2
-                if distij2 < maxdist2:
-                    rhoj    = atomj.rho 
-                    distij2 = distij2 * bohr2ang2
-                    gammaij = e2 / np.sqrt(distij2 + 0.25 * (rhoi + rhoj)**2.)
-                    R=np.sqrt(distij2)
-                    A[i,j] = gammaij
-                    atnoj   = atomj.atno
-                    enuke += ( atomi.Z*atomj.Z*gammaij +  abs(atomi.Z*atomj.Z*(ut.e2/R-gammaij)*getScaleij(atnoi, atnoj, R)) ) / ( atomi.nbf * atomj.nbf )
-        k += 1            
-    t = pt.getWallTime(t0=t,str='For loop')
-    A.setDiagonal(Vdiag) 
-    A.assemblyBegin()
-    enuke =  comm.allreduce(enuke)        
-    if preallocate:
-        nnz =  comm.allreduce(nnz) 
-    A.assemblyEnd()
-    B = A.duplicate(copy=True)
-    B = B + A.transpose() 
-    B.setDiagonal(Vdiag) 
-    t = pt.getWallTime(t0=t,str='Assembly')
-    return  nnz,enuke,B
 
 def getGammaold(comm,basis,maxdist,maxnnz=[0],bandwidth=[0]):
     """
@@ -1060,7 +1065,7 @@ def getEnergy(qmol,opts):
     nocc    = nel/2
     basis   = getBasis(qmol, nbf)
     atomids = getAtomIDs(basis)
-    matcomm = pt.getComm()
+    worldcomm = pt.getComm()
     pt.write("Distance cutoff: {0:5.3f}".format(maxdist))
     pt.write("Number of basis functions  : {0} = Matrix size".format(nbf))
     pt.write("Number of valance electrons: {0}".format(nel))
@@ -1070,7 +1075,7 @@ def getEnergy(qmol,opts):
         maxnnz,bandwidth = pt.getNnzInfo(basis, maxdist)
         t0=t
     stage, t = pt.getStageTime(newstage='T', oldstage=stage,t0=t0)
-    nnz, Enuke, T            = getT(matcomm, basis, maxdist,preallocate=prealloc)
+    nnz, Enuke, T            = getT(worldcomm, basis, maxdist,preallocate=prealloc)
     dennnz = (100. * nnz) / (nbf*nbf) 
     pt.write("Nonzero density percent : {0:6.3f}".format(dennnz))
     writeEnergies(Eref, unit='kcal', enstr='Eref')
@@ -1078,9 +1083,9 @@ def getEnergy(qmol,opts):
     stage, t = pt.getStageTime(newstage='F0', oldstage=stage, t0=t)
     F0    = getF0(atoms, basis, T)
     stage, t = pt.getStageTime(newstage='D0', oldstage=stage ,t0=t)
-    D0     = getD0(matcomm,basis,guess=guess,T=T)
+    D0     = getD0(worldcomm,basis,guess=guess,T=T)
     stage, t = pt.getStageTime(newstage='G', oldstage=stage, t0=t)
-    G     = getG(matcomm,basis)    
+    G     = getG(worldcomm,basis)    
     stage, t = pt.getStageTime(newstage='H', oldstage=stage, t0=t)
     H     = getH(basis,T=G)
     pt.getStageTime(oldstage=stage, t0=t)
