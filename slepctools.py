@@ -158,11 +158,13 @@ def setupEPS(A,B=None,interval=[0]):
 
 def updateEPS(eps,A,B=None,subintervals=[0],local=True, globalupdate=False,):
     """
-    Updates eps object for a new matrix.
-    Currently I need to recreate the eps object.
-    In the ideal case eps can be reused, and 
-    symbolic factorization is not performed if the nnz 
-    structure remains the same.
+    Updates eps object for a new matrix with the same nnz structure
+    as the previous one.
+    No need to call
+        eps.setFromOptions()
+        eps.setUp()
+    If these functions are called additional (unnecessary)
+    1 sym, and 2 num factoizations are performed.
     """
     if local:
         eps.updateKrylovSchurSubcommMats(s=0.0, a=1.0, Au=A, t=1.0, b=1.0, Bu=B, 
@@ -176,8 +178,6 @@ def updateEPS(eps,A,B=None,subintervals=[0],local=True, globalupdate=False,):
         if len(subintervals)>2:
             eps.setKrylovSchurPartitions(len(subintervals)-1)
             eps.setKrylovSchurSubintervals(subintervals)
-    eps.setFromOptions()
-    eps.setUp()
     return eps
 
 def solveEPS(eps,printinfo=False,returnoption=0,checkerror=False,interval=[0],subintervals=[0],nocc=0):
