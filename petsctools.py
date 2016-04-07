@@ -85,6 +85,9 @@ def getStageTime(newstage='',oldstage='',t0=0):
         str1 = oldstage.name + ' time'
         write("{0: <14s}: {1:5.3f} seconds".format(str1,t))
         oldstage.pop()
+    elif newstage=='':
+        str1 = 'Overall'
+        write("{0: <14s}: {1:5.3f} seconds".format(str1,t))    
     if newstage:    
         write("{0:*^30s}".format("Stage "+ newstage))
         newstage = PETSc.Log.Stage(newstage); 

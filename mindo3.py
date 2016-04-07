@@ -245,7 +245,7 @@ def getLocalNnzPerRow(basis,rstart,rend,maxdist2):
         k += 1 
     return dnnz, onnz, jmax
 
-def getT(comm,basis,maxdist,preallocate=False):
+def getT(comm,basis,maxdist):
     """
     Computes a matrix for the two-center two-electron integrals.
     Assumes spherical symmetry, no dependence on basis function, only atom types.
@@ -258,28 +258,23 @@ def getT(comm,basis,maxdist,preallocate=False):
     """
     t            = pt.getWallTime()
     nbf          = len(basis)
-    nnz          = nbf*nbf
     maxdist2     = maxdist * maxdist * ut.ang2bohr * ut.ang2bohr    
     bohr2ang2    = ut.bohr2ang**2.
     e2           = ut.e2
-    k            = 0   
-    enuke        = 0.0
     rstart, rend = pt.distributeN(comm, nbf)
     localsize    = rend - rstart
-    t            = pt.getWallTime(t0=t,str='Initial')
+    enuke        = 0.0
+    k            = 0   
+    t            = pt.getWallTime(t0=t,str='Initialize')
     A            = pt.createMat(comm=comm)
     A.setType('aij')
     A.setSizes([(localsize,nbf),(localsize,nbf)]) 
-    t = pt.getWallTime(t0=t,str='MatSetSizes')
-    if preallocate:
-        dnnz,onnz,jmax = getLocalNnzPerRow(basis,rstart,rend,maxdist2)
-        nnz            = sum(dnnz) + sum(onnz)
-        t              = pt.getWallTime(t0=t,str='Local nnz')
-        A.setPreallocationNNZ((dnnz,onnz)) 
-    else:
-        A.setPreallocationNNZ([nbf,nbf])
-        jmax           = np.array([nbf-1]*localsize)
-    t = pt.getWallTime(t0=t,str='Prealloc')
+    t = pt.getWallTime(t0=t,str='Create Mat')
+    dnnz,onnz,jmax = getLocalNnzPerRow(basis,rstart,rend,maxdist2)
+    nnz            = sum(dnnz) + sum(onnz)
+    t              = pt.getWallTime(t0=t,str='Count nnz')
+    A.setPreallocationNNZ((dnnz,onnz)) 
+    t = pt.getWallTime(t0=t,str='Preallocate')
     for i in xrange(rstart,rend):
         atomi   = basis[i].atom
         atnoi   = atomi.atno
@@ -315,16 +310,16 @@ def getT(comm,basis,maxdist,preallocate=False):
         A.setValues(i,cols[0:n],vals[0:n],addv=pt.INSERT)
         k += 1            
     t = pt.getWallTime(t0=t,str='For loop')
-    A.assemblyBegin()
+    A.assemble()
+    t = pt.getWallTime(t0=t,str='Assemble mat')
     #enuke =  comm.allreduce(enuke)
     enuke = pt.getCommSum(comm, enuke)
-    if preallocate:
-        #nnz =  comm.allreduce(nnz) 
-        nnz =  pt.getCommSum(comm, nnz, integer=True) 
-    A.assemblyEnd()
+    #nnz =  comm.allreduce(nnz) 
+    nnz =  pt.getCommSum(comm, nnz, integer=True) 
+    t = pt.getWallTime(t0=t,str='Reductions')
     B = A.duplicate(copy=True)
     B = B + A.transpose() 
-    t = pt.getWallTime(t0=t,str='Assembly')
+    t = pt.getWallTime(t0=t,str='Add transpose')
     A.destroy()
     return  nnz,enuke, B
 
@@ -1076,7 +1071,7 @@ def getEnergy(qmol,opts):
         maxnnz,bandwidth = pt.getNnzInfo(basis, maxdist)
         t0=t
     stage, t = pt.getStageTime(newstage='T', oldstage=stage,t0=t0)
-    nnz, Enuke, T            = getT(worldcomm, basis, maxdist,preallocate=prealloc)
+    nnz, Enuke, T            = getT(worldcomm, basis, maxdist)
     dennnz = (100. * nnz) / (nbf*nbf) 
     pt.write("Nonzero density percent : {0:6.3f}".format(dennnz))
     writeEnergies(Eref, unit='kcal', enstr='Eref')
