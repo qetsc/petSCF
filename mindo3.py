@@ -298,6 +298,7 @@ def getT(comm,basis,maxdist,preallocate=False):
                 #A[i,j] = gammaii
                 cols[n] = j
                 vals[n] = gammaii
+                n += 1 
             else:                        
                 distij2 = atomi.dist2(atomj) # (in bohr squared) * bohr2ang2
                 if distij2 < maxdist2:
@@ -310,8 +311,8 @@ def getT(comm,basis,maxdist,preallocate=False):
                     vals[n] = gammaij
                     atnoj   = atomj.atno
                     enuke  += ( atomi.Z*atomj.Z*gammaij +  abs(atomi.Z*atomj.Z*(ut.e2/R-gammaij)*getScaleij(atnoi, atnoj, R)) ) / ( atomi.nbf * atomj.nbf )
-            n += 1        
-        A.setValues(i,cols,vals,addv=pt.INSERT)
+                    n += 1        
+        A.setValues(i,cols[0:n],vals[0:n],addv=pt.INSERT)
         k += 1            
     t = pt.getWallTime(t0=t,str='For loop')
     A.assemblyBegin()
