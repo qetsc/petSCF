@@ -800,36 +800,36 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
         t0 = pt.getWallTime()
 
         if k==1:
-            stage = pt.getStage(stagename='F',oldstage=stage)
+            stage, t = pt.getStageTime(newstage='F',oldstage=stage, t0=t0)
             Ftmp = getF(atomids, D, F0, T, G, H)
             Ftmp = F0 + Ftmp
             F = Ftmp.copy(F,None)
             Eold = Eel
-            stage = pt.getStage(stagename='Trace',oldstage=stage)
+            stage, t = pt.getStageTime(newstage='Trace',oldstage=stage, t0=t)
             if guess==0:
                 Eel  = 0.5 * pt.getTraceProductDiag(D,F0+F)
             else:
                 Eel  = 0.5 * pt.getTraceProductAIJ(D, F0+F)
-            stage = pt.getStage(stagename='SetupEPS',oldstage=stage)    
+            stage, t = pt.getStageTime(newstage='SetupEPS',oldstage=stage, t0=t)    
             eps = st.setupEPS(F, B=None,interval=interval)  
-            stage = pt.getStage(stagename='SolveEPS',oldstage=stage)
+            stage, t = pt.getStageTime(newstage='SolveEPS',oldstage=stage, t0=t)
             eps, nconv, eigarray = st.solveEPS(eps,returnoption=1,nocc=nocc)
         else:
             Eold = Eel
-            stage = pt.getStage(stagename='F',oldstage=stage)
+            stage, t = pt.getStageTime(newstage='F',oldstage=stage, t0=t)
             if local:
                 Ftmp = getF(atomids, D, F0loc, Tloc, Gloc, Hloc)
                 Ftmp = F0loc + Ftmp
                 Floc = Ftmp.copy(Floc,None)
-                stage = pt.getStage(stagename='Trace',oldstage=stage)            
+                stage, t = pt.getStageTime(newstage='Trace',oldstage=stage, t0=t)            
                 Eel  = 0.5 * pt.getTraceProductAIJ(D, F0loc+Floc)
             else:
                 Ftmp = getF(atomids, D, F0, T, G, H)
                 Ftmp = F0 + Ftmp
                 F = Ftmp.copy(F,None)
-                stage = pt.getStage(stagename='Trace',oldstage=stage)            
+                stage, t = pt.getStageTime(newstage='Trace',oldstage=stage, t0=t)            
                 Eel  = 0.5 * pt.getTraceProductAIJ(D, F0+F)
-            stage = pt.getStage(stagename='UpdateEPS',oldstage=stage)            
+            stage, t = pt.getStageTime(newstage='UpdateEPS',oldstage=stage, t0=t)            
             subint =interval
             if staticsubint==1:
                 nsubint=st.getNumberOfSubIntervals(eps)
@@ -841,7 +841,7 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
                 eps = st.updateEPS(eps,Floc,subintervals=subint,local=local)
             else:
                 eps = st.updateEPS(eps,F,subintervals=subint,local=local)                
-            stage = pt.getStage(stagename='SolveEPS',oldstage=stage)
+            stage,t = pt.getStageTime(newstage='SolveEPS',oldstage=stage, t0=t)
             eps, nconv, eigarray = st.solveEPS(eps,returnoption=1,nocc=nocc)         
         
         if (len(eigarray)>nocc):
@@ -852,7 +852,7 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
             writeEnergies(lumo,unit='ev',enstr='LUMO')
             writeEnergies(gap,unit='ev',enstr='Gap')
         writeEnergies(Eel, unit='ev', enstr='Eel')
-        stage = pt.getStage(stagename='Density', oldstage=stage)
+        stage, t = pt.getStageTime(newstage='Density', oldstage=stage, t0=t)
         nden = nocc
         if nconv < nocc: 
             nden = nconv
