@@ -5,7 +5,11 @@ from mpi4py import MPI
 
 write  = PETSc.Sys.Print
 INSERT = PETSc.InsertMode.INSERT
+
 import numpy as np
+
+def getOptions():
+    return PETSc.Options()
 
 def getComm():
     return MPI.COMM_WORLD
