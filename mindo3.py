@@ -195,6 +195,14 @@ def getNuclearEnergy(comm,atoms,maxdist):
     return pt.getCommSum(comm,Enuc)   
 
 def getNuclearEnergyFull(comm,atoms):
+    """
+    Computes nuclear energy as defined in MINDO/3 method.
+    Calls getEnukeij
+    TODO:
+    Rewrite with Cython at least getEnukeij function
+    There should be very efficient tecniques for this calculation, since
+    it is standard in all atomic simulations.
+    """
     Np=comm.size
     Na=len(atoms)
     rank=comm.rank
@@ -997,6 +1005,7 @@ def getEnergy(qmol,opts):
     checknnz    = opts.getBool('checknnz',False) 
     prealloc    = opts.getBool('prealloc',True) 
     pyquante    = opts.getBool('pyquante',False) #TODO get Pyquante energy for testing
+    nuke        = opts.getBool('nuke',False) 
     from PyQuante.MINDO3 import initialize
     qmol  = initialize(qmol)
     pt.getWallTime(t0,str="MINDO3 initialization")
@@ -1025,9 +1034,12 @@ def getEnergy(qmol,opts):
     nnz, Enuc, T            = getT(worldcomm, basis, maxdist)
     dennnz = (100. * nnz) / (nbf*nbf) 
     pt.write("Nonzero density percent : {0:6.3f}".format(dennnz))
+    if nuke:
+            stage, t = pt.getStageTime(newstage='Nuclear', oldstage=stage,t0=t0)
+            Enukefull                = getNuclearEnergyFull(worldcomm, atoms)   
+            writeEnergies(Enukefull, unit='ev', enstr='Enucfull')
     writeEnergies(Eref, unit='kcal', enstr='Eref')
-    writeEnergies(Enuc, unit='ev', enstr='Enuc')
-    writeEnergies(Enukefull, unit='ev', enstr='Enucfull')
+    writeEnergies(Enuc, unit='ev', enstr='Enuc')        
     stage, t = pt.getStageTime(newstage='F0', oldstage=stage, t0=t)
     F0    = getF0(atoms, basis, T)
     stage, t = pt.getStageTime(newstage='D0', oldstage=stage ,t0=t)
@@ -1046,18 +1058,19 @@ def getEnergy(qmol,opts):
     else:    
         pt.getWallTime(t0,str="No convergence")
     Etot   = Eelec + Enuc
-    Etotfull   = Eelec + Enukefull
     Efinal = Etot*ut.ev2kcal+Eref
-    Efinalfull = Etotfull*ut.ev2kcal+Eref
     writeEnergies(Eref, unit='kcal', enstr='Eref')
     writeEnergies(Enuc, 'ev', 'Enuc')
-    writeEnergies(Enukefull, 'ev', 'Enucfull')
     writeEnergies(Eelec, unit='ev', enstr='Eel')
     writeEnergies(homo,unit='ev',enstr='HOMO')
     writeEnergies(lumo,unit='ev',enstr='LUMO')
     writeEnergies(gap,unit='ev',enstr='Gap')
     writeEnergies(Etot,unit='ev',enstr='Enuc+Eelec')
-    writeEnergies(Etotfull,unit='ev',enstr='Enucfull+Eelec')
     writeEnergies(Efinal, unit= 'kcal', enstr='Eref+Enuc+Eelec')
-    writeEnergies(Efinalfull, unit= 'kcal', enstr='Eref+Enucfull+Eelec')
+    if nuke:
+        Etotfull   = Eelec + Enukefull
+        Efinalfull = Etotfull*ut.ev2kcal+Eref
+        writeEnergies(Enukefull, 'ev', 'Enucfull')
+        writeEnergies(Etotfull,unit='ev',enstr='Enucfull+Eelec')
+        writeEnergies(Efinalfull, unit= 'kcal', enstr='Eref+Enucfull+Eelec')
     return Efinal
