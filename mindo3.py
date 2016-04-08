@@ -790,7 +790,8 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
             subint =interval
             if staticsubint==1:
                 nsubint=st.getNumberOfSubIntervals(eps)
-                subint = st.getSubIntervals(eigarray[0:nocc],nsubint,interval=interval) 
+                subint = st.getSubIntervals(eigarray[0:nocc],nsubint,interval=interval)
+                pt.write(subint) 
             elif staticsubint==2:
                 nsubint=st.getNumberOfSubIntervals(eps)
                 subint = st.getSubIntervals(eigarray[0:nocc],nsubint)
@@ -1028,8 +1029,6 @@ def getEnergy(qmol,opts):
         stage,t = pt.getStageTime(newstage='Nonzero info', oldstage=stage,t0=t0)
         maxnnz,bandwidth = pt.getNnzInfo(basis, maxdist)
         t0=t
-    stage, t = pt.getStageTime(newstage='Nuclear', oldstage=stage,t0=t0)
-    Enukefull                = getNuclearEnergyFull(worldcomm, atoms)
     stage, t = pt.getStageTime(newstage='T', oldstage=stage,t0=t0)
     nnz, Enuc, T            = getT(worldcomm, basis, maxdist)
     dennnz = (100. * nnz) / (nbf*nbf) 
