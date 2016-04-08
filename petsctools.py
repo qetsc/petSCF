@@ -368,6 +368,59 @@ def getLocalNnzPerRow(basis,rstart,rend,maxdist2):
                 onnz[i] += 2
     return dnnz,onnz
 
+def getLocalNnzInfoSym(basis,rstart,rend,maxdist2):
+    """
+    Returns an array containing local number of nonzeros per row based on distance between atoms.
+    Size depends on the number of rows per process.
+    Locality is based on a temporarily created AIJ matrix. Is there a better way?
+    I am not  sure if this is needed, I could do this for all processes since I only need to create a vector of size nbf
+    """
+    nbf=len(basis)
+    dnnz=np.ones(rend-rstart,dtype='int32')
+    onnz=np.zeros(rend-rstart,dtype='int32')
+    
+    for i in xrange(rstart,rend):
+        atomi=basis[i].atom
+        for j in xrange(i+1,rend):
+            distij2=atomi.dist2(basis[j].atom)
+            if distij2 < maxdist2: 
+                dnnz[i] += 1
+        for j in xrange(rend,nbf):
+            distij2=atomi.dist2(basis[j].atom)
+            if distij2 < maxdist2: 
+                onnz[i] += 1
+        pt.write(dnnz[i],onnz[i])        
+    return dnnz,onnz
+
+def getLocalNnzInfo(basis,rstart,rend,maxdist2):
+    """
+    Returns three arrays that contains: 
+    dnnz: local numbers of nonzseros per row in diagonal blocks (square) 
+    onnz: local numbers of nonzeros per row in off-diagonal blocks (rectangular)
+    jmax: max column index that contains a nonzero.
+    Nonzeros are based on distance between atoms.
+    TODO: Exploit symmetry, not sure how to do that.
+    """
+    nbf=len(basis)
+    localsize=rend-rstart
+    dnnz=np.zeros(localsize,dtype='int32')
+    onnz=np.zeros(localsize,dtype='int32')
+    jmax=np.zeros(localsize,dtype='int32')
+    k=0
+    for i in xrange(rstart,rend):
+        atomi=basis[i].atom
+        for j in xrange(nbf):
+            distij2=atomi.dist2(basis[j].atom)
+            if distij2 < maxdist2:
+                if j >= rstart and j < rend: 
+                    dnnz[k] += 1
+                else:
+                    onnz[k] += 1
+                if j > jmax[k]:
+                    jmax[k] = j 
+        k += 1 
+    return dnnz, onnz, jmax
+
 def getNnzVec(basis,maxdist):
     """
     Returns number of nonzeros per row based on distance between atoms.

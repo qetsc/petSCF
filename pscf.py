@@ -25,6 +25,7 @@ sample options_qetsc:
 -eps_interval 1,10
 -eps_tol  1.e-8
 -eps_krylovschur_detect_zeros TRUE
+-eps_view_values ascii:eigs.txt #writes eigenvalues to a file (overwrites if there are many iterations)
 """
 import sys
 import petsctools as pt
