@@ -253,9 +253,11 @@ def getT(comm,basis,maxdist):
     k            = 0   
     t            = pt.getWallTime(t0=t,str='Initialize')
     A            = pt.createMat(comm=comm)
-    A.setType('aij')
-    A.setSizes([(localsize,nbf),(localsize,nbf)]) 
     t = pt.getWallTime(t0=t,str='Create Mat')
+    A.setType('aij')
+    t = pt.getWallTime(t0=t,str='Set Type')
+    A.setSizes([(localsize,nbf),(localsize,nbf)])
+    t = pt.getWallTime(t0=t,str='Set Sizes') 
     dnnz,onnz,jmax = pt.getLocalNnzInfo(basis,rstart,rend,maxdist2)
     nnz            = sum(dnnz) + sum(onnz)
     t              = pt.getWallTime(t0=t,str='Count nnz')
@@ -617,10 +619,15 @@ def getF(atomids, D, F0, T, G, H):
     """
     Density matrix dependent terms of the Fock matrix
     """
+    t            = pt.getWallTime()
     diagD = pt.convert2SeqVec(D.getDiagonal()) 
+    t = pt.getWallTime(t0=t,str='Diag D')
     A     = T.duplicate()
+    t = pt.getWallTime(t0=t,str='Mat duplicate')    
     A.setUp()
+    t = pt.getWallTime(t0=t,str='Mat setup')    
     rstart, rend = A.getOwnershipRange()
+    t = pt.getWallTime(t0=t,str='Ownership')
     for i in xrange(rstart,rend):
         atomi        = atomids[i]
         colsT, valsT = T.getRow(i)
@@ -658,7 +665,9 @@ def getF(atomids, D, F0, T, G, H):
         #A[i,i] = tmpii
         valsF[kdiag] = tmpii
         A.setValues(i,colsT,valsF,addv=pt.INSERT)        
+    t = pt.getWallTime(t0=t,str='For loop')        
     A.assemble()
+    t = pt.getWallTime(t0=t,str='Mat assemble')    
     return A
 
 def getFDseq(atomids, Dseq, F0, T, G, H):
@@ -791,7 +800,6 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
             if staticsubint==1:
                 nsubint=st.getNumberOfSubIntervals(eps)
                 subint = st.getSubIntervals(eigarray[0:nocc],nsubint,interval=interval)
-                pt.write(subint) 
             elif staticsubint==2:
                 nsubint=st.getNumberOfSubIntervals(eps)
                 subint = st.getSubIntervals(eigarray[0:nocc],nsubint)
@@ -1009,7 +1017,7 @@ def getEnergy(qmol,opts):
     nuke        = opts.getBool('nuke',False) 
     from PyQuante.MINDO3 import initialize
     qmol  = initialize(qmol)
-    pt.getWallTime(t0,str="MINDO3 initialization")
+    pt.getWallTime(t0,str="PyQuante initialization")
     if pyquante:
         from PyQuante.MINDO3 import scf as pyquantescf
         pyquantescf(qmol)
