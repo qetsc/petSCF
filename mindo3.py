@@ -620,8 +620,10 @@ def getF(atomids, D, F0, T, G, H):
     Density matrix dependent terms of the Fock matrix
     """
     t            = pt.getWallTime()
-    diagD = pt.convert2SeqVec(D.getDiagonal()) 
+    diagD = D.getDiagonal()
     t = pt.getWallTime(t0=t,str='Diag D')
+    diagD = pt.convert2SeqVec(diagD) 
+    t = pt.getWallTime(t0=t,str='Scatter Diag D')
     A     = T.duplicate()
     t = pt.getWallTime(t0=t,str='Mat duplicate')    
     A.setUp()
@@ -641,12 +643,12 @@ def getF(atomids, D, F0, T, G, H):
         for j in colsT:
             atomj=atomids[j]
             if i != j:
-                tmpij = 0
+                #tmpij = 0.
                 Djj   = diagD[j] # D[j,j]
                 if len(valsD)>1:
                     Dij    = valsD[k]
                 else:
-                    Dij    = 0
+                    Dij    = 0.
                 Tij   = valsT[k]
                 if atomj  == atomi:
                     idxG   = np.where(colsG==j)
@@ -827,13 +829,15 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
         else:    
             D = st.getDensityMatrix(eps,T, nden)
         if k==1 and local: 
+            stage, t = pt.getStageTime(newstage='Redundant mat', oldstage=stage, t0=t)
             matcomm = D.getComm()
             F0loc = pt.getRedundantMat(F0, nslices, matcomm, out=F0loc)
             Floc  = pt.getRedundantMat( F, nslices, matcomm, out=Floc)
             Tloc  = pt.getRedundantMat( T, nslices, matcomm, out=Tloc)
             Gloc  = pt.getRedundantMat( G, nslices, matcomm, out=Gloc)
             Hloc  = pt.getRedundantMat( H, nslices, matcomm, out=Hloc)
-        elif  npmat < np:   
+        elif  npmat < np:
+            stage, t = pt.getStageTime(newstage='Seq D', oldstage=stage, t0=t)   
             D = pt.getSeqMat(D)
         pt.getWallTime(t0,str='Iteration')
         if abs(Eel-Eold) < scfthresh and nconv >= nocc:
