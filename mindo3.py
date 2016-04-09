@@ -1021,10 +1021,10 @@ def getEnergy(qmol,opts):
     nuke        = opts.getBool('nuke',False) 
     from PyQuante.MINDO3 import initialize
     qmol  = initialize(qmol)
-    pt.getWallTime(t0,str="PyQuante initialization")
+    t           = pt.getWallTime(t0=t0,str='PyQuante initialization')
     if pyquante:
         from PyQuante.MINDO3 import scf as pyquantescf
-        pyquantescf(qmol)
+        pyquantescf(qmol)   
     atoms   = qmol.atoms
     Eref    = getEref(qmol)
     nbf     = getNbasis(qmol)    
@@ -1037,10 +1037,7 @@ def getEnergy(qmol,opts):
     pt.write("Number of basis functions  : {0} = Matrix size".format(nbf))
     pt.write("Number of valance electrons: {0}".format(nel))
     pt.write("Number of occupied orbitals: {0} = Number of required eigenvalues".format(nocc))
-    if checknnz:
-        stage,t = pt.getStageTime(newstage='Nonzero info', oldstage=stage,t0=t0)
-        maxnnz,bandwidth = pt.getNnzInfo(basis, maxdist)
-        t0=t
+    t           = pt.getWallTime(t0=t,str='Basis set')
     stage, t = pt.getStageTime(newstage='T', oldstage=stage,t0=t0)
     nnz, Enuc, T            = getT(worldcomm, basis, maxdist)
     dennnz = (100. * nnz) / (nbf*nbf) 
