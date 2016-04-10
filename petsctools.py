@@ -8,6 +8,13 @@ INSERT = PETSc.InsertMode.INSERT
 
 import numpy as np
 
+def sync(comm=None):
+    if comm:
+        comm.Barrier()
+    else:    
+        MPI.COMM_WORLD.Barrier()
+    return    
+
 def getOptions():
     return PETSc.Options()
 

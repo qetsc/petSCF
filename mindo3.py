@@ -252,6 +252,8 @@ def getT(comm,basis,maxdist):
     Enuc        = 0.0
     k            = 0   
     t            = pt.getWallTime(t0=t,str='Initialize')
+    pt.sync()
+    t            = pt.getWallTime(t0=t,str='Barrier')
     A            = pt.createMat(comm=comm)
     t = pt.getWallTime(t0=t,str='Create Mat')
     A.setType('aij')
