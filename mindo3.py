@@ -1035,6 +1035,8 @@ def getEnergy(qmol,opts):
     basis   = getBasis(qmol, nbf)
     atomids = getAtomIDs(basis)
     worldcomm = pt.getComm()
+    pt.sync()
+    t            = pt.getWallTime(t0=t,str='Barrier')
     pt.write("Distance cutoff: {0:5.3f}".format(maxdist))
     pt.write("Number of basis functions  : {0} = Matrix size".format(nbf))
     pt.write("Number of valance electrons: {0}".format(nel))

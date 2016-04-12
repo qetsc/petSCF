@@ -61,6 +61,8 @@ def main():
     comm = pt.getComm()
     pt.write("Number of MPI ranks: {0}".format(comm.size))
     pt.write("Number of subintervals: {0}".format(nsubint))
+    pt.sync()
+    t            = pt.getWallTime(t0=t0,str='Barrier')
     qmol=None
     if mol:
         import PyQuante.Molecule 
@@ -110,6 +112,8 @@ def main():
     if qmol:
         pt.write("Number of atoms: %i" % (len(qmol.atoms)))
         pt.write("Number of electrons: %i" % (qmol.get_nel()))
+        pt.sync()
+        t            = pt.getWallTime(t0=t,str='Barrier')
         if method == "sparsity":
             import PyQuante.MINDO3
             stage = pt.getStage(stagename='Initialize',oldstage=stage)
