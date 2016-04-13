@@ -59,7 +59,9 @@ def main():
     scfthresh   = opts.getReal('scfthresh',1.e-5)
     checkenergy = opts.getReal('checkenergy',0) #
     comm = pt.getComm()
-    pt.write("Number of MPI ranks: {0}".format(comm.size))
+    nrank = comm.size
+    rank  = comm.rank
+    pt.write("Number of MPI ranks: {0}".format(nrank))
     pt.write("Number of subintervals: {0}".format(nsubint))
     pt.sync()
     t            = pt.getWallTime(t0=t0,str='Barrier')
@@ -90,9 +92,13 @@ def main():
     elif os.path.isfile(xyzfile):
         pt.write('xyz file:{0}'.format(xyzfile))
         if sort > 0:
-            t0          = pt.getWallTime() 
-            xyz         = xt.readXYZ(xyzfile)
-            sortedxyz   = xt.sortXYZ(xyz)
+            t0          = pt.getWallTime()
+            if rank == 0: 
+                xyz         = xt.readXYZ(xyzfile)
+                sortedxyz   = xt.sortXYZ(xyz)
+            else:
+                sortedxyz = None  
+            sortedxyz = comm.bcast(sortedxyz,root=0)     
             pt.getWallTime(t0,str='Sorted xyz in')
             if writeXYZ: 
                 sortedfile  = xt.writeXYZ(sortedxyz)
