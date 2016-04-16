@@ -31,8 +31,10 @@ import sys
 import petsctools as pt
 import slepctools as st
 import xyztools as xt
+import pyquantetools as qt
 import os.path
-
+from mindo3 import runMindo3
+from hf import runHF
 def main():
     pt.write("{0:*^72s}".format("  PSCF  "))
     host        = pt.getHostName()
@@ -44,41 +46,32 @@ def main():
     opts        = pt.getOptions()
     mol         = opts.getString('mol','')
     xyzfile     = opts.getString('xyz','')
-    maxdist     = opts.getReal('maxdist', 1.e6)
-    maxiter     = opts.getInt('maxiter', 30)
-    analysis    = opts.getInt('analysis', 0)
     solve       = opts.getInt('solve', 0)
-    maxnnz      = opts.getInt('maxnnz', 0)
-    guess       = opts.getInt('guess', 0)
-    bandwidth   = opts.getInt('bw', 0)
     sort        = opts.getInt('sort', 0)
     nsubint     = opts.getInt('eps_krylovschur_partitions', 1)
     method      = opts.getString('method','mindo3').lower()
-    pyquante    = opts.getBool('pyquante',False)
     writeXYZ    = opts.getBool('writeXYZ',False)
-    scfthresh   = opts.getReal('scfthresh',1.e-5)
-    checkenergy = opts.getReal('checkenergy',0) #
+    sync        = opts.getBool('sync',False)
     comm = pt.getComm()
     nrank = comm.size
     rank  = comm.rank
     pt.write("Number of MPI ranks: {0}".format(nrank))
     pt.write("Number of subintervals: {0}".format(nsubint))
-    pt.sync()
-    t            = pt.getWallTime(t0=t0,str='Barrier')
+    if sync: 
+        pt.sync()
+        t = pt.getWallTime(t0=t0,str='Barrier')
     qmol=None
     if mol:
-        import PyQuante.Molecule 
         pt.write('xyz from mol input:{0}'.format(mol))  
-        qmol=PyQuante.Molecule(mol)
+        qmol=qt.getMol(mol)
     elif method == 'file':
-        from os.path import isfile
         fA = opts.getString('fA','')
         fB = opts.getString('fB','')
-        if isfile(fA):
+        if os.path.isfile(fA):
             pt.write('Matrix A from file:{0}'.format(fA))
             stage = pt.getStage(stagename='Load Mat',oldstage=stage)
             A  = pt.getMatFromFile(fA,comm=comm)
-            if isfile(fB):
+            if os.path.isfile(fB):
                 pt.write('Matrix B from file:{0}'.format(fB))
                 B  = pt.getMatFromFile(fB,comm=comm)
                 stage = pt.getStage(stagename='Solve',oldstage=stage)
@@ -103,14 +96,13 @@ def main():
             if writeXYZ: 
                 sortedfile  = xt.writeXYZ(sortedxyz)
                 pt.write('sorted xyz file:{0}'.format(sortedfile))
-            qmol        = xt.xyz2PyQuanteMol(sortedxyz)
+            qmol        = qt.xyz2PyQuanteMol(sortedxyz)
         else:   
-            qmol        = xt.xyzFile2PyQuanteMol(xyzfile)
+            qmol        = qt.xyzFile2PyQuanteMol(xyzfile)
     else:
         pt.write("{0} not found".format(xyzfile))
         pt.write("A chain of atoms will be used.")
         N       = opts.getInt('N', 4)
-        c       = opts.getInt('c', 3)
         Z       = opts.getInt('Z', 8)
         dist    = opts.getReal('d', 0.712) 
         qmol    = xt.getChainMol(N=N, Z=Z, d=dist)
@@ -118,44 +110,30 @@ def main():
     if qmol:
         pt.write("Number of atoms: %i" % (len(qmol.atoms)))
         pt.write("Number of electrons: %i" % (qmol.get_nel()))
-        pt.sync()
-        t            = pt.getWallTime(t0=t,str='Barrier')
-        if method == "sparsity":
-            import PyQuante.MINDO3
-            stage = pt.getStage(stagename='Initialize',oldstage=stage)
-            qmol  = PyQuante.MINDO3.initialize(qmol)
-            nbf   = getNBF(qmol)    
-            basis = getBasis(qmol, nbf)
-            stage = pt.getStage(stagename='distCSR',oldstage=stage)
-            BCSR  = getDistCSR(basis, nbf,maxdist=maxdist)
-            stage = pt.getStage(stagename='getSparsityInfo',oldstage=stage)
-            pt.getSparsityInfo(BCSR, nbf, maxdensity)
-            stage.pop()
-    
-        elif method.startswith('hf'):
-            from hf import getEnergy
-            finalenergy = getEnergy(qmol,opts)
-            if checkenergy:
-                energydiff = abs(finalenergy-checkenergy)
-                if energydiff < scfthresh:
-                    pt.write("Passed final energy test with difference (kcal/mol): {0:20.10f}".format(energydiff))
-                else:
-                    pt.write("Failed final energy test with difference (kcal/mol): {0:20.10f}".format(energydiff))
-        elif method.startswith('mindo3'):
+        if sync: 
+            pt.sync()
+            t = pt.getWallTime(t0=t,str='Barrier')
+        if method.startswith('hf'):
             t1 = pt.getWallTime()
-            from mindo3 import getEnergy
-            stage.pop()
-            finalenergy = getEnergy(qmol,opts)
-            if checkenergy:
-                energydiff = abs(finalenergy-checkenergy)
-                if energydiff < scfthresh:
-                    pt.write("Passed final energy test with difference (kcal/mol): {0:20.10f}".format(energydiff))
-                else:
-                    pt.write("Failed final energy test with difference (kcal/mol): {0:20.10f}".format(energydiff))
+            stage.pop()        
+            runHF(qmol,opts)
             pt.getWallTime(t1,'MINDO3')
+        elif method.startswith('mindo'):
+            t = pt.getWallTime()
+            qmol = qt.initializeMindo3(qmol)
+            if sync: 
+                pt.sync()
+                t = pt.getWallTime(t0=t,str='Barrier')
+            t = pt.getWallTime(t,'Initialization')            
+            stage.pop()        
+            runMindo3(qmol,opts)
+            pt.getWallTime(t,'MINDO3')
         else:
             pt.write("No valid method specified")
     pt.getWallTime(t0, str="PSCF")
+    if sync: 
+        pt.sync()
+        pt.getWallTime(t0,str='Barrier')    
 if __name__ == '__main__':
     main()
 

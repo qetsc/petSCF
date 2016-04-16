@@ -269,7 +269,7 @@ def rhf(opts,nocc,basis,S,F0):
             return converged, Eel, gap
     return converged, Eel, gap
 
-def getEnergy(mol,opts=None):
+def runHF(mol,opts=None):
     stage       = pt.getStage(stagename='Hartree-Fock')
     t0          = pt.getWallTime()
     maxdist     = opts.getReal('maxdist', 1.e6)
@@ -293,4 +293,4 @@ def getEnergy(mol,opts=None):
     Print("Eelec+Enuc       = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(Etot*const.ev2kcal,Etot,Etot*const.ev2hartree))
     Print("Gap              = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(gap*const.ev2kcal,gap,gap*const.ev2hartree))
     pt.getWallTime(t0,str="SCF finished in")
-    return Etot
+    return

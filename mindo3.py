@@ -173,8 +173,6 @@ def getNuclearEnergy(comm,atoms,maxdist):
     Nc=Na/Np
     remainder=Na%Np
     maxdist2 = maxdist * maxdist * ut.ang2bohr * ut.ang2bohr
-    bohr2ang2 = ut.bohr2ang * ut.bohr2ang
-    e2        = ut.e2
     Enuc = 0
     for i in xrange(Nc):
         atomi = atoms[rank*Nc+i]
@@ -191,7 +189,6 @@ def getNuclearEnergy(comm,atoms,maxdist):
             if distij2 < maxdist2:
                 Enuc += getEnukeij(atomi, atomj, distij2)   
 
-#    return comm.allreduce(Enuc)   
     return pt.getCommSum(comm,Enuc)   
 
 def getNuclearEnergyFull(comm,atoms):
@@ -208,8 +205,6 @@ def getNuclearEnergyFull(comm,atoms):
     rank=comm.rank
     Nc=Na/Np
     remainder=Na%Np
-    bohr2ang2 = ut.bohr2ang * ut.bohr2ang
-    e2        = ut.e2
     Enuc = 0
     for i in xrange(Nc):
         atomi = atoms[rank*Nc+i]
@@ -224,7 +219,6 @@ def getNuclearEnergyFull(comm,atoms):
             distij2 = atomi.dist2(atomj) # (in bohr squared) * bohr2ang2
             Enuc += getEnukeij(atomi, atomj, distij2)   
 
-#    return comm.allreduce(Enuc)   
     return pt.getCommSum(comm,Enuc)   
 
 def getT(comm,basis,maxdist):
@@ -385,88 +379,6 @@ def getTold(comm,basis,maxdist,preallocate=False):
     t = pt.getWallTime(t0=t,str='Assembly')
     A.destroy()
     return  nnz,Enuc, B
-
-def getGammaold(comm,basis,maxdist,maxnnz=[0],bandwidth=[0]):
-    """
-    Computes MINDO3 nuclear repulsion energy and gamma matrix
-    Nuclear repulsion energy: Based on PyQuante MINDO3 get_enuke(atoms)
-    Gamma matrix: Based on PyQuante MINDO3 get_gamma(atomi,atomj)
-    "Coulomb repulsion that goes to the proper limit at R=0"
-    Corresponds to two-center two-electron integrals
-    Assumes spherical symmetry, no dependence on basis function, only atom types.
-    Parametrized for pairs of atoms. (Two-atom parameters)
-    maxnnz: max number of nonzeros per row. If it is given performance might improve    
-    Gamma matrix also determines the nonzero structure of the Fock matrix.
-    TODO:
-    Values are indeed based on atoms, not basis functions, so possible to improve performance by nbf/natom.
-    Better to preallocate based on diagonal and offdiagonal nonzeros.
-    Cythonize
-    """
-    import constants as const
-
-    nbf      = len(basis)
-    maxdist2 = maxdist * maxdist
-    Enuc=0.0
-    A        = pt.createMat(comm=comm)
-    A.setType('aij') #'sbaij'
-    A.setSizes([nbf,nbf]) 
-    if any(maxnnz): 
-        A.setPreallocationNNZ(maxnnz) 
-    else:
-        A.setPreallocationNNZ(nbf)
-    A.setUp()
-    A.setOption(A.Option.NEW_NONZERO_ALLOCATION_ERR,False)
-    rstart, rend = A.getOwnershipRange()
-    nnz = 0
-    mindist = 1.E-5 # just to see same atom or not
-    if any(bandwidth):
-        if len(bandwidth)==1: bandwidth=np.array([bandwidth]*nbf)
-        for i in xrange(rstart,rend):
-            atomi=basis[i].atom
-            gammaii= PyQuante.MINDO3_Parameters.f03[atomi.atno]
-            A[i,i] = gammaii
-            for j in xrange(i+1,min(i+bandwidth[i],nbf)):
-                atomj = basis[j].atom
-                if atomi == atomj:
-                    A[i,j] = gammaii
-                    A[j,i] = gammaii
-                    nnz += 1
-                else:                        
-                    distij2 = atomi.dist2(atomj) * ut.bohr2ang**2.
-                    if distij2 < maxdist2: 
-                        gammaij=ut.e2/np.sqrt(distij2+0.25*(atomi.rho+atomj.rho)**2.)
-                        R=np.sqrt(distij2)
-                        scale = PyQuante.MINDO3.get_scale(atomi.atno,atomj.atno,R)
-                        Enuc += ( atomi.Z*atomj.Z*gammaij +  abs(atomi.Z*atomj.Z*(ut.e2/R-gammaij)*scale) ) / ( atomi.nbf *atomj.nbf )
-                        A[i,j] = gammaij
-                        A[j,i] = gammaij
-                        nnz += 1
-    else:
-        for i in xrange(rstart,rend):
-            atomi=basis[i].atom
-            gammaii= PyQuante.MINDO3_Parameters.f03[atomi.atno]
-            A[i,i] = gammaii
-            for j in xrange(i+1,nbf):
-                atomj = basis[j].atom
-                if atomi == atomj:
-                    A[i,j] = gammaii
-                    A[j,i] = gammaii
-                    nnz += 1
-                else:                        
-                    distij2 = atomi.dist2(atomj) * ut.bohr2ang**2.
-                    if distij2 < maxdist2: 
-                        gammaij=ut.e2/np.sqrt(distij2+0.25*(atomi.rho+atomj.rho)**2.)
-                        R=np.sqrt(distij2)
-                        scale = PyQuante.MINDO3.get_scale(atomi.atno,atomj.atno,R)
-                        Enuc += ( atomi.Z*atomj.Z*gammaij +  abs(atomi.Z*atomj.Z*(ut.e2/R-gammaij)*scale) ) / ( atomi.nbf *atomj.nbf )
-                        A[i,j] = gammaij
-                        A[j,i] = gammaij
-                        nnz += 1
-    A.assemblyBegin()
-    Enuc =  comm.allreduce(Enuc)        
-    nnz =  comm.allreduce(nnz)  + nbf      
-    A.assemblyEnd()
-    return  nnz,Enuc, A
        
 def getF0(atoms,basis,T):
     """
@@ -538,7 +450,7 @@ def getD0(comm,basis,guess=0,T=None):
             rstart, rend = A.getOwnershipRange() 
             for i in xrange(rstart,rend):
                 atomi=basis[i].atom
-                cols,vals = T.getRow(i) 
+                cols = T.getRow(i)[0] 
                 for j in cols:
                     if i==j:
                         if atomi.atno == 1: A[i,i] = atomi.Z/1.
@@ -598,7 +510,6 @@ def getH(basis, T=None,comm=None):
         A.setType('aij') #'sbaij'
         A.setSizes([nbf,nbf]) 
         A.setPreallocationNNZ(maxnnzperrow) 
-    k=0
     A.setUp()
     rstart, rend = A.getOwnershipRange()
     for i in xrange(rstart,rend):
@@ -674,65 +585,21 @@ def getF(atomids, D, F0, T, G, H):
     t = pt.getWallTime(t0=t,str='Mat assemble')    
     return A
 
-def getFDseq(atomids, Dseq, F0, T, G, H):
-    """
-    Density matrix dependent terms of the Fock matrix
-    """
-    diagG = G.getDiagonal()
-    diagD = pt.convert2SeqVec(D.getDiagonal()) 
-    A     = T.duplicate()
-    A.setUp()
-    rstart, rend = A.getOwnershipRange()
-    for i in xrange(rstart,rend):
-        atomi=atomids[i]
-        colsD,valsD = D.getRow(i)
-        colsG,valsG = G.getRow(i)
-        colsH,valsH = H.getRow(i)
-        colsT,valsT = T.getRow(i)
-        tmpii       = 0.5 * diagD[i] * diagG[i] # Since g[i,i]=h[i,i]
-        k=0
-        idxG=0
-        for j in colsT:
-            atomj=atomids[j]
-            if i != j:
-                tmpij = 0
-                Djj   = diagD[j] # D[j,j]
-                if len(valsD)>1:
-                    Dij    = valsD[k]
-                else:
-                    Dij    = 0
-                Tij   = valsT[k]
-                if atomj  == atomi:
-                    idxG   = np.where(colsG==j)
-                    Gij    = valsG[idxG]
-                    Hij    = valsH[idxG]
-                    tmpii += Djj * ( Gij - 0.5 * Hij ) # Ref1 and PyQuante, In Ref2, Ref3, when i==j, g=h
-                    tmpij  =  0.5 * Dij * ( 3. * Hij - Gij ) # Ref3, PyQuante, I think this term is an improvement to MINDO3 (it is in MNDO) so not found in Ref1 and Ref2  
-                else:
-                    tmpii += Tij * Djj     # Ref1, Ref2, Ref3
-                    tmpij = -0.5 * Tij * Dij   # Ref1, Ref2, Ref3  
-                A[i,j] = tmpij
-            k=k+1    
-        A[i,i] = tmpii        
-    A.assemble()
-    return A
-
 def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
     """
     Performs, self-consistent field  iterations until convergence, or max
     number of iterations reached.
     """
+    t = pt.getWallTime()
     maxiter     = opts.getInt('maxiter', 30)
-    scfacc      = opts.getInt('scfacc', 0)
     guess       = opts.getInt('guess', 0)
-    sizediis    = opts.getInt('diissize', 4)
-    errdiis     = opts.getReal('diiserr', 1.e-2)
     scfthresh   = opts.getReal('scfthresh',1.e-5)
     interval    = [opts.getReal('a',-50.) , opts.getReal('b', -10.)]
     staticsubint= opts.getInt('staticsubint',0)
     usesips     = opts.getBool('sips',False)
     local       = opts.getBool('local',True)
     nslices     = opts.getInt('eps_krylovschur_partitions',1)
+    sync        = opts.getBool('sync',False)
     Eel       = 0.
     gap       = 0.
     homo      = 0
@@ -750,12 +617,18 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
     elif staticsubint == 2: 
         pt.write("Subintervals will be adjusted at each iteration")
     else:
-        pt.write("Not available")   
+        pt.write("Not available")
+    if sync:
+        pt.sync()
+        t            = pt.getWallTime(t0=t,str='Barrier - SCF options')           
     if usesips:
         try:
             import SIPs.sips as sips
+            if sync:
+                pt.sync()
+                t            = pt.getWallTime(t0=t,str='Barrier - import sips')
         except:
-            pt.write("SIPs not found")
+            pt.write("Error: SIPs not found")
             usesips = False
     F = None
     F0loc = None
@@ -1008,25 +881,13 @@ def scfwithaccelerators(opts,nocc,atomids,D,F0,T,G,H,stage):
             return converged, Eel, homo, lumo
     return converged, Eel, homo, lumo
 
-def getEnergy(qmol,opts):
+def runMindo3(qmol,opts):
     stage, t0   = pt.getStageTime(newstage='MINDO3')
     maxdist     = opts.getReal('maxdist', 1.e6)
-    solve       = opts.getInt('solve', 0)
-    maxnnz      = [opts.getInt('maxnnz', 0)]
     guess       = opts.getInt('guess', 0)
-    bandwidth   = [opts.getInt('bw', 0)]
-    spfilter    = opts.getReal('spfilter',0.)
-    debug       = opts.getBool('debug',False)
-    checknnz    = opts.getBool('checknnz',False) 
-    prealloc    = opts.getBool('prealloc',True) 
-    pyquante    = opts.getBool('pyquante',False) #TODO get Pyquante energy for testing
-    nuke        = opts.getBool('nuke',False) 
-    from PyQuante.MINDO3 import initialize
-    qmol  = initialize(qmol)
-    t           = pt.getWallTime(t0=t0,str='PyQuante initialization')
-    if pyquante:
-        from PyQuante.MINDO3 import scf as pyquantescf
-        pyquantescf(qmol)   
+    nuke        = opts.getBool('nuke',False)
+    sync        = opts.getBool('sync',False)
+    t           = pt.getWallTime(t0=t0,str='PyQuante initialization')  
     atoms   = qmol.atoms
     Eref    = getEref(qmol)
     nbf     = getNbasis(qmol)    
@@ -1035,8 +896,9 @@ def getEnergy(qmol,opts):
     basis   = getBasis(qmol, nbf)
     atomids = getAtomIDs(basis)
     worldcomm = pt.getComm()
-    pt.sync()
-    t            = pt.getWallTime(t0=t,str='Barrier')
+    if sync:
+        pt.sync()
+        t            = pt.getWallTime(t0=t,str='Barrier')
     pt.write("Distance cutoff: {0:5.3f}".format(maxdist))
     pt.write("Number of basis functions  : {0} = Matrix size".format(nbf))
     pt.write("Number of valance electrons: {0}".format(nel))
@@ -1085,4 +947,4 @@ def getEnergy(qmol,opts):
         writeEnergies(Enukefull, 'ev', 'Enucfull')
         writeEnergies(Etotfull,unit='ev',enstr='Enucfull+Eelec')
         writeEnergies(Efinalfull, unit= 'kcal', enstr='Eref+Enucfull+Eelec')
-    return Efinal
+    return 
