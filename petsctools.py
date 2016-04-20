@@ -764,7 +764,7 @@ def getRedundantMat(A,nsubcomm, subcomm=None, out=None):
     """
     Create copies of the matrix in subcommunicators
     """
-    return A.createRedundantMatrix(nsubcomm,subcomm=subcomm, out=out)
+    return A.getRedundantMatrix(nsubcomm,subcomm=subcomm, out=out)
    
 def getSeqAIJ(A):
     """
