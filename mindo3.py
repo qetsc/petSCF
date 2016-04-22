@@ -247,7 +247,7 @@ def getT(comm,basis,maxdist):
     k            = 0   
     t            = pt.getWallTime(t0=t,str='Initialize')
     pt.sync()
-    t            = pt.getWallTime(t0=t,str='Barrier')
+    t            = pt.getWallTime(t0=t,str='Barrier - distribute')
     A            = pt.createMat(comm=comm)
     t = pt.getWallTime(t0=t,str='Create Mat')
     A.setType('aij')
@@ -535,8 +535,8 @@ def getF(atomids, D, F0, T, G, H):
     t            = pt.getWallTime()
     diagD = D.getDiagonal()
     t = pt.getWallTime(t0=t,str='Diag D')
-    diagD = pt.convert2SeqVec(diagD) 
-    t = pt.getWallTime(t0=t,str='Scatter Diag D')
+    diagD = pt.getSeqArr(diagD) 
+    t = pt.getWallTime(t0=t,str='AllGather Diag')
     A     = T.duplicate()
     t = pt.getWallTime(t0=t,str='Mat duplicate')    
     A.setUp()
@@ -898,7 +898,7 @@ def runMindo3(qmol,opts):
     worldcomm = pt.getComm()
     if sync:
         pt.sync()
-        t            = pt.getWallTime(t0=t,str='Barrier')
+        t            = pt.getWallTime(t0=t,str='Barrier - options')
     pt.write("Distance cutoff: {0:5.3f}".format(maxdist))
     pt.write("Number of basis functions  : {0} = Matrix size".format(nbf))
     pt.write("Number of valance electrons: {0}".format(nel))

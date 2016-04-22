@@ -25,6 +25,7 @@ sample options_qetsc:
 -eps_interval 1,10
 -eps_tol  1.e-8
 -eps_krylovschur_detect_zeros TRUE
+-eps_view_values # prints eigenvalues to STD OUT
 -eps_view_values ascii:eigs.txt #writes eigenvalues to a file (overwrites if there are many iterations)
 """
 import sys
@@ -59,7 +60,7 @@ def main():
     pt.write("Number of subintervals: {0}".format(nsubint))
     if sync: 
         pt.sync()
-        t = pt.getWallTime(t0=t0,str='Barrier')
+    t = pt.getWallTime(t0=t0,str='Barrier - options')
     qmol=None
     if mol:
         pt.write('xyz from mol input:{0}'.format(mol))  
@@ -85,14 +86,15 @@ def main():
     elif os.path.isfile(xyzfile):
         pt.write('xyz file:{0}'.format(xyzfile))
         if sort > 0:
-            t0          = pt.getWallTime()
             if rank == 0: 
                 xyz         = xt.readXYZ(xyzfile)
+                t = pt.getWallTime(t,str='Read xyz in')
                 sortedxyz   = xt.sortXYZ(xyz)
+                t = pt.getWallTime(t,str='Sorted xyz in')
             else:
                 sortedxyz = None  
             sortedxyz = comm.bcast(sortedxyz,root=0)     
-            pt.getWallTime(t0,str='Sorted xyz in')
+            pt.getWallTime(t,str='Bcast xyz in')
             if writeXYZ: 
                 sortedfile  = xt.writeXYZ(sortedxyz)
                 pt.write('sorted xyz file:{0}'.format(sortedfile))
@@ -112,7 +114,7 @@ def main():
         pt.write("Number of electrons: %i" % (qmol.get_nel()))
         if sync: 
             pt.sync()
-            t = pt.getWallTime(t0=t,str='Barrier')
+            t = pt.getWallTime(t0=t,str='Barrier - qmol')
         if method.startswith('hf'):
             t1 = pt.getWallTime()
             stage.pop()        
@@ -123,17 +125,17 @@ def main():
             qmol = qt.initializeMindo3(qmol)
             if sync: 
                 pt.sync()
-                t = pt.getWallTime(t0=t,str='Barrier')
+                t = pt.getWallTime(t0=t,str='Barrier - init')
             t = pt.getWallTime(t,'Initialization')            
             stage.pop()        
             runMindo3(qmol,opts)
             pt.getWallTime(t,'MINDO3')
         else:
             pt.write("No valid method specified")
-    pt.getWallTime(t0, str="PSCF")
+    t = pt.getWallTime(t0, str="PSCF")
     if sync: 
         pt.sync()
-        pt.getWallTime(t0,str='Barrier')    
+        pt.getWallTime(t,str='Barrier - final')    
 if __name__ == '__main__':
     main()
 

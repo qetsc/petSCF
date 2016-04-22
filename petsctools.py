@@ -70,7 +70,7 @@ def getWallTime(t0=0, str=''):
     """
     t = MPI.Wtime() - t0
     str = str + ' time'
-    if(t0): write("{0: <14s}: {1:5.3f} seconds".format(str,t))
+    if(t0): write("{0: <24s}: {1:5.3f} seconds".format(str,t))
     return MPI.Wtime()
 
 def getStage(stagename='stage', oldstage=None, printstage=True):
@@ -103,6 +103,27 @@ def getStageTime(newstage='',oldstage='',t0=0):
     else:
         return
     
+def getViewer(A,view=False):
+    """
+    Returns PETSC.Viewer for a given PETSc object A.
+    One can view the object by setting view=True
+    """
+    viewer = PETSc.Viewer().STDOUT(A.getComm())
+    if view:
+        viewer(A)
+    return viewer
+
+def getSeqArr(A):
+    """
+    Given a parallel PETSc Vec, returns a sequential array
+    which gathers all elements of the Vec.
+    """
+    sizeA = A.getSize()
+    seq = np.zeros(sizeA)
+    mpicomm = A.getComm().tompi4py()
+    mpicomm.Allgatherv(A.array,seq)
+    return seq
+   
 def distributeN(comm,N):
     """
     Distribute N consecutive things (rows of a matrix , blocks of a 1D array) 
