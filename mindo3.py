@@ -595,7 +595,7 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
     guess       = opts.getInt('guess', 0)
     scfthresh   = opts.getReal('scfthresh',1.e-5)
     interval    = [opts.getReal('a',-50.) , opts.getReal('b', -10.)]
-    staticsubint= opts.getInt('staticsubint',0)
+    slicing     = opts.getInt('slicing',0)
     usesips     = opts.getBool('sips',False)
     local       = opts.getBool('local',True)
     nslices     = opts.getInt('eps_krylovschur_partitions',1)
@@ -610,11 +610,11 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
     pt.write("{0:*^60s}".format("SELF-CONSISTENT-FIELD ITERATIONS"))
     pt.write("SCF threshold: {0:5.3e}".format(scfthresh))
     pt.write("Maximum number of SCF iterations: {0}".format(maxiter))
-    if staticsubint == 0: 
+    if slicing == 0: 
         pt.write("Fixed subintervals will be used")
-    elif staticsubint == 1: 
+    elif slicing == 1: 
         pt.write("Subintervals will be adjusted at each iteration with fixed interval")
-    elif staticsubint == 2: 
+    elif slicing == 2: 
         pt.write("Subintervals will be adjusted at each iteration")
     else:
         pt.write("Not available")
@@ -674,12 +674,12 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
                 Eel  = 0.5 * pt.getTraceProductAIJ(D, F0+F)
             stage, t = pt.getStageTime(newstage='UpdateEPS',oldstage=stage, t0=t)            
             subint =interval
-            if staticsubint==1:
-                nsubint=st.getNumberOfSubIntervals(eps)
-                subint = st.getSubIntervals(eigarray[0:nocc],nsubint,interval=interval)
-            elif staticsubint==2:
-                nsubint=st.getNumberOfSubIntervals(eps)
-                subint = st.getSubIntervals(eigarray[0:nocc],nsubint)
+            if slicing == 1:
+                nsubint = st.getNumberOfSubIntervals(eps)
+                subint  = st.getSubIntervals(eigarray[0:nocc],nsubint,interval=interval)
+            elif slicing == 2:
+                nsubint = st.getNumberOfSubIntervals(eps)
+                subint  = st.getSubIntervals(eigarray[0:nocc],nsubint)
             if local:
                 eps = st.updateEPS(eps,Floc,subintervals=subint,local=local)
             else:
@@ -735,7 +735,7 @@ def scfwithaccelerators(opts,nocc,atomids,D,F0,T,G,H,stage):
     errdiis     = opts.getReal('diiserr', 1.e-2)
     scfthresh   = opts.getReal('scfthresh',1.e-5)
     interval    = [opts.getReal('a',-50.) , opts.getReal('b', -10.)]
-    staticsubint= opts.getInt('staticsubint',0)
+    slicing     = opts.getInt('slicing',0)
     usesips     = opts.getBool('sips',False)
     
     Eel       = 0.
@@ -748,11 +748,11 @@ def scfwithaccelerators(opts,nocc,atomids,D,F0,T,G,H,stage):
     pt.write("{0:*^60s}".format("SELF-CONSISTENT-FIELD ITERATIONS"))
     pt.write("SCF threshold: {0:5.3e}".format(scfthresh))
     pt.write("Maximum number of SCF iterations: {0}".format(maxiter))
-    if staticsubint == 0: 
+    if slicing == 0: 
         pt.write("Fixed subintervals will be used")
-    elif staticsubint == 1: 
+    elif slicing == 1: 
         pt.write("Subintervals will be adjusted at each iteration with fixed interval")
-    elif staticsubint == 2: 
+    elif slicing == 2: 
         pt.write("Subintervals will be adjusted at each iteration")
     else:
         pt.write("Not available")   
@@ -824,10 +824,10 @@ def scfwithaccelerators(opts,nocc,atomids,D,F0,T,G,H,stage):
             Eel  = 0.5 * pt.getTraceProductAIJ(D, F0+F)
             stage = pt.getStage(stagename='UpdateEPS',oldstage=stage)            
             subint =interval
-            if staticsubint==1:
+            if slicing == 1:
                 nsubint=st.getNumberOfSubIntervals(eps)
                 subint = st.getSubIntervals(eigarray[0:nocc],nsubint,interval=interval) 
-            elif staticsubint==2:
+            elif slicing == 2:
                 nsubint=st.getNumberOfSubIntervals(eps)
                 subint = st.getSubIntervals(eigarray[0:nocc],nsubint)
             eps = st.updateEPS(eps,F,subintervals=subint)
