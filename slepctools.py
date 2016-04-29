@@ -7,6 +7,32 @@ Print = PETSc.Sys.Print
 def getNumberOfSubIntervals(eps):
     return eps.getKrylovSchurPartitions()
 
+def getClusters(eigs, ethresh=1.e-6):
+    """
+    Given a list of eigenvalues  and an optional threshold
+    returns an array of clusters, and the multiplicities
+    of each cluster.
+    Input:
+    eigs    - numpy array (dtype='float64')
+    ethresh - float (optional)
+    Returns:
+            - numpy array (dtype='float64')
+            - numpy array (dtpye='int32')
+    """
+    neigs          = len(eigs)
+    clusters       = np.zeros(neigs)
+    multiplicities = np.ones(neigs,dtype='int32')
+    clusters[0]    = eigs[0]
+    icluster       = 0
+    for i in range(1,neigs):
+        if abs(eigs[i]-clusters[icluster]) < ethresh:
+            multiplicities[icluster] += 1
+        else:
+            icluster += 1
+            clusters[icluster] = eigs[i]
+    ncluster = icluster + 1
+    return clusters[0:ncluster],multiplicities[0:ncluster]
+
 def getSubIntervals(eigs, nsub, bufferratio=0.75,interval=[0]):
     """
     Given a list of eigenvalues, (eigs) and number of subintervals (nsub), 
