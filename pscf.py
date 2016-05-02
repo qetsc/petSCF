@@ -43,7 +43,9 @@ def main():
         pt.write("Could not get git info...")
     else:
         pt.writeGitHash()
-    stage, t0   = pt.getStageTime(newstage='Read input')  
+    stage, t0   = pt.getStageTime(newstage='Read input')
+    pt.sync()
+    t = pt.getWallTime(t0=t0,str='Sync')  
     opts        = pt.getOptions()
     mol         = opts.getString('mol','')
     xyzfile     = opts.getString('xyz','')
@@ -60,7 +62,7 @@ def main():
     pt.write("Number of subintervals: {0}".format(nsubint))
     if sync: 
         pt.sync()
-    t = pt.getWallTime(t0=t0,str='Barrier - options')
+        t = pt.getWallTime(t0=t,str='Barrier - options')
     qmol=None
     if mol:
         pt.write('xyz from mol input:{0}'.format(mol))  

@@ -591,11 +591,14 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
     number of iterations reached.
     """
     t = pt.getWallTime()
-    maxiter     = opts.getInt('maxiter', 30)
-    guess       = opts.getInt('guess', 0)
-    scfthresh   = opts.getReal('scfthresh',1.e-5)
-    interval    = [opts.getReal('a',-50.) , opts.getReal('b', -10.)]
-    slicing     = opts.getInt('slicing',0)
+    maxiter       = opts.getInt('maxiter', 30)
+    guess         = opts.getInt('guess', 0)
+    scfthresh     = opts.getReal('scfthresh',1.e-5)
+    interval      = [opts.getReal('a',-50.) , opts.getReal('b', -10.)]
+    slicing       = opts.getInt('slicing',1)
+    slicingiter   = opts.getInt('slicingiter',2)
+    slicingbuffer = opts.getReal('slicingbuffer',1.e-1)
+    cthresh       = opts.getReal('cthresh',1.e-6)
     usesips     = opts.getBool('sips',False)
     local       = opts.getBool('local',True)
     nslices     = opts.getInt('eps_krylovschur_partitions',1)
@@ -638,6 +641,7 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
     Hloc  = None
     np    = pt.getWorldSize() # total number of ranks
     npmat = np / nslices # number of ranks for each slice
+    mults=[1]
     for k in xrange(1,maxiter+1):
         pt.write("{0:*^60s}".format("Iteration "+str(k)))
         t0 = pt.getWallTime()
@@ -673,13 +677,16 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
                 stage, t = pt.getStageTime(newstage='Trace',oldstage=stage, t0=t)            
                 Eel  = 0.5 * pt.getTraceProductAIJ(D, F0+F)
             stage, t = pt.getStageTime(newstage='UpdateEPS',oldstage=stage, t0=t)            
-            subint =interval
-            if slicing == 1:
+            subint = interval
+            if slicing == 1 and k > slicingiter:
                 nsubint = st.getNumberOfSubIntervals(eps)
-                subint  = st.getSubIntervals(eigarray[0:nocc],nsubint,interval=interval)
-            elif slicing == 2:
+                subint, mults  = st.getSubIntervals(eigarray[0:nocc],nsubint,interval=interval,cthresh=cthresh)
+            elif slicing == 2 and k > slicingiter:
                 nsubint = st.getNumberOfSubIntervals(eps)
-                subint  = st.getSubIntervals(eigarray[0:nocc],nsubint)
+                subint, mults  = st.getSubIntervals(eigarray[0:nocc],nsubint,cthresh=cthresh,sbuffer=slicingbuffer)
+            maxmult = max(mults)
+            if max(mults) > 1:
+                pt.write("Maximum multiplicity is= {0}".format(maxmult))    
             if local:
                 eps = st.updateEPS(eps,Floc,subintervals=subint,local=local)
             else:

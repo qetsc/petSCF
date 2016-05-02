@@ -7,57 +7,58 @@ Print = PETSc.Sys.Print
 def getNumberOfSubIntervals(eps):
     return eps.getKrylovSchurPartitions()
 
-def getClusters(eigs, ethresh=1.e-6):
+def getClusters(eigs, chtresh=1.e-6):
     """
-    Given a list of eigenvalues  and an optional threshold
+    Given a list of eigenvalues and a threshold for clustering,
     returns an array of clusters, and the multiplicities
     of each cluster.
     Input:
     eigs    - numpy array (dtype='float64')
-    ethresh - float (optional)
+    chtresh - float (optional)
     Returns:
             - numpy array (dtype='float64')
             - numpy array (dtpye='int32')
     """
+    eigs = sorted(np.array(eigs))
     neigs          = len(eigs)
     clusters       = np.zeros(neigs)
     multiplicities = np.ones(neigs,dtype='int32')
     clusters[0]    = eigs[0]
     icluster       = 0
     for i in range(1,neigs):
-        if abs(eigs[i]-clusters[icluster]) < ethresh:
+        if abs(eigs[i]-clusters[icluster]) < chtresh:
             multiplicities[icluster] += 1
         else:
             icluster += 1
             clusters[icluster] = eigs[i]
     ncluster = icluster + 1
-    return clusters[0:ncluster],multiplicities[0:ncluster]
+    return clusters[0:ncluster], multiplicities[0:ncluster]
 
-def getSubIntervals(eigs, nsub, bufferratio=0.75,interval=[0]):
+def getSubIntervals(eigs, nsub, sbuffer=0.1,interval=[0],cthresh=1.e-6):
     """
     Given a list of eigenvalues, (eigs) and number of subintervals (nsub), 
     returns the boundaries for subintervals such that each subinterval has an average number of eigenvalues.
     Doesn't skip gaps, SLEPc doesn't support it, yet.
-    range of eigs * bufferratio gives a buffer zone for leftmost and rightmost boundaries.
+    range of eigs * sbuffer gives a sbuffer zone for leftmost and rightmost boundaries.
     """
-    eigs = sorted(np.array(eigs))
+    eigs, mults = getClusters(eigs,cthresh) 
     neigs = len(eigs)
     mean = neigs / nsub
     remainder = neigs % nsub
     erange = eigs[-1] - eigs[0]
-    ibuffer = erange * bufferratio
+    isbuffer = erange * sbuffer
     subint = np.zeros(nsub + 1)
-    subint[0] = eigs[0] - ibuffer
+    subint[0] = eigs[0] - isbuffer
     for i in xrange(1, nsub):
         subint[i] = (eigs[mean * i] + eigs[mean * i - 1]) / 2.
         if remainder > 0 and i > 1:
             subint[i] = (eigs[mean * i + 1] + eigs[mean * i]) / 2.
             remainder = remainder - 1
-    subint[nsub] = eigs[-1] + ibuffer
+    subint[nsub] = eigs[-1] + isbuffer
     if len(interval)==2:
         subint[0]  = interval[0]
         subint[-1] = interval[1]
-    return subint
+    return subint, mults
 
 def getDensityMatrix(eps,T,nocc):
     """
