@@ -2,11 +2,11 @@ import sys, petsc4py
 petsc4py.init(sys.argv)
 from petsc4py import PETSc
 from mpi4py import MPI
+import numpy as np
 
 write  = PETSc.Sys.Print
 INSERT = PETSc.InsertMode.INSERT
 
-import numpy as np
 
 def sync(comm=None):
     if comm:
@@ -23,9 +23,6 @@ def getComm():
 
 def getPetscComm():
     return PETSc.COMM_WORLD
-
-def getOptions():
-    return PETSc.Options()
 
 def getCommSum(comm,x,integer=False):
     """
@@ -343,36 +340,7 @@ def perturbMat(A,pert=0.1):
         A.setValue(i,i,pert,addv=PETSc.InsertMode.ADD_VALUES)    
     A.assemble()
     return A    
-
         
-def getCSRBandwidth(A):
-    """
-    From QuTIP
-    Returns the max(mb), lower(lb), and upper(ub) bandwidths of a 
-    qobj or sparse CSR/CSC matrix.
-  
-    If the matrix is symmetric then the upper and lower bandwidths are 
-    identical. Diagonal matrices have a bandwidth equal to one.
-  
-    Parameters
-    ----------
-    A : qobj, csr_matrix, csc_matrix
-        Input matrix
-  
-    Returns
-    -------
-    mb : int
-        Maximum bandwidth of matrix.
-    lb : int
-        Lower bandwidth of matrix.
-    ub : int
-        Upper bandwidth of matrix.
-  
-    """
-    from qutip.cy.sparse_utils import _sparse_bandwidth
-    return _sparse_bandwidth(A.indices, A.indptr, A.shape[0])
-
-
 def getLocalNnzPerRow(basis,rstart,rend,maxdist2):
     """
     Returns an array containing local number of nonzeros per row based on distance between atoms.
@@ -502,25 +470,6 @@ def getMaxNnzPerRow(mol,nat,maxdist):
     maxnnz  = MPI.COMM_WORLD.allreduce(maxnnz,op=MPI.MAX)        
     maxband = MPI.COMM_WORLD.allreduce(maxband,op=MPI.MAX)        
     return maxnnz*2+1, 2 * maxband   
-
-def getNnzPerRowold(basis,maxdist):
-    """
-    Returns number of nonzeros per row based on distance between atoms.
-    This is based on basis set rather than atoms, so there is redundancy in the calculations.
-    TODO:
-    Parallel version with a PETSc vector.
-    Distance calculation loop should be over atoms indeed, which will improve performance by nbf/natom.
-    If atoms are ordered based on a distance from a pivot point, loop can be reduced to exclude far atoms.
-    """
-    nbf=len(basis)
-    maxdist2 = maxdist * maxdist
-    nnzarray=np.ones(nbf,dtype='int16')
-    for i in xrange(nbf):
-        atomi=basis[i].atom
-        for j in xrange(i+1,nbf):
-            distij2=atomi.dist2(basis[j].atom)
-            if distij2 < maxdist2: nnzarray[i] += 1
-    return nnzarray   
 
 def getNnzInfo(basis,maxdist):
     """
@@ -671,20 +620,6 @@ def getMatFromFile(filename,comm):
     A.load(matreader)
     return A
 
-def writeMatToTxtFile(A,filename):
-    N=A.getSize()[0]
-    B=getSeqAIJ(A)
-    for i in xrange(rstart,rend):   
-        pass
-    return 0
-    
-def writeMatToBinFile(A,filename):
-    N=A.getSize()[0]
-    B=getSeqAIJ(A)
-    for i in xrange(rstart,rend):   
-        pass
-    return 0
-
 def getWorldSize():
     return PETSc.COMM_WORLD.size
 
@@ -808,62 +743,6 @@ def getSeqAIJ(A):
         B.setValues(Bi,Bcols,Bvals,addv=PETSc.InsertMode.INSERT)
     B.assemble()  
     return B
-
-def getSeqAIJ2(A):
-    N=A.getSize()[0]
-    B=PETSc.Mat().create(comm=PETSc.COMM_SELF)
-    B.setType(PETSc.Mat.Type.SEQAIJ)
-    B.setSizes(N)
-    B.setUp()
-    rank = PETSc.COMM_WORLD.rank
-    rstart, rend = A.getOwnershipRange()
-    for i in xrange(rstart,rend):
-        cols,vals = A.getRow(i) #maybe restore later
-    #    print rank, ":", i,cols,vals
-        ncols = len(cols)
-        k=0
-        for j in cols:
-            B[i,j]=vals[k]
-            k+=1
-    B.assemble()  
-    return B
-
-def getAij():
-    B=PETSc.Mat().create(comm=PETSc.COMM_SELF)
-    B.setType(PETSc.Mat.Type.SEQAIJ)
-    B.setSizes(2)
-    B.setUp()
-    B[0,:]=[1,2]
-    B[1,:]=[3,4]
-    B.assemblyBegin()
-    B.assemblyEnd()  
-    return B
-
-def getDistAIJslow(N):
-    A=PETSc.Mat().create(comm=PETSc.COMM_WORLD)
-    A.setType(PETSc.Mat.Type.MPISBAIJ)
-    A.setSizes(N,1)
-    A.setUp()
-    rstart, rend = A.getOwnershipRange()
-    for i in xrange(rstart,rend):
-        for j in xrange(i,N):
-            A[i,j]=j-i
-    A.assemble()
-    return A
-
-def getDistAIJfast(N):
-    A=PETSc.Mat().create(comm=PETSc.COMM_WORLD)
-    A.setType(PETSc.Mat.Type.MPISBAIJ)
-    A.setSizes(N,1)
-    A.setUp()
-    A.setPreallocationNNZ(N*(N+1)/2)
-    rstart, rend = A.getOwnershipRange()
-    for i in xrange(rstart,rend):
-        cols=range(i,N)
-        vals=[j-i for j in cols]
-        A.setValues(i,cols,vals,addv=PETSc.InsertMode.ADD_VALUES)
-    A.assemble()
-    return A
 
 def convertAIJ2CSR(A):
     import scipy.sparse

@@ -35,7 +35,6 @@ def xyzFile2PyQuanteMol(xyzfile):
     xyz should be given in Angstroms
     Note that PyQuante.IO.XYZ.read_xyz(xyzfile)[0] assumes bohrs
     """
-    import PyQuante.Molecule 
     with open(xyzfile) as f:
         line = f.readline()
         N=int(line.split()[0])
@@ -45,5 +44,5 @@ def xyzFile2PyQuanteMol(xyzfile):
             line = f.readline() 
             chunks = line.split()
             x,y,z = map(float,chunks[1:])
-            atoms[i] = (chunks[0],(x*const.ang2bohr,y*const.ang2bohr,z*const.ang2bohr))
+            atoms[i] = (chunks[0],(x*ang2bohr,y*ang2bohr,z*ang2bohr))
     return Molecule(title,atoms,units='Bohr')           

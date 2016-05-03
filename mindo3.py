@@ -599,10 +599,11 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
     slicingiter   = opts.getInt('slicingiter',2)
     slicingbuffer = opts.getReal('slicingbuffer',1.e-1)
     cthresh       = opts.getReal('cthresh',1.e-6)
-    usesips     = opts.getBool('sips',False)
-    local       = opts.getBool('local',True)
-    nslices     = opts.getInt('eps_krylovschur_partitions',1)
-    sync        = opts.getBool('sync',False)
+    usesips       = opts.getBool('sips',False)
+    local         = opts.getBool('local',True)
+    nslices       = opts.getInt('eps_krylovschur_partitions',1)
+    sync          = opts.getBool('sync',False)
+    savemat       = opts.getBool('savemat',False)
     Eel       = 0.
     gap       = 0.
     homo      = 0
@@ -645,7 +646,6 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
     for k in xrange(1,maxiter+1):
         pt.write("{0:*^60s}".format("Iteration "+str(k)))
         t0 = pt.getWallTime()
-
         if k==1:
             stage, t = pt.getStageTime(newstage='F',oldstage=stage, t0=t0)
             Ftmp = getF(atomids, D, F0, T, G, H)
@@ -660,7 +660,12 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
             stage, t = pt.getStageTime(newstage='SetupEPS',oldstage=stage, t0=t)    
             eps = st.setupEPS(F, B=None,interval=interval)  
             stage, t = pt.getStageTime(newstage='SolveEPS',oldstage=stage, t0=t)
-            eps, nconv, eigarray = st.solveEPS(eps,returnoption=1,nocc=nocc)
+            eps = st.solveEPS(eps)
+            t = pt.getWallTime(t0=t, str='getNumber')
+            nconv = st.getNumberOfConvergedEigenvalues(eps)
+            if nconv < nocc: return
+            t = pt.getWallTime(t0=t, str='getNEigenvalues')
+            eigarray = st.getNEigenvalues(eps,nocc)
         else:
             Eold = Eel
             stage, t = pt.getStageTime(newstage='F',oldstage=stage, t0=t)
@@ -676,6 +681,7 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
                 F = Ftmp.copy(F,None)
                 stage, t = pt.getStageTime(newstage='Trace',oldstage=stage, t0=t)            
                 Eel  = 0.5 * pt.getTraceProductAIJ(D, F0+F)
+            writeEnergies(Eel, unit='ev', enstr='Eel')
             stage, t = pt.getStageTime(newstage='UpdateEPS',oldstage=stage, t0=t)            
             subint = interval
             if slicing == 1 and k > slicingiter:
@@ -692,8 +698,14 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
             else:
                 eps = st.updateEPS(eps,F,subintervals=subint,local=local)                
             stage,t = pt.getStageTime(newstage='SolveEPS',oldstage=stage, t0=t)
-            eps, nconv, eigarray = st.solveEPS(eps,returnoption=1,nocc=nocc)         
-        
+            eps = st.solveEPS(eps)
+            t1 = pt.getWallTime(t0=t, str='Solve')
+            nconv = st.getNumberOfConvergedEigenvalues(eps)
+            t1 = pt.getWallTime(t0=t1, str='Get no of eigs')
+            if nconv < nocc: return
+            eigarray = st.getNEigenvalues(eps,nocc)
+            t1 = pt.getWallTime(t0=t1, str='Get eigs')
+          
         if (len(eigarray)>nocc):
             homo = eigarray[nocc-1] 
             lumo = eigarray[nocc]
@@ -701,7 +713,6 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
             writeEnergies(homo,unit='ev',enstr='HOMO')
             writeEnergies(lumo,unit='ev',enstr='LUMO')
             writeEnergies(gap,unit='ev',enstr='Gap')
-        writeEnergies(Eel, unit='ev', enstr='Eel')
         stage, t = pt.getStageTime(newstage='Density', oldstage=stage, t0=t)
         nden = nocc
         if nconv < nocc: 
@@ -721,10 +732,13 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
         elif  npmat < np:
             stage, t = pt.getStageTime(newstage='Seq D', oldstage=stage, t0=t)   
             D = pt.getSeqMat(D)
-        pt.getWallTime(t0,str='Iteration')
+        t = pt.getWallTime(t0,str='Iteration')
         if abs(Eel-Eold) < scfthresh and nconv >= nocc:
             pt.write("Converged at iteration {0}".format(k))
             converged = True
+            if savemat:
+                pt.writeMat(F, 'finalfock.bin')
+                t = pt.getWallTime(t0,str='Save mat')
             return converged, Eel, homo, lumo
     return converged, Eel, homo, lumo
 

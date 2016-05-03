@@ -94,11 +94,6 @@ def getDensityMatrix(eps,T,nocc):
         if error > 1.e-6: Print("Error: %12g" % ( error)) 
     if k.imag != 0.0:
           Print("Complex eigenvalue dedected: %9f%+9f j  %12g" % (k.real, k.imag, error))
-  #  HOMO = k.real
-  #  LUMO = eps.getEigenpair(nocc, xr, xi).real
-  #  eigarray[nocc]=LUMO
-  #  gap  = LUMO - HOMO
-  #  Print("LUMO-HOMO      = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(gap*const.ev2kcal,gap,gap*const.ev2hartree))
     return D #,eigarray
 
 def getSIPsDensityMatrix(eps,nocc):
@@ -147,15 +142,11 @@ def getDensityMatrixLocal(eps,T,nocc):
         if error > 1.e-6: Print(" %12g" % ( error)) 
     if k.imag != 0.0:
           Print("Complex eigenvalue dedected: %9f%+9f j  %12g" % (k.real, k.imag, error))
-  #  HOMO = k.real
-  #  LUMO = eps.getEigenpair(nocc, xr, xi).real
-  #  eigarray[nocc]=LUMO
-  #  gap  = LUMO - HOMO
-  #  Print("LUMO-HOMO      = {0:20.10f} kcal/mol = {1:20.10f} ev = {2:20.10f} Hartree".format(gap*const.ev2kcal,gap,gap*const.ev2hartree))
     return D,eigarray
 
 def setupEPS(A,B=None,interval=[0]):
     """
+    Returns SLEPc eps object for given operators, and options.
     If matrix B is not given, solves the standard eigenvalue problem for a Hermitian matrix A.
     If matrix B (should be positive definite) is given, solve the generalized eigenvalue problem. 
     EPS comm is the same as the comm of A.
@@ -207,7 +198,45 @@ def updateEPS(eps,A,B=None,subintervals=[0],local=True, globalupdate=False,):
             eps.setKrylovSchurSubintervals(subintervals)
     return eps
 
-def solveEPS(eps,printinfo=False,returnoption=0,checkerror=False,interval=[0],subintervals=[0],nocc=0):
+def solveEPS(eps):
+    """
+    Solve the eigenvalue problem defined in eps.
+    Return eps
+    """
+    eps.solve()
+    return eps
+
+def getEPSInterval(eps):
+    """
+    Returns left and right boundaries of the 
+    eps interval.
+    """
+    return eps.getInterval()
+
+def getNumberOfConvergedEigenvalues(eps):
+    """
+    Returns total number of converged eigenvalues.
+    """
+    return eps.getConverged()
+
+def getNEigenvalues(eps,N):
+    """
+    Returns N eigenvalues in a numpy array
+    """
+    eigarray=np.zeros(N)
+    for i in range(N):
+        k = eps.getEigenvalue(i)
+        eigarray[i]=k.real 
+    return eigarray
+
+def getConvergedEigenvalues(eps):
+    """
+    Returns a numpy array of all converged eigenvalues
+    """
+    nconv = getNumberOfConvergedEigenvalues(eps)
+    return getNEigenvalues(eps, nconv)       
+
+def solveEPSdepreceated(eps,printinfo=False,returnoption=0,checkerror=False,nreq=0):
     """
     returnoption 0:
         Returns SLEPc EPS object, 
@@ -227,19 +256,18 @@ def solveEPS(eps,printinfo=False,returnoption=0,checkerror=False,interval=[0],su
         A dense matrix of eigenvectors  
         
     TODO: 
-        Repeat solve with larger range if nconv<nocc
+        Repeat solve with larger range if nconv<nreq
         Or continue with random (or approximate or save some from previous iter) 
         eigenvectors to replace the missing ones.
         Or and maybe the best option is simply form the Density Matrix with 
         the converged eigenvectors and increase the interval for the next iter.     
     """
-
     left , right = eps.getInterval()       
-    Print("Interval: {0:5.3f}, {1:5.3f} ".format(left, right))
+    Print("Solving for eigenvalues in [{0:5.3f}, {1:5.3f}]".format(left, right))
     eps.solve()
     nconv = eps.getConverged()
-    if nocc :
-        Print("Number of converged and required eigenvalues: {0}, {1} ".format(nconv, nocc))
+    if nreq :
+        Print("Number of converged and required eigenvalues: {0}, {1} ".format(nconv, nreq))
     if printinfo:
         its = eps.getIterationNumber()
         sol_type = eps.getType()
@@ -249,8 +277,12 @@ def solveEPS(eps,printinfo=False,returnoption=0,checkerror=False,interval=[0],su
         Print("Number of eps iterations: %i" % its)
         Print("Solution method: %s" % sol_type)
         Print("Stopping condition: tol=%.4g, maxit=%d" % (tol, maxit))
-    if nconv < nocc:
+    if nconv < nreq:
         Print("Missing eigenvalues!")
+        newleft  = left  - 1.0
+        newright = right + 1.0
+        eps.setInterval(newleft,newright)
+        solveEPS(eps,printinfo=printinfo,returnoption=returnoption,checkerror=checkerror,nreq=nreq)
     if returnoption==0:
         return eps, nconv
     elif returnoption == 1:
@@ -261,8 +293,8 @@ def solveEPS(eps,printinfo=False,returnoption=0,checkerror=False,interval=[0],su
             if checkerror:
                 error = eps.computeError(i)
                 if error > 1.e-6: Print("Eigenvalue {0} has error {1}".format(k,error)) 
-        if nconv >= nocc :
-            Print("Range of required eigenvalues: {0:5.3f} , {1:5.3f}".format(eigarray[0],eigarray[nocc-1]))
+        if nconv >= nreq :
+            Print("Range of required eigenvalues: {0:5.3f} , {1:5.3f}".format(eigarray[0],eigarray[nreq-1]))
         else:
             Print("Range of converged eigenvalues: {0:5.3f} , {1:5.3f}".format(eigarray[0],eigarray[-1]))
             Print("Missing eigenvalues!")
@@ -277,10 +309,11 @@ def solveEPS(eps,printinfo=False,returnoption=0,checkerror=False,interval=[0],su
                 if error > 1.e-6: Print("Eigenvalue {0} has error {1}".format(k,error)) 
         return eps, nconv, eigarray
     elif returnoption == 3:
+        A = eps.getOperators(eps)[0]
         eigarray=np.zeros(nconv)
         eigmat=np.zeros((nconv,A.getSize()[0]))
-        xr, tmp = A.getVecs()
-        xi, tmp = A.getVecs()
+        xr = A.getVecs()[0]
+        xi = A.getVecs()[0]
         for i in range(nconv):
             k = eps.getEigenpair(i,xr,xi)
             eigarray[i]=k.real
