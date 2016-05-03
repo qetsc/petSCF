@@ -661,11 +661,12 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
             eps = st.setupEPS(F, B=None,interval=interval)  
             stage, t = pt.getStageTime(newstage='SolveEPS',oldstage=stage, t0=t)
             eps = st.solveEPS(eps)
-            t = pt.getWallTime(t0=t, str='getNumber')
+            t1 = pt.getWallTime(t0=t, str='Solve')
             nconv = st.getNumberOfConvergedEigenvalues(eps)
+            t1 = pt.getWallTime(t0=t1, str='Get no of eigs')
             if nconv < nocc: return
-            t = pt.getWallTime(t0=t, str='getNEigenvalues')
             eigarray = st.getNEigenvalues(eps,nocc)
+            t1 = pt.getWallTime(t0=t1, str='Get eigs')
         else:
             Eold = Eel
             stage, t = pt.getStageTime(newstage='F',oldstage=stage, t0=t)
