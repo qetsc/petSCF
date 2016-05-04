@@ -297,10 +297,11 @@ def writeMat(A,filename='mat.bin'):
     0 if successful
     """
     ext = filename[-3:]
+    comm = A.getComm()
     if ext == 'bin':
-        writer=PETSc.Viewer().createBinary(filename, 'w')
+        writer=PETSc.Viewer().createBinary(filename, 'w',comm=comm)
     elif ext == 'txt':
-        writer=PETSc.Viewer().createASCII(filename, 'w')
+        writer=PETSc.Viewer().createASCII(filename, 'w',comm=comm)
     elif ext == 'mtx':
         pass        
     else:

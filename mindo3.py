@@ -639,6 +639,7 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
     np    = pt.getWorldSize() # total number of ranks
     npmat = np / nslices # number of ranks for each slice
     mults=[1]
+    eigarray=[]
     for k in xrange(1,maxiter+1):
         pt.write("{0:*^60s}".format("Iteration "+str(k)))
         t0 = pt.getWallTime()
@@ -655,16 +656,6 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
                 Eel  = 0.5 * pt.getTraceProductAIJ(D, F0+F)
             stage, t = pt.getStageTime(newstage='SetupEPS',oldstage=stage, t0=t)    
             eps = st.setupEPS(F, B=None,interval=interval)  
-            stage, t = pt.getStageTime(newstage='SolveEPS',oldstage=stage, t0=t)
-            eps = st.solveEPS(eps)
-            t1 = pt.getWallTime(t0=t, str='Solve')
-            nconv = st.getNumberOfConvergedEigenvalues(eps)
-            t1 = pt.getWallTime(t0=t1, str='Get no of eigs')
-            if nconv < nocc: 
-                pt.write("Missing eigenvalues: {0} converged, {1} required".format(nconv,nocc))
-                break
-            eigarray = st.getNEigenvalues(eps,nocc)
-            t1 = pt.getWallTime(t0=t1, str='Get eigs')
         else:
             Eold = Eel
             stage, t = pt.getStageTime(newstage='F',oldstage=stage, t0=t)
@@ -696,17 +687,19 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
                 eps = st.updateEPS(eps,Floc,subintervals=subint,local=local)
             else:
                 eps = st.updateEPS(eps,F,subintervals=subint,local=local)                
-            stage,t = pt.getStageTime(newstage='SolveEPS',oldstage=stage, t0=t)
-            eps = st.solveEPS(eps)
-            t1 = pt.getWallTime(t0=t, str='Solve')
-            nconv = st.getNumberOfConvergedEigenvalues(eps)
-            t1 = pt.getWallTime(t0=t1, str='Get no of eigs')
-            if nconv < nocc: 
-                pt.write("Missing eigenvalues: {0} converged, {1} required".format(nconv,nocc))
-                break
-            eigarray = st.getNEigenvalues(eps,nocc)
-            t1 = pt.getWallTime(t0=t1, str='Get eigs')
-          
+        stage,t = pt.getStageTime(newstage='SolveEPS',oldstage=stage, t0=t)
+        eps = st.solveEPS(eps)
+        t1 = pt.getWallTime(t0=t, str='Solve')
+        nconv = st.getNumberOfConvergedEigenvalues(eps)
+        t1 = pt.getWallTime(t0=t1, str='Get no of eigs')
+        pt.write("Number of converged eigenvalues: {0}".format(nconv))
+        if nconv < nocc: 
+            pt.write("Error! Missing eigenvalues.")
+            pt.write("Number of required eigenvalues: {0}".format(nocc))
+            break
+        eigarray = st.getNEigenvalues(eps,nocc)
+        pt.write("Eigenvalue range: {0:5.3f}, {1:5.3f}".format(min(eigarray),max(eigarray)))
+        t1 = pt.getWallTime(t0=t1, str='Get eigs')
         if (len(eigarray)>nocc):
             homo = eigarray[nocc-1] 
             lumo = eigarray[nocc]
@@ -715,13 +708,10 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
             writeEnergies(lumo,unit='ev',enstr='LUMO')
             writeEnergies(gap,unit='ev',enstr='Gap')
         stage, t = pt.getStageTime(newstage='Density', oldstage=stage, t0=t)
-        nden = nocc
-        if nconv < nocc: 
-            nden = nconv
         if usesips:
-            D = sips.getDensityMat(eps,0,nden)
+            D = sips.getDensityMat(eps,0,nocc)
         else:    
-            D = st.getDensityMatrix(eps,T, nden)
+            D = st.getDensityMatrix(eps,T,nocc)
         if k==1 and local: 
             stage, t = pt.getStageTime(newstage='Redundant mat', oldstage=stage, t0=t)
             matcomm = D.getComm()
@@ -734,13 +724,14 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
             stage, t = pt.getStageTime(newstage='Seq D', oldstage=stage, t0=t)   
             D = pt.getSeqMat(D)
         t = pt.getWallTime(t0,str='Iteration')
+        if savemat:
+            pt.writeMat(Floc, 'fock'+str(k)+'.bin')
+            pt.writeMat(D, 'dens'+str(k)+'.bin')
+            t = pt.getWallTime(t,str='Save mat')
         if abs(Eel-Eold) < scfthresh and nconv >= nocc:
             pt.write("Converged at iteration {0}".format(k))
             converged = True
-            if savemat:
-                pt.writeMat(F, 'finalfock.bin')
-                t = pt.getWallTime(t0,str='Save mat')
-            return converged, Eel, homo, lumo
+            break
     return converged, Eel, homo, lumo
 
 def scfwithaccelerators(opts,nocc,atomids,D,F0,T,G,H,stage):

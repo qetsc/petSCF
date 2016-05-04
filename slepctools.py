@@ -194,7 +194,7 @@ def updateEPS(eps,A,B=None,subintervals=[0],local=True, globalupdate=False,):
     if len(subintervals)>1:
         #Print("subintervals:{0}".format(subintervals))
         eps.setInterval(subintervals[0],subintervals[-1])
-        Print("Solving for eigenvalues in [{0:5.3f}, {1:5.3f}]".format(subintervals[0], subintervals[-1]))
+        Print("Solution interval: {0:5.3f}, {1:5.3f}".format(subintervals[0], subintervals[-1]))
         if len(subintervals)>2:
             eps.setKrylovSchurPartitions(len(subintervals)-1)
             eps.setKrylovSchurSubintervals(subintervals)
