@@ -169,6 +169,7 @@ def setupEPS(A,B=None,interval=[0]):
     PETSc.Options().setValue('mat_mumps_cntl_3',1.e-12)
     if len(interval)==2:
         eps.setInterval(interval[0],interval[1])
+        Print("Solving for eigenvalues in [{0:5.3f}, {1:5.3f}]".format(interval[0], interval[1]))
     eps.setWhichEigenpairs(SLEPc.EPS.Which.ALL)
     eps.setFromOptions()
     eps.setUp()
@@ -193,6 +194,7 @@ def updateEPS(eps,A,B=None,subintervals=[0],local=True, globalupdate=False,):
     if len(subintervals)>1:
         #Print("subintervals:{0}".format(subintervals))
         eps.setInterval(subintervals[0],subintervals[-1])
+        Print("Solving for eigenvalues in [{0:5.3f}, {1:5.3f}]".format(subintervals[0], subintervals[-1]))
         if len(subintervals)>2:
             eps.setKrylovSchurPartitions(len(subintervals)-1)
             eps.setKrylovSchurSubintervals(subintervals)

@@ -393,21 +393,17 @@ def getF0(atoms,basis,T):
     A.setUp()
     rstart, rend = A.getOwnershipRange()
     for i in xrange(rstart,rend):
-        basisi=basis[i]
-        typei=basisi.type
-        ipi=basisi.ip
-        atomi=basisi.atom
-        cols,vals = T.getRow(i)
+        basisi      = basis[i]
+        ipi         = basisi.ip
+        atomi       = basisi.atom
+        cols, valsT = T.getRow(i)
         tmp = basisi.u # Ref1, Ref2
         k = 0
         for j in cols:
             basisj=basis[j]
             atomj=basisj.atom
             if atomj != atomi:
- #               tmp -= T[i,j] * atomj.Z / len(atomj.basis) # Ref1, Ref2 adopted sum to be over orbitals rather than atoms
-                tmp -= vals[k] * atomj.Z / atomj.nbf # Ref1, Ref2 adopted sum to be over orbitals rather than atoms
-          #  if i != j: # According to Ref1, Ref2 and Ref3  atoms should be different, but PyQuante implementation ignores that, however this does not change any results since the overlap of different orbitals on the same atom is very small. (orthogonal) 
-           #     if typei == basisj.type:
+                tmp -= valsT[k] * atomj.Z / atomj.nbf # Ref1, Ref2 adopted sum to be over orbitals rather than atoms
                 betaij = getBeta0ij(atomi.atno,atomj.atno)
                 Sij = basisi.cgbf.overlap(basisj.cgbf)
                 IPij = ipi + basisj.ip
@@ -664,7 +660,9 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
             t1 = pt.getWallTime(t0=t, str='Solve')
             nconv = st.getNumberOfConvergedEigenvalues(eps)
             t1 = pt.getWallTime(t0=t1, str='Get no of eigs')
-            if nconv < nocc: return
+            if nconv < nocc: 
+                pt.write("Missing eigenvalues: {0} converged, {1} required".format(nconv,nocc))
+                break
             eigarray = st.getNEigenvalues(eps,nocc)
             t1 = pt.getWallTime(t0=t1, str='Get eigs')
         else:
@@ -703,7 +701,9 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
             t1 = pt.getWallTime(t0=t, str='Solve')
             nconv = st.getNumberOfConvergedEigenvalues(eps)
             t1 = pt.getWallTime(t0=t1, str='Get no of eigs')
-            if nconv < nocc: return
+            if nconv < nocc: 
+                pt.write("Missing eigenvalues: {0} converged, {1} required".format(nconv,nocc))
+                break
             eigarray = st.getNEigenvalues(eps,nocc)
             t1 = pt.getWallTime(t0=t1, str='Get eigs')
           
@@ -948,21 +948,21 @@ def runMindo3(qmol,opts):
     pt.getWallTime(t0,str="Pre-SCF")
     t0          = pt.getWallTime()
     converged, Eelec, homo, lumo = scf(opts,nocc,atomids,D0,F0,T,G,H,stage)
-    gap = lumo - homo
     if converged:
-        pt.getWallTime(t0,str="SCF")
+        pt.getWallTime(t0,str="SCF achieved")
+        gap = lumo - homo
+        Etot   = Eelec + Enuc
+        Efinal = Etot*ut.ev2kcal+Eref
+        writeEnergies(Eref, unit='kcal', enstr='Eref')
+        writeEnergies(Enuc, 'ev', 'Enuc')
+        writeEnergies(Eelec, unit='ev', enstr='Eel')
+        writeEnergies(homo,unit='ev',enstr='HOMO')
+        writeEnergies(lumo,unit='ev',enstr='LUMO')
+        writeEnergies(gap,unit='ev',enstr='Gap')
+        writeEnergies(Etot,unit='ev',enstr='Enuc+Eelec')
+        writeEnergies(Efinal, unit= 'kcal', enstr='Eref+Enuc+Eelec')
     else:    
-        pt.getWallTime(t0,str="No convergence")
-    Etot   = Eelec + Enuc
-    Efinal = Etot*ut.ev2kcal+Eref
-    writeEnergies(Eref, unit='kcal', enstr='Eref')
-    writeEnergies(Enuc, 'ev', 'Enuc')
-    writeEnergies(Eelec, unit='ev', enstr='Eel')
-    writeEnergies(homo,unit='ev',enstr='HOMO')
-    writeEnergies(lumo,unit='ev',enstr='LUMO')
-    writeEnergies(gap,unit='ev',enstr='Gap')
-    writeEnergies(Etot,unit='ev',enstr='Enuc+Eelec')
-    writeEnergies(Efinal, unit= 'kcal', enstr='Eref+Enuc+Eelec')
+        pt.getWallTime(t0,str="SCF FAILED!!!")
     if nuke:
         Etotfull   = Eelec + Enukefull
         Efinalfull = Etotfull*ut.ev2kcal+Eref
