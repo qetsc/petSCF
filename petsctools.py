@@ -472,6 +472,17 @@ def getMaxNnzPerRow(mol,nat,maxdist):
     maxband = MPI.COMM_WORLD.allreduce(maxband,op=MPI.MAX)        
     return maxnnz*2+1, 2 * maxband   
 
+def getNNZ(A):
+    """
+    Returns the number of nonzeros of the given matrix A.
+    """
+    comm = A.getComm().tompi4py()
+    rstart,rend = A.getOwnershipRange()
+    nnz  = 0
+    for i in range(rstart,rend):
+        nnz += len(A.getRow(i)[0])
+    return getCommSum(comm,nnz,integer=True) 
+
 def getNnzInfo(basis,maxdist):
     """
     Returns number of nonzeros per row and  bandwidth per row, based on distance between atoms.
@@ -613,10 +624,10 @@ def getMatComm(n,comm=MPI.COMM_WORLD,debug=False):
     matcomm    = MPI.COMM_WORLD.Create(matgroup)
     return matcomm
 
-def getMatFromFile(filename,comm):
+def getMatFromFile(filename,comm=PETSc.COMM_WORLD):
     matreader=PETSc.Viewer().createBinary(filename,mode='r',comm=comm)
     A=PETSc.Mat().create(comm=comm)
-    A.setType('sbaij')
+#    A.setType('aij')
     A.setFromOptions()
     A.load(matreader)
     return A
