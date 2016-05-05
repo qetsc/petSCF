@@ -3,6 +3,8 @@ import slepctools as st
 import unittools as ut
 import numpy as np
 import scftools as ft
+from os.path import isfile
+from sys import exit
 """
 MINDO/3 parameters from PyQuante
 """
@@ -243,7 +245,7 @@ def getT(comm,basis,maxdist):
     e2           = ut.e2
     rstart, rend = pt.distributeN(comm, nbf)
     localsize    = rend - rstart
-    Enuc        = 0.0
+    Enuc         = 0.
     k            = 0   
     t            = pt.getWallTime(t0=t,str='Initialize')
     pt.sync()
@@ -300,9 +302,7 @@ def getT(comm,basis,maxdist):
     A.assemblyBegin()
     A.assemblyEnd()
     t = pt.getWallTime(t0=t,str='Assemble mat')
-    #Enuc =  comm.allreduce(Enuc)
     Enuc = pt.getCommSum(comm, Enuc)
-    #nnz =  comm.allreduce(nnz) 
     nnz =  pt.getCommSum(comm, nnz, integer=True) 
     t = pt.getWallTime(t0=t,str='Reductions')
     B = A.duplicate(copy=True)
@@ -310,6 +310,56 @@ def getT(comm,basis,maxdist):
     t = pt.getWallTime(t0=t,str='Add transpose')
     A.destroy()
     return  nnz,Enuc, B
+
+def getTFromGuess(comm,guessmat,basis):
+    """
+    Returns a matrix that stores gammaij.
+    The matrix has the same nonzero pattern of guesmat.
+    Computes nnz info, and nuclear energy.
+    TODO:
+    Allow to use a subset of the nonzeros of the guessmat.
+    Make use of symmetry. 
+    Try sbaij.
+    """
+    t            = pt.getWallTime()
+    bohr2ang2    = ut.bohr2ang**2.
+    e2           = ut.e2
+    A = guessmat.duplicate()
+    A.setUp()
+    rstart, rend = A.getOwnershipRange()
+    nnz = 0
+    Enuc         = 0.
+    for i in xrange(rstart,rend):
+        cols, vals    = guessmat.getRow(i)
+        nnz    += len(cols)
+        atomi   = basis[i].atom
+        atnoi   = atomi.atno
+        rhoi    = atomi.rho
+        gammaii = f03[atnoi]
+        n       = 0
+        for j in cols:
+            atomj = basis[j].atom
+            if atomi.atid == atomj.atid:
+                vals[n] = gammaii
+            else:                        
+                distij2 = atomi.dist2(atomj) # (in bohr squared) * bohr2ang2
+                rhoj    = atomj.rho 
+                distij2 = distij2 * bohr2ang2
+                gammaij = e2 / np.sqrt(distij2 + 0.25 * (rhoi + rhoj)**2.)
+                R       = np.sqrt(distij2)
+                vals[n] = gammaij
+                atnoj   = atomj.atno
+                Enuc  += ( atomi.Z*atomj.Z*gammaij +  abs(atomi.Z*atomj.Z*(ut.e2/R-gammaij)*getScaleij(atnoi, atnoj, R)) ) / ( atomi.nbf * atomj.nbf )
+            n += 1
+        A.setValues(i,cols,vals,addv=pt.INSERT)
+    t = pt.getWallTime(t0=t,str='For loop')
+    A.assemblyBegin()
+    A.assemblyEnd()
+    t = pt.getWallTime(t0=t,str='Assemble mat')
+    Enuc = .5 * pt.getCommSum(comm, Enuc) # Since we disregard symmetry.
+    nnz =  pt.getCommSum(comm, nnz, integer=True) 
+    t = pt.getWallTime(t0=t,str='Reductions')
+    return  nnz,Enuc, A
 
 def getTold(comm,basis,maxdist,preallocate=False):
     """
@@ -414,20 +464,21 @@ def getF0(atoms,basis,T):
     A.assemble()
     return A
 
-def getD0(comm,basis,guess=0,T=None):
+def getD0(comm,basis,guessfile=None,T=None):
     """
     Returns the guess (initial) density matrix.
-    guess = 0 :
-        A very simple guess is used which a diagonal matrix containing atomic charge divided by number of basis functions for the atom.
-    guess = 1 :
-        Same diagoanl with guess 0 but offdiagonal values are set to d. Duplicates T.
-    guess = 2 :
-        TODO:
-        Same diagoanl with guess 0 but offdiagonal values are set to random values. Duplicates T.   
+    Guesfile is the path for a stored density matrix
+    If guess file is not found, a simple guess for the density 
+    matrix is returned. 
+    Default guess is a diagonal matrix based on valance electrons of atoms.   
     """
-    nbf=len(basis)
 
-    if guess==0: 
+    if isfile(guessfile):
+        pt.write("Read density matrix file: {0}".format(guessfile))
+        A = pt.getMatFromFile(guessfile, comm) 
+    else:
+        pt.write("Density matrix file not found: {0}".format(guessfile))            
+        nbf=len(basis) 
         A= pt.createMat(comm=comm)
         A.setType('aij') 
         A.setSizes([nbf,nbf])        
@@ -439,23 +490,7 @@ def getD0(comm,basis,guess=0,T=None):
             if atomi.atno == 1: A[i,i] = atomi.Z/1.
             else:               A[i,i] = atomi.Z/4.
         A.assemble()    
-    elif guess==1:
-        d=0.
-        if T:
-            A=T.duplicate()
-            rstart, rend = A.getOwnershipRange() 
-            for i in xrange(rstart,rend):
-                atomi=basis[i].atom
-                cols = T.getRow(i)[0] 
-                for j in cols:
-                    if i==j:
-                        if atomi.atno == 1: A[i,i] = atomi.Z/1.
-                        else:               A[i,i] = atomi.Z/4.
-                    else:    
-                        A[i,j] = d * T[i,j]
-            A.assemble()
-        else:
-            pt.write("You need to give a template matrix for guess type {0}".format(guess))            
+
     return  A 
 
 def getG(comm, basis, T=None):
@@ -898,11 +933,13 @@ def runMindo3(qmol,opts):
     stage, t0   = pt.getStageTime(newstage='MINDO3')
     maxdist     = opts.getReal('maxdist', 1.e6)
     guess       = opts.getInt('guess', 0)
+    guessfile   = opts.getString('guessfile', 'fock.bin')
     nuke        = opts.getBool('nuke',False)
     sync        = opts.getBool('sync',False)
     t           = pt.getWallTime(t0=t0,str='PyQuante initialization')  
     atoms   = qmol.atoms
     Eref    = getEref(qmol)
+    Enuc    = 0.
     nbf     = getNbasis(qmol)    
     nel     = getNelectrons(atoms)
     nocc    = nel/2
@@ -917,8 +954,13 @@ def runMindo3(qmol,opts):
     pt.write("Number of valance electrons: {0}".format(nel))
     pt.write("Number of occupied orbitals: {0} = Number of required eigenvalues".format(nocc))
     t           = pt.getWallTime(t0=t,str='Basis set')
+    stage, t = pt.getStageTime(newstage='D0', oldstage=stage ,t0=t)
+    D0     = getD0(worldcomm,basis,guessfile=guessfile)    
     stage, t = pt.getStageTime(newstage='T', oldstage=stage,t0=t0)
-    nnz, Enuc, T            = getT(worldcomm, basis, maxdist)
+    if guess > 0:
+        nnz, Enuc, T            = getTFromGuess(worldcomm, D0, basis)
+    else:
+        nnz, Enuc, T            = getT(worldcomm, basis, maxdist)
     dennnz = (100. * nnz) / (nbf*nbf) 
     pt.write("Nonzero density percent : {0:6.3f}".format(dennnz))
     if nuke:
@@ -926,11 +968,9 @@ def runMindo3(qmol,opts):
             Enukefull                = getNuclearEnergyFull(worldcomm, atoms)   
             writeEnergies(Enukefull, unit='ev', enstr='Enucfull')
     writeEnergies(Eref, unit='kcal', enstr='Eref')
-    writeEnergies(Enuc, unit='ev', enstr='Enuc')        
+    writeEnergies(Enuc, unit='ev', enstr='Enuc')
     stage, t = pt.getStageTime(newstage='F0', oldstage=stage, t0=t)
     F0    = getF0(atoms, basis, T)
-    stage, t = pt.getStageTime(newstage='D0', oldstage=stage ,t0=t)
-    D0     = getD0(worldcomm,basis,guess=guess,T=T)
     stage, t = pt.getStageTime(newstage='G', oldstage=stage, t0=t)
     G     = getG(worldcomm,basis)    
     stage, t = pt.getStageTime(newstage='H', oldstage=stage, t0=t)
