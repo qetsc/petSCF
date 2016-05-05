@@ -24,21 +24,35 @@ def getComm():
 def getPetscComm():
     return PETSc.COMM_WORLD
 
-def getCommSum(comm,x,integer=False):
+def getCommSum(comm,x,integer=False, all=False,op=MPI.SUM):
     """
-    Sum integers or floats over the communicator.
+    Returns the result of an opperation
+    on an integer or a float over the communicator.
+    Only rank=0 has the sum.
     Should be faster than comm.reduce()
+    comm should be mpi4py comm, not petsc comm
+    TODO:
+    Rename the function
+    Use dtype as an option and simplify,
     """
     if integer:        
-        sum=np.zeros(1,dtype='int32')
-        send=np.array(x,dtype='int32')
-        comm.Reduce([send, MPI.INT ], [sum, MPI.INT],
-                op=MPI.SUM, root=0)
+        sum = np.zeros(1,dtype='int32')
+        send = np.array(x,dtype='int32')
+        if all:
+            comm.Allreduce([send, MPI.INT ], [sum, MPI.INT],
+                op=op)
+        else:
+            comm.Reduce([send, MPI.INT ], [sum, MPI.INT],
+                op=op, root=0)
     else:    
-        sum=np.zeros(1)
-        send=np.array(x)
-        comm.Reduce([send, MPI.DOUBLE ], [sum, MPI.DOUBLE],
-                op=MPI.SUM, root=0)
+        sum = np.zeros(1)
+        send = np.array(x)
+        if all:
+            comm.Allreduce([send, MPI.DOUBLE ], [sum, MPI.DOUBLE],
+                op=op)
+        else:
+            comm.Reduce([send, MPI.DOUBLE ], [sum, MPI.DOUBLE],
+                op=op, root=0)    
     return sum[0]
 
 def writeGitHash():
@@ -681,15 +695,21 @@ def getTraceProductAIJ(A,B):
     Returns the trace of the product which is:
     sum_i sum_j A(i,j) B(j,i), 
     so it is simpler than taking the product first and then computing the trace.
+    TODO: Change allreduce
+    return getCommSum(comm,temp) #This or comm.reduce does not work since, there are operations on all processores
     """
-    temp=0.0
     rstart, rend = B.getOwnershipRange()
     comm = B.getComm().tompi4py()
-    for i in xrange(rstart,rend):
+    a = A.getRow(rstart)[1]
+    b = B.getRow(rstart)[1]
+    if len(a) != len(b):
+        return getTraceProductDiag(A,B)
+    temp = a.dot(b)
+    for i in xrange(rstart+1,rend):
         a = A.getRow(i)[1]
         b = B.getRow(i)[1]
         temp += a.dot(b)
-    return comm.allreduce(temp,op=MPI.SUM)
+    return getCommSum(comm, temp, all=True)  
 
 def getTraceProductAIJslow(A,B):
     """

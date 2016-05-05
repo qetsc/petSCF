@@ -685,10 +685,7 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
             F = Ftmp.copy(F,None)
             Eold = Eel
             stage, t = pt.getStageTime(newstage='Trace',oldstage=stage, t0=t)
-            if guess==0:
-                Eel  = 0.5 * pt.getTraceProductDiag(D,F0+F)
-            else:
-                Eel  = 0.5 * pt.getTraceProductAIJ(D, F0+F)
+            Eel  = 0.5 * pt.getTraceProductAIJ(D, F0+F)
             stage, t = pt.getStageTime(newstage='SetupEPS',oldstage=stage, t0=t)    
             eps = st.setupEPS(F, B=None,interval=interval)  
         else:
