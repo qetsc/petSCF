@@ -1,5 +1,31 @@
 import numpy as np
 import petsctools as pt
+from os.path import isfile, basename
+
+def saveall(opts,k, Floc,D,eigs):
+    """
+    Saves Fock and Density matrices and eigenvalues to disk
+    TODO:
+    Put files in a dir, allow a prefix etc.
+    Perform IO only on root, bcast filestr
+    """
+    t0 = pt.getWallTime()
+    maxdstr = str(int(opts.getReal('maxdist', 1.e6)))
+    xyzstr  = basename(opts.getString('xyz',''))[:-4]
+    filestr = xyzstr + '_d' + maxdstr + '_i' + str(k)
+    i = 2
+    while (isfile('E_' + filestr + '.txt')):
+        filestr = filestr + '_' + str(i)
+        i += 1
+    efile   = 'E_' + filestr + '.txt'
+    dfile   = 'D_' + filestr + '.bin'
+    ffile   = 'F_' + filestr + '.bin'      
+    if not pt.rank:
+        np.savetxt(efile, eigs)
+    pt.writeMat(Floc, ffile)
+    pt.writeMat(D, dfile)
+    pt.getWallTime(t0,str='Save mat')
+    return 
 
 def extrapolate3c(A0,A1,A2):
     """
