@@ -3,6 +3,8 @@ petsc4py.init(sys.argv)
 from petsc4py import PETSc
 from mpi4py import MPI
 import numpy as np
+#from numba.decorators import autojit
+#from numba import jit
 
 write     = PETSc.Sys.Print
 INSERT    = PETSc.InsertMode.INSERT
@@ -383,6 +385,7 @@ def getLocalNnzInfoSym(basis,rstart,rend,maxdist2):
         pt.write(dnnz[i],onnz[i])        
     return dnnz,onnz
 
+#@jit
 def getLocalNnzInfo(basis,rstart,rend,maxdist2):
     """
     Returns three arrays that contains: 
@@ -398,9 +401,9 @@ def getLocalNnzInfo(basis,rstart,rend,maxdist2):
     onnz=np.zeros(localsize,dtype='int32')
     jmax=np.zeros(localsize,dtype='int32')
     k=0
-    for i in xrange(rstart,rend):
+    for i in range(rstart,rend):
         atomi=basis[i].atom
-        for j in xrange(nbf):
+        for j in range(nbf):
             distij2=atomi.dist2(basis[j].atom)
             if distij2 < maxdist2:
                 if j >= rstart and j < rend: 
@@ -411,6 +414,9 @@ def getLocalNnzInfo(basis,rstart,rend,maxdist2):
                     jmax[k] = j 
         k += 1 
     return dnnz, onnz, jmax
+
+
+#getLocalNnzInfoNumba = autojit(getLocalNnzInfo)
 
 def getNnzVec(basis,maxdist):
     """
