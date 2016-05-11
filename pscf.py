@@ -36,13 +36,37 @@ import pyquantetools as qt
 import os.path
 from mindo3 import runMindo3
 from hf import runHF
+
+def printGitHash():
+    """
+    Not portable
+    Will not work if not on the same directory
+    """
+    import subprocess
+#    githash = subprocess.check_output(["git", "describe", "--always"]) # short hash or tag
+    githash = subprocess.check_output(["git", "rev-parse", "HEAD"])  #long hasg
+    print("Git hash: {0}".format(githash.strip()))
+    return
+
+def printHostName():
+    from socket import gethostname
+    print("Running on host {0}".format(gethostname()))
+    return 
+
+def printDateTime():
+    from time import strftime
+    print(strftime("%Y-%m-%d %H:%M"))
+    return
+
 def main():
-    pt.write("{0:*^72s}".format("  PSCF  "))
-    host        = pt.getHostName()
-    if 'vesta' in host or 'mira' in host:
-        pt.write("Could not get git info...")
-    else:
-        pt.writeGitHash()
+    comm = pt.getComm()
+    nrank = comm.size
+    rank  = comm.rank
+    if not rank:
+        print("{0:*^72s}".format("  PSCF  "))
+        printDateTime()
+        printHostName()
+        print("Number of MPI ranks: {0}".format(nrank))
     stage, t0   = pt.getStageTime(newstage='Read input')
     pt.sync()
     t = pt.getWallTime(t0=t0,str='Sync')  
@@ -51,15 +75,10 @@ def main():
     xyzfile     = opts.getString('xyz','')
     solve       = opts.getInt('solve', 0)
     sort        = opts.getInt('sort', 0)
-    nsubint     = opts.getInt('eps_krylovschur_partitions', 1)
     method      = opts.getString('method','mindo3').lower()
     writeXYZ    = opts.getBool('writeXYZ',False)
     sync        = opts.getBool('sync',False)
-    comm = pt.getComm()
-    nrank = comm.size
-    rank  = comm.rank
-    pt.write("Number of MPI ranks: {0}".format(nrank))
-    pt.write("Number of subintervals: {0}".format(nsubint))
+
     if sync: 
         pt.sync()
         t = pt.getWallTime(t0=t,str='Barrier - options')

@@ -57,6 +57,8 @@ def getCommSum(comm,x,integer=False, all=False,op=MPI.SUM):
 
 def writeGitHash():
     """
+    Not portable
+    Will not work if not on the same directory
     """
     if not PETSc.COMM_WORLD.rank:
         import subprocess
