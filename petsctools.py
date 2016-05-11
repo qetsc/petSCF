@@ -55,28 +55,6 @@ def getCommSum(comm,x,integer=False, all=False,op=MPI.SUM):
                 op=op, root=0)    
     return sum[0]
 
-def writeGitHash():
-    """
-    Not portable
-    Will not work if not on the same directory
-    """
-    if not PETSc.COMM_WORLD.rank:
-        import subprocess
-#        githash = subprocess.check_output(["git", "describe", "--always"]) # short hash or tag
-        githash = subprocess.check_output(["git", "rev-parse", "HEAD"])  #long hasg
-        write("Git hash: {0}".format(githash.strip()))
-    return
-
-def getHostName():
-    """
-    """
-    if not PETSc.COMM_WORLD.rank:
-        import socket
-        host = socket.gethostname()
-        write("PSCF running on host {0}".format(host))
-        return host
-    return 'host'
-
 def getWallTime(t0=0, str=''):
     """
     Returns the walltime - t0 in seconds.

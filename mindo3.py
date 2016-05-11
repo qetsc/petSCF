@@ -634,7 +634,7 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
     sync          = opts.getBool('sync',False)
     saveall       = opts.getBool('saveall',False)
     if nbin == 0:
-        nbin = opts.getint('nbin',0)
+        nbin = opts.getInt('nbin',0)
     wcomm = pt.worldcomm
     nrank    = wcomm.size # total number of ranks
     if nbin == 0:
