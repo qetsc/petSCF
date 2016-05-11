@@ -4,10 +4,10 @@ from petsc4py import PETSc
 from mpi4py import MPI
 import numpy as np
 
-write  = PETSc.Sys.Print
-INSERT = PETSc.InsertMode.INSERT
-
-
+write     = PETSc.Sys.Print
+INSERT    = PETSc.InsertMode.INSERT
+rank      = MPI.COMM_WORLD.rank
+worldcomm = MPI.COMM_WORLD
 def sync(comm=None):
     if comm:
         comm.Barrier()

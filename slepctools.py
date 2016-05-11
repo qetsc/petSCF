@@ -7,9 +7,9 @@ Print = PETSc.Sys.Print
 def getNumberOfSubIntervals(eps):
     return eps.getKrylovSchurPartitions()
 
-def getClusters(eigs, chtresh=1.e-6):
+def getClusters(x, crange=1.e-6):
     """
-    Given a list of eigenvalues and a threshold for clustering,
+    Given an array of numbers (x) and a threshold for clustering,
     returns an array of clusters, and the multiplicities
     of each cluster.
     Input:
@@ -19,46 +19,152 @@ def getClusters(eigs, chtresh=1.e-6):
             - numpy array (dtype='float64')
             - numpy array (dtpye='int32')
     """
-    eigs = sorted(np.array(eigs))
-    neigs          = len(eigs)
-    clusters       = np.zeros(neigs)
-    multiplicities = np.ones(neigs,dtype='int32')
-    clusters[0]    = eigs[0]
+    nx          = len(x)
+    clusters       = np.zeros(nx)
+    multiplicities = np.ones(nx,dtype='int32')
+    clusters[0]    = x[0]
     icluster       = 0
-    for i in range(1,neigs):
-        if abs(eigs[i]-clusters[icluster]) < chtresh:
+    for i in range(1,nx):
+        if x[i]-clusters[icluster] < crange:
             multiplicities[icluster] += 1
         else:
             icluster += 1
-            clusters[icluster] = eigs[i]
+            clusters[icluster] = x[i]
     ncluster = icluster + 1
     return clusters[0:ncluster], multiplicities[0:ncluster]
 
-def getSubIntervals(eigs, nsub, sbuffer=0.1,interval=[0],cthresh=1.e-6):
+def getBinEdges1(x, nbin, rangebuffer=0.1,interval=[0],cthresh=1.e-6):
     """
-    Given a list of eigenvalues, (eigs) and number of subintervals (nsub), 
+    Given a list of eigenvalues, (x) and number of subintervals (nbin), 
     returns the boundaries for subintervals such that each subinterval has an average number of eigenvalues.
     Doesn't skip gaps, SLEPc doesn't support it, yet.
-    range of eigs * sbuffer gives a sbuffer zone for leftmost and rightmost boundaries.
+    range of x * rangebuffer gives a rangebuffer zone for leftmost and rightmost boundaries.
     """
-    eigs, mults = getClusters(eigs,cthresh) 
-    neigs = len(eigs)
-    mean = neigs / nsub
-    remainder = neigs % nsub
-    erange = eigs[-1] - eigs[0]
-    isbuffer = erange * sbuffer
-    subint = np.zeros(nsub + 1)
-    subint[0] = eigs[0] - isbuffer
-    for i in xrange(1, nsub):
-        subint[i] = (eigs[mean * i] + eigs[mean * i - 1]) / 2.
+    x, mults = getClusters(x,cthresh) 
+    nx = len(x)
+    mean = nx / nbin
+    remainder = nx % nbin
+    erange = x[-1] - x[0]
+    isbuffer = erange * rangebuffer
+    b = np.zeros(nbin + 1)
+    b[0] = x[0] - isbuffer
+    for i in xrange(1, nbin):
+        b[i] = (x[mean * i] + x[mean * i - 1]) / 2.
         if remainder > 0 and i > 1:
-            subint[i] = (eigs[mean * i + 1] + eigs[mean * i]) / 2.
+            b[i] = (x[mean * i + 1] + x[mean * i]) / 2.
             remainder = remainder - 1
-    subint[nsub] = eigs[-1] + isbuffer
+    b[nbin] = x[-1] + isbuffer
     if len(interval)==2:
-        subint[0]  = interval[0]
-        subint[-1] = interval[1]
-    return subint, mults
+        b[0]  = interval[0]
+        b[-1] = interval[1]
+    return b, mults
+
+def getBinEdges2(x,nbin,binbuffer=0.001):
+    """
+    Given an array of numbers (x) and number
+    of bins (nbins), returns optimum bin edges,
+    to reduce number of shifts required for eps
+    solve.
+    Input:
+    x       - numpy array (dtype='float64')
+    nbin    - int
+    Returns:
+            - numpy array (dtype='float64', len = nbin+1)
+    TODO:
+    Bisection type algorithms can be used to obtain optimum bin edges.
+    Binning score can be used for better optimization of bin edges
+    """
+    rangex = max(x) - min(x)
+    meanbinsize = rangex / float(nbin)
+    b = np.zeros(nbin+1)
+    maxtrial = 100
+    crange = meanbinsize
+    i = 0
+    while i < maxtrial:
+        i += 1
+        clusters = getClusters(x,crange=crange)[0]
+        ncluster = len(clusters)
+        if ncluster > nbin:
+            crange = crange * 1.1
+        elif ncluster < nbin:    
+            crange = crange * 0.9
+        else:
+            break
+    if i == maxtrial :
+        Print("Bin optimization failed for bintype 2. Found {1} clusters".format(ncluster))
+        Print("Adjust bin edges based on prior knowledge to have a uniform number of eigenvalues in each bin")
+        b = getBinEdges1(x,nbin)[0]
+    else:
+        for i in range(1,nbin):
+            b[i] = clusters[i] - binbuffer
+    return b                    
+            
+def getBinEdges(x, nbin,interval=[0],bintype=2,binbuffer=0.001,rangebuffer=0.1):
+    """
+    Given an array of numbers (x) and number
+    of bins (nbins), returns bin edges,
+    based on binning algortithm.
+    bintype = 0 :
+        Fixed uniform width bins
+    bintype = 1 :
+        Bin edges are adjusted to contain uniform number of values.
+    bintype = 2 :
+        Bin edges are adjusted to minimize distance from left edge.
+    Input:
+    x       - numpy array (dtype='float64')
+    nbin    - int
+    Returns:
+            - numpy array (dtype='float64', len = nbin+1)
+    TODO:
+    Bisection type algorithms can be used to obtain optimum bin edges.
+    Binning score can be used for better optimization of bin edges
+    """
+    if len(x) > 1:
+        dx   = x[1:] - x[:-1]
+        Print("Min seperation of eigenvalues: {0}".format(min(dx)))
+        Print("Max seperation of eigenvalues: {0}".format(max(dx)))
+    if (len(x) < nbin or bintype == 0) and len(interval) == 2:
+        Print("Fixed uniform bins will be used within [{0},{1}]".format(interval[0],interval[1]))
+        return interval
+    elif bintype == 1:
+        Print("Adjust bin edges to have a uniform number of eigenvalues in each bin")
+        b = getBinEdges1(x,nbin)[0]   
+    else:
+        Print("Adjust bin edges to minimize distance of values from the left edge of each bin")
+        b = getBinEdges2(x,nbin,binbuffer=binbuffer)           
+    if len(interval) == 2:
+        Print("Using given left and right bin edges: [{0},{1}]".format(interval[0],interval[1]))
+        b[0]  = interval[0]
+        b[-1] = interval[1]
+    else:
+        Print("Using optimized  left and right bin edges: [{0},{1}] with buffer {3}".format(interval[0],interval[1], rangebuffer))    
+        b[0]  = x[0]  - rangebuffer
+        b[-1] = x[-1] + rangebuffer
+    return sorted(b)
+
+def getBinningScore(b,x):
+    """
+    Returns a score (lower is better) for given
+    bin_edges (b), and values (x)
+    1) Find the eigenvalues within each slice
+    Within a slice:
+        2) Compute the sum of distances of eigenvalues from the closest 
+           neigbor on the left.
+        3) Add this sum to the distance of the leftmost eigenvalue from the 
+           left boundary.
+    Returns the max sum for each slice.
+    """
+    nbin   = len(b)-1
+    scores = np.zeros(nbin)
+    nempty = 0 
+    for i in range(nbin):
+        xloc=x[(x>b[i]) & (x<b[i+1])] #1
+        if len(xloc) > 1:
+            tmp = np.sum(xloc[1:]-xloc[:-1]) #2
+            scores[i]= xloc[0]-b[i] + tmp #3
+        else:
+            nempty += 1
+    return max(scores), nempty       
 
 def getDensityMatrix(eps,T,nocc):
     """
@@ -144,7 +250,7 @@ def getDensityMatrixLocal(eps,T,nocc):
           Print("Complex eigenvalue dedected: %9f%+9f j  %12g" % (k.real, k.imag, error))
     return D,eigarray
 
-def setupEPS(A,B=None,interval=[0]):
+def setupEPS(A,B=None,binedges=[0]):
     """
     Returns SLEPc eps object for given operators, and options.
     If matrix B is not given, solves the standard eigenvalue problem for a Hermitian matrix A.
@@ -167,15 +273,18 @@ def setupEPS(A,B=None,interval=[0]):
     PETSc.Options().setValue('mat_mumps_icntl_13',1)
     PETSc.Options().setValue('mat_mumps_icntl_24',1)
     PETSc.Options().setValue('mat_mumps_cntl_3',1.e-12)
-    if len(interval)==2:
-        eps.setInterval(interval[0],interval[1])
-        Print("Solving for eigenvalues in [{0:5.3f}, {1:5.3f}]".format(interval[0], interval[1]))
+    if len(binedges) > 1:
+        eps.setInterval(binedges[0],binedges[-1])
+        Print("Solution interval: {0:5.3f}, {1:5.3f}".format(binedges[0], binedges[-1]))
+        if len(binedges)>2:
+            eps.setKrylovSchurPartitions(len(binedges)-1)
+            eps.setKrylovSchurSubintervals(binedges)
     eps.setWhichEigenpairs(SLEPc.EPS.Which.ALL)
     eps.setFromOptions()
     eps.setUp()
     return eps
 
-def updateEPS(eps,A,B=None,subintervals=[0],local=True, globalupdate=False,):
+def updateEPS(eps,A,B=None,binedges=[0],local=True, globalupdate=False,):
     """
     Updates eps object for a new matrix with the same nnz structure
     as the previous one.
@@ -191,13 +300,13 @@ def updateEPS(eps,A,B=None,subintervals=[0],local=True, globalupdate=False,):
                                          globalup=globalupdate)
     else:
         eps.setOperators(A,B)    
-    if len(subintervals)>1:
-        #Print("subintervals:{0}".format(subintervals))
-        eps.setInterval(subintervals[0],subintervals[-1])
-        Print("Solution interval: {0:5.3f}, {1:5.3f}".format(subintervals[0], subintervals[-1]))
-        if len(subintervals)>2:
-            eps.setKrylovSchurPartitions(len(subintervals)-1)
-            eps.setKrylovSchurSubintervals(subintervals)
+    if len(binedges)>1:
+        #Print("binedges:{0}".format(binedges))
+        eps.setInterval(binedges[0],binedges[-1])
+        Print("Solution interval: {0:5.3f}, {1:5.3f}".format(binedges[0], binedges[-1]))
+        if len(binedges)>2:
+            eps.setKrylovSchurPartitions(len(binedges)-1)
+            eps.setKrylovSchurSubintervals(binedges)
     return eps
 
 def solveEPS(eps):

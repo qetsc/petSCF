@@ -623,36 +623,34 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
     """
     t = pt.getWallTime()
     maxiter       = opts.getInt('maxiter', 30)
-    guess         = opts.getInt('guess', 0)
     scfthresh     = opts.getReal('scfthresh',1.e-5)
-    interval      = [opts.getReal('a',-50.) , opts.getReal('b', -10.)]
-    slicing       = opts.getInt('slicing',1)
-    slicingiter   = opts.getInt('slicingiter',2)
-    slicingbuffer = opts.getReal('slicingbuffer',1.e-1)
-    cthresh       = opts.getReal('cthresh',1.e-6)
+    a, b          = opts.getReal('a',-50.) , opts.getReal('b', -10.)
+    bintype       = opts.getInt('bintype',1)
+    rangebuffer   = opts.getReal('rangebuffer',0.25)
+    eigsfile      = opts.getString('eigsfile','eigs.txt')
     usesips       = opts.getBool('sips',False)
     local         = opts.getBool('local',True)
-    nslices       = opts.getInt('eps_krylovschur_partitions',1)
+    nbin          = opts.getInt('eps_krylovschur_partitions',0)
     sync          = opts.getBool('sync',False)
-    savemat       = opts.getBool('savemat',False)
+    saveall       = opts.getBool('saveall',False)
+    if nbin == 0:
+        nbin = opts.getint('nbin',0)
+    wcomm = pt.worldcomm
+    nrank    = wcomm.size # total number of ranks
+    if nbin == 0:
+        nbin = nrank
+    npmat = nrank / nbin # number of ranks for each slice    
     Eel       = 0.
     gap       = 0.
     homo      = 0
     lumo      = 0
     converged = False 
     eps       = None   
-    subint    = [0]
     pt.write("{0:*^60s}".format("SELF-CONSISTENT-FIELD ITERATIONS"))
     pt.write("SCF threshold: {0:5.3e}".format(scfthresh))
     pt.write("Maximum number of SCF iterations: {0}".format(maxiter))
-    if slicing == 0: 
-        pt.write("Fixed subintervals will be used")
-    elif slicing == 1: 
-        pt.write("Subintervals will be adjusted at each iteration with fixed interval")
-    elif slicing == 2: 
-        pt.write("Subintervals will be adjusted at each iteration")
-    else:
-        pt.write("Not available")
+    pt.write("Number of bins: {0}".format(nbin))
+    pt.write("Number of ranks per bin: {0}".format(npmat))
     if sync:
         pt.sync()
         t            = pt.getWallTime(t0=t,str='Barrier - SCF options')           
@@ -665,16 +663,20 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
         except:
             pt.write("Error: SIPs not found")
             usesips = False
+    eigs  = []
+    if isfile(eigsfile) and bintype > 0: 
+        if not pt.rank:
+            eigs = np.loadtxt(eigsfile)
+            print("{0} eigenvalues read from file {1}".format(len(eigs),eigsfile))
+        eigs = wcomm.bcast(eigs,root=0)    
+    binedges = st.getBinEdges(eigs, nbin,bintype=bintype,rangebuffer=rangebuffer,interval=[a,b])
     F = None
     F0loc = None
     Floc  = None
     Tloc  = None
     Gloc  = None
     Hloc  = None
-    np    = pt.getWorldSize() # total number of ranks
-    npmat = np / nslices # number of ranks for each slice
-    mults=[1]
-    eigarray=[]
+
     for k in xrange(1,maxiter+1):
         pt.write("{0:*^60s}".format("Iteration "+str(k)))
         t0 = pt.getWallTime()
@@ -687,7 +689,7 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
             stage, t = pt.getStageTime(newstage='Trace',oldstage=stage, t0=t)
             Eel  = 0.5 * pt.getTraceProductAIJ(D, F0+F)
             stage, t = pt.getStageTime(newstage='SetupEPS',oldstage=stage, t0=t)    
-            eps = st.setupEPS(F, B=None,interval=interval)  
+            eps = st.setupEPS(F, B=None,binedges=binedges)  
         else:
             Eold = Eel
             stage, t = pt.getStageTime(newstage='F',oldstage=stage, t0=t)
@@ -704,21 +706,12 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
                 stage, t = pt.getStageTime(newstage='Trace',oldstage=stage, t0=t)            
                 Eel  = 0.5 * pt.getTraceProductAIJ(D, F0+F)
             writeEnergies(Eel, unit='ev', enstr='Eel')
-            stage, t = pt.getStageTime(newstage='UpdateEPS',oldstage=stage, t0=t)            
-            subint = interval
-            if slicing == 1 and k > slicingiter:
-                nsubint = st.getNumberOfSubIntervals(eps)
-                subint, mults  = st.getSubIntervals(eigarray[0:nocc],nsubint,interval=interval,cthresh=cthresh)
-            elif slicing == 2 and k > slicingiter:
-                nsubint = st.getNumberOfSubIntervals(eps)
-                subint, mults  = st.getSubIntervals(eigarray[0:nocc],nsubint,cthresh=cthresh,sbuffer=slicingbuffer)
-            maxmult = max(mults)
-            if max(mults) > 1:
-                pt.write("Maximum multiplicity is= {0}".format(maxmult))    
+            stage, t = pt.getStageTime(newstage='UpdateEPS',oldstage=stage, t0=t) 
+            binedges = st.getBinEdges(eigs, nbin,bintype=bintype,rangebuffer=rangebuffer,interval=[a,b])           
             if local:
-                eps = st.updateEPS(eps,Floc,subintervals=subint,local=local)
+                eps = st.updateEPS(eps,Floc,binedges=binedges,local=local)
             else:
-                eps = st.updateEPS(eps,F,subintervals=subint,local=local)                
+                eps = st.updateEPS(eps,F,binedges=binedges,local=local)                
         stage,t = pt.getStageTime(newstage='SolveEPS',oldstage=stage, t0=t)
         eps = st.solveEPS(eps)
         t1 = pt.getWallTime(t0=t, str='Solve')
@@ -729,12 +722,12 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
             pt.write("Error! Missing eigenvalues.")
             pt.write("Number of required eigenvalues: {0}".format(nocc))
             break
-        eigarray = st.getNEigenvalues(eps,nocc)
-        pt.write("Eigenvalue range: {0:5.3f}, {1:5.3f}".format(min(eigarray),max(eigarray)))
+        eigs = st.getNEigenvalues(eps,nocc)
+        pt.write("Eigenvalue range: {0:5.3f}, {1:5.3f}".format(min(eigs),max(eigs)))
         t1 = pt.getWallTime(t0=t1, str='Get eigs')
-        if (len(eigarray)>nocc):
-            homo = eigarray[nocc-1] 
-            lumo = eigarray[nocc]
+        if (len(eigs)>nocc):
+            homo = eigs[nocc-1] 
+            lumo = eigs[nocc]
             gap = lumo - homo             
             writeEnergies(homo,unit='ev',enstr='HOMO')
             writeEnergies(lumo,unit='ev',enstr='LUMO')
@@ -747,19 +740,17 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
         if k==1 and local: 
             stage, t = pt.getStageTime(newstage='Redundant mat', oldstage=stage, t0=t)
             matcomm = D.getComm()
-            F0loc = pt.getRedundantMat(F0, nslices, matcomm, out=F0loc)
-            Floc  = pt.getRedundantMat( F, nslices, matcomm, out=Floc)
-            Tloc  = pt.getRedundantMat( T, nslices, matcomm, out=Tloc)
-            Gloc  = pt.getRedundantMat( G, nslices, matcomm, out=Gloc)
-            Hloc  = pt.getRedundantMat( H, nslices, matcomm, out=Hloc)
-        elif  npmat < np:
+            F0loc = pt.getRedundantMat(F0, nbin, matcomm, out=F0loc)
+            Floc  = pt.getRedundantMat( F, nbin, matcomm, out=Floc)
+            Tloc  = pt.getRedundantMat( T, nbin, matcomm, out=Tloc)
+            Gloc  = pt.getRedundantMat( G, nbin, matcomm, out=Gloc)
+            Hloc  = pt.getRedundantMat( H, nbin, matcomm, out=Hloc)
+        elif  npmat < nrank:
             stage, t = pt.getStageTime(newstage='Seq D', oldstage=stage, t0=t)   
             D = pt.getSeqMat(D)
+        if saveall:
+            ft.saveall(opts,k,Floc,D,eigs)
         t = pt.getWallTime(t0,str='Iteration')
-        if savemat:
-            pt.writeMat(Floc, 'fock'+str(k)+'.bin')
-            pt.writeMat(D, 'dens'+str(k)+'.bin')
-            t = pt.getWallTime(t,str='Save mat')
         if abs(Eel-Eold) < scfthresh and nconv >= nocc:
             pt.write("Converged at iteration {0}".format(k))
             converged = True
@@ -871,11 +862,11 @@ def scfwithaccelerators(opts,nocc,atomids,D,F0,T,G,H,stage):
             subint =interval
             if slicing == 1:
                 nsubint=st.getNumberOfSubIntervals(eps)
-                subint = st.getSubIntervals(eigarray[0:nocc],nsubint,interval=interval) 
+                subint = st.getBinEdges1(eigarray[0:nocc],nsubint,interval=interval) 
             elif slicing == 2:
                 nsubint=st.getNumberOfSubIntervals(eps)
-                subint = st.getSubIntervals(eigarray[0:nocc],nsubint)
-            eps = st.updateEPS(eps,F,subintervals=subint)
+                subint = st.getBinEdges1(eigarray[0:nocc],nsubint)
+            eps = st.updateEPS(eps,F,binedges=subint)
             stage = pt.getStage(stagename='SolveEPS',oldstage=stage)
             eps, nconv, eigarray = st.solveEPS(eps,returnoption=1,nocc=nocc)         
         
@@ -930,7 +921,7 @@ def runMindo3(qmol,opts):
     stage, t0   = pt.getStageTime(newstage='MINDO3')
     maxdist     = opts.getReal('maxdist', 1.e6)
     guess       = opts.getInt('guess', 0)
-    guessfile   = opts.getString('guessfile', 'fock.bin')
+    guessfile   = opts.getString('guessfile', 'dens.bin')
     nuke        = opts.getBool('nuke',False)
     sync        = opts.getBool('sync',False)
     t           = pt.getWallTime(t0=t0,str='PyQuante initialization')  

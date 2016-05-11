@@ -235,11 +235,11 @@ def rhf(opts,nocc,basis,S,F0):
             subint =interval
             if staticsubint==1:
                 nsubint=st.getNumberOfSubIntervals(eps)
-                subint = st.getSubIntervals(eigarray[0:nocc],nsubint,interval=interval) 
+                subint = st.getBinEdges1(eigarray[0:nocc],nsubint,interval=interval) 
             elif staticsubint==2:
                 nsubint=st.getNumberOfSubIntervals(eps)
-                subint = st.getSubIntervals(eigarray[0:nocc],nsubint)
-            eps = st.updateEPS(eps,F,B=S,subintervals=subint)
+                subint = st.getBinEdges1(eigarray[0:nocc],nsubint)
+            eps = st.updateEPS(eps,F,B=S,binedges=subint)
             stage = pt.getStage(stagename='SolveEPS',oldstage=stage)
             eps, nconv, eigarray = st.solveEPS(eps,returnoption=1,nocc=nocc)         
         if (len(eigarray)>nocc):
