@@ -92,18 +92,23 @@ def getScaleij(atnoi,atnoj,R):
     return np.exp(-alpha*R)
 
 def getGammaij(rhoi,rhoj,rij2):
+    """
+    PyQuante: Returns Coulomb repulsion that goes to the proper limit at R=0"
+    """
     return ut.e2 / np.sqrt(rij2 + 0.25 * (rhoi + rhoj)**2.)
 
-def getNelectrons(atoms,charge=0):
-    "PyQuante: Number of electrons in an atoms. Can be dependent on the charge"
+def getNVE(atoms):
+    "PyQuante: Return number of valence electrons for given atoms."
     nel = 0
-    for atom in atoms: nel += atom.Z
-    return nel-charge
+    for atom in atoms: 
+        nel += atom.Z
+    return nel
 
-def getNbasis(atoms):
-    "Number of basis functions in an atom list"
+def getNBF(atoms):
+    "PyQuante: Return number of basis functions for given atoms."
     nbf = 0
-    for atom in atoms: nbf += atom.nbf
+    for atom in atoms: 
+        nbf += atom.nbf
     return nbf
 
 def getEref(atoms):
@@ -630,16 +635,12 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
     eigsfile      = opts.getString('eigsfile','eigs.txt')
     usesips       = opts.getBool('sips',False)
     local         = opts.getBool('local',True)
-    nbin          = opts.getInt('eps_krylovschur_partitions',0)
+    nbin          = opts.getInt('eps_krylovschur_partitions',1)
     sync          = opts.getBool('sync',False)
     saveall       = opts.getBool('saveall',False)
-    if nbin == 0:
-        nbin = opts.getInt('nbin',0)
     wcomm = pt.worldcomm
     nrank    = wcomm.size # total number of ranks
-    if nbin == 0:
-        nbin = nrank
-    npmat = nrank / nbin # number of ranks for each slice    
+    npmat = nrank / nbin # number of ranks for each slice       
     Eel       = 0.
     gap       = 0.
     homo      = 0
@@ -928,8 +929,9 @@ def runMindo3(qmol,opts):
     atoms   = qmol.atoms
     Eref    = getEref(qmol)
     Enuc    = 0.
-    nbf     = getNbasis(qmol)    
-    nel     = getNelectrons(atoms)
+    Etot    = 0.
+    nbf     = getNBF(qmol)    
+    nel     = getNVE(atoms)
     nocc    = nel/2
     basis   = getBasis(qmol, nbf)
     atomids = getAtomIDs(basis)
@@ -988,4 +990,4 @@ def runMindo3(qmol,opts):
         writeEnergies(Enukefull, 'ev', 'Enucfull')
         writeEnergies(Etotfull,unit='ev',enstr='Enucfull+Eelec')
         writeEnergies(Efinalfull, unit= 'kcal', enstr='Eref+Enucfull+Eelec')
-    return 
+    return Etot*ut.ev2kcal,Eref
