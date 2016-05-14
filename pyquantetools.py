@@ -15,7 +15,7 @@ def getMol(mol):
     """
     return Molecule(Molecule)
 
-def xyz2PyQuanteMol(xyz):
+def xyz2PyQuanteMolOld(xyz):
     """
     Convert xyz data to PyQuante molecule object
     """
@@ -28,6 +28,12 @@ def xyz2PyQuanteMol(xyz):
                      xyz[i][3] * ang2bohr)
                     )
     return Molecule(str(N),atoms,units='Bohr') 
+
+def xyz2PyQuanteMol(xyz):
+    """
+    Convert xyz data to PyQuante molecule object
+    """
+    return Molecule('PSCFmol',xyz,units='angs') 
 
 def xyzFile2PyQuanteMol(xyzfile):
     """
@@ -45,4 +51,6 @@ def xyzFile2PyQuanteMol(xyzfile):
             chunks = line.split()
             x,y,z = map(float,chunks[1:])
             atoms[i] = (chunks[0],(x*ang2bohr,y*ang2bohr,z*ang2bohr))
-    return Molecule(title,atoms,units='Bohr')           
+    return Molecule(title,atoms,units='Bohr') 
+
+          
