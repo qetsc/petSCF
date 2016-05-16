@@ -270,6 +270,7 @@ def setupEPS(A,B=None,binedges=[0]):
     pc=ksp.getPC()
     pc.setType(PETSc.PC.Type.CHOLESKY)
     pc.setFactorSolverPackage('mumps')
+    eps.setType(SLEPc.EPS.Type.KRYLOVSCHUR)
     PETSc.Options().setValue('mat_mumps_icntl_13',1)
     PETSc.Options().setValue('mat_mumps_icntl_24',1)
     PETSc.Options().setValue('mat_mumps_cntl_3',1.e-12)
