@@ -10,6 +10,7 @@ write     = PETSc.Sys.Print
 INSERT    = PETSc.InsertMode.INSERT
 rank      = MPI.COMM_WORLD.rank
 worldcomm = MPI.COMM_WORLD
+options   = PETSc.Options()
 def sync(comm=None):
     if comm:
         comm.Barrier()
@@ -318,6 +319,9 @@ def createVec(comm):
 def createMat(comm):
     return PETSc.Mat().create(comm=comm)
 
+def createDenseMat(size,comm):
+    return PETSc.Mat().createDense(size,comm=comm)
+
 def createSquareMat(comm, localsize,globalsize, opt=0):
     A = PETSc.Mat().create(comm=comm)
     A.setType('aij')
@@ -385,8 +389,7 @@ def getLocalNnzInfoSym(basis,rstart,rend,maxdist2):
         pt.write(dnnz[i],onnz[i])        
     return dnnz,onnz
 
-#@jit
-def getLocalNnzInfo(basis,rstart,rend,maxdist2):
+def getLocalNnzInfoPQ(basis,rstart,rend,maxdist2):
     """
     Returns three arrays that contains: 
     dnnz: local numbers of nonzseros per row in diagonal blocks (square) 
@@ -394,6 +397,9 @@ def getLocalNnzInfo(basis,rstart,rend,maxdist2):
     jmax: max column index that contains a nonzero.
     Nonzeros are based on distance between atoms.
     TODO: Exploit symmetry, not sure how to do that.
+    Notes
+    -----
+    Requires PyQuante atoms class attributes
     """
     nbf=len(basis)
     localsize=rend-rstart
@@ -415,8 +421,66 @@ def getLocalNnzInfo(basis,rstart,rend,maxdist2):
         k += 1 
     return dnnz, onnz, jmax
 
+def getLocalNnzInfo(xyz,rstart,rend,maxdist2):
+    """
+    Returns three arrays that contains: 
+    dnnz: local numbers of nonzseros per row in diagonal blocks (square) 
+    onnz: local numbers of nonzeros per row in off-diagonal blocks (rectangular)
+    jmax: max column index that contains a nonzero.
+    Nonzeros are based on distance between atoms.
+    TODO:
+    Exploit symmetry
+    Cython
+    Notes
+    -----
+    Generates a new xyz shape array 
+    """
+    nxyz=len(xyz)
+    localsize=rend-rstart
+    dnnz=np.zeros(localsize,dtype='int32')
+    onnz=np.zeros(localsize,dtype='int32')
+    jmax=np.zeros(localsize,dtype='int32')
+    k = 0
+    for i in range(rstart,rend):
+        dists2 = np.sum((xyz - xyz[i])**2,axis=1)
+        for j in range(nxyz):
+            if dists2[j] < maxdist2:
+                if j >= rstart and j < rend: 
+                    dnnz[k] += 1
+                else:
+                    onnz[k] += 1
+                if j > jmax[k]:
+                    jmax[k] = j
+        k += 1            
+    return dnnz, onnz, jmax
 
-#getLocalNnzInfoNumba = autojit(getLocalNnzInfo)
+def getLocalNnzInfoLessMemory(xyz,rstart,rend,maxdist2):
+    """
+    Returns three arrays that contains: 
+    dnnz: local numbers of nonzseros per row in diagonal blocks (square) 
+    onnz: local numbers of nonzeros per row in off-diagonal blocks (rectangular)
+    jmax: max column index that contains a nonzero.
+    Nonzeros are based on distance between atoms.
+    TODO: Exploit symmetry, not sure how to do that.
+    """
+    nxyz=len(xyz)
+    localsize=rend-rstart
+    dnnz=np.zeros(localsize,dtype='int32')
+    onnz=np.zeros(localsize,dtype='int32')
+    jmax=np.zeros(localsize,dtype='int32')
+    k = 0
+    for i in range(rstart,rend):
+        for j in range(nxyz):
+            dist2 = np.sum((xyz[j] - xyz[i])**2)
+            if dist2 < maxdist2:
+                if j >= rstart and j < rend: 
+                    dnnz[k] += 1
+                else:
+                    onnz[k] += 1
+                if j > jmax[k]:
+                    jmax[k] = j
+        k += 1            
+    return dnnz, onnz, jmax
 
 def getNnzVec(basis,maxdist):
     """
@@ -495,8 +559,8 @@ def getNnzInfo(basis,maxdist):
     import constants as const
     nbf=len(basis)
     maxdist2 = maxdist * maxdist * const.ang2bohr**2.
-    nnzarray=np.ones(nbf,dtype='int16')
-    bwarray=np.zeros(nbf,dtype='int16')
+    nnzarray=np.ones(nbf,dtype='int32')
+    bwarray=np.zeros(nbf,dtype='int32')
     for i in xrange(nbf):
         atomi=basis[i].atom
         for j in xrange(i+1,nbf):
@@ -637,15 +701,39 @@ def getWorldSize():
 
 def getTraceProduct(A,B):
     """
-    Returns the trace of the product of A and B where A and B are same shape 2D numpy arrays.
+    Returns the trace of the product of A and B where A and B are 
+    same shape 2D numpy arrays.
+    Fastest N^2 algorithm.
     """
-  #  if len(A) != len(B):print "length are not equal", len(A),len(B)
+    return np.sum(A*B.T)
+
+def getTraceProductSym(A,B):
+    """
+    Returns the trace of the product of A and B where A and B are 
+    same shape 2D numpy arrays and B is symmetric.
+    Fastest N^2 algorithm.
+    """
+    return np.sum(A*B)
+
+def getTraceProductSlowN2(A,B):
+    """
+    Returns the trace of the product of A and B where A and B are same shape 2D numpy arrays.
+    Slow N^2 algorithm.
+    """
+    assert A.shape == B.shape
     N=A.shape[0]
     temp=0.0
     for i in xrange(N):
         for j in xrange(N):
             temp += A[i,j]*B[j,i]
     return temp
+
+def getTraceProductFastN3(A,B):
+    """
+    Returns the trace of the product of A and B where A and B are same shape 2D numpy arrays.
+    Fast but N^3 algorithm.
+    """
+    return np.trace(np.dot(A,A.T))
 
 def getTraceProductCSR(A,B):
     """
@@ -787,8 +875,9 @@ def compareAIJB(Aij,B,N,thresh=1.e-5,comment='Comparison'):
             if abs(Aij[i,j]-B[i,j]) > thresh: 
                 k += 1
                 print('{0}, Rank: {1},!!!!!!!!Differs in {2} {3}: {4} vs {5}'.format(comment,rank,i,j, Aij[i,j],B[i,j]))
+                return False
     if k==0: write("{0} ok  within {1}".format(comment,thresh))
-    return
+    return True
 
 def compareAB(A,B,N,thresh=1.e-5):
     """
