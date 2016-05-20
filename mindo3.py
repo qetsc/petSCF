@@ -4,161 +4,12 @@ import unittools as ut
 import numpy as np
 import scftools as ft
 from os.path import isfile
-from sys import exit
-"""
-MINDO/3 parameters from PyQuante
-"""
-#MINDO/3 Parameters: Thru Ar
-# in eV
-f03 = [ None, 12.848, 10.0, #averaged repulsion integral for use in gamma
-        10.0, 0.0, 8.958, 10.833, 12.377, 13.985, 16.250,
-        10.000, 10.000, 0.000, 0.000,7.57 ,  9.00 ,10.20 , 11.73]
-# Bxy resonance coefficients
-Bxy = {
-    (1,1) : 0.244770, (1,5) : 0.185347, (1,6) : 0.315011, (1,7) : 0.360776,
-    (1,8) : 0.417759, (1,9) : 0.195242, (1,14) : 0.289647, (1,15) : 0.320118,
-    (1,16) : 0.220654, (1,17) : 0.231653,
-    (5,5) : 0.151324, (5,6) : 0.250031, (5,7) : 0.310959, (5,8) : 0.349745,
-    (5,9) : 0.219591,
-    (6,6) : 0.419907, (6,7) : 0.410886, (6,8) : 0.464514, (6,9) : 0.247494,
-    (6,14) : 0.411377, (6,15) : 0.457816, (6,16) : 0.284620, (6,17) : 0.315480,
-    (7,7) : 0.377342, (7,8) : 0.458110, (7,9) : 0.205347,
-    (8,8) : 0.659407, (8,9) : 0.334044, (9,9) : 0.197464,
-    (14,14) : 0.291703, (15,15) : 0.311790, (16,16) : 0.202489,
-    (17,17) : 0.258969,
-    (7,15) : 0.457816, # Rick hacked this to be the same as 6,15
-    (8,15) : 0.457816, # Rick hacked this to be the same as 6,15
-    }
-
-# axy Core repulsion function terms
-axy = {     
-    (1,1) : 1.489450, (1,5) : 2.090352, (1,6) : 1.475836, (1,7) : 0.589380,
-    (1,8) : 0.478901, (1,9) : 3.771362, (1,14) : 0.940789, (1,15) : 0.923170,
-    (1,16) : 1.700689, (1,17) : 2.089404,
-    (5,5) : 2.280544, (5,6) : 2.138291, (5,7) : 1.909763, (5,8) : 2.484827,
-    (5,9) : 2.862183,
-    (6,6) : 1.371208, (6,7) : 1.635259, (6,8) : 1.820975, (6,9) : 2.725913,
-    (6,14) : 1.101382, (6,15) : 1.029693, (6,16) : 1.761370, (6,17) : 1.676222,
-    (7,7) : 2.209618, (7,8) : 1.873859, (7,9) : 2.861667,
-    (8,8) : 1.537190, (8,9) : 2.266949, (9,9) : 3.864997,
-    (14,14) : 0.918432, (15,15) : 1.186652, (16,16) : 1.751617,
-    (17,17) : 1.792125,
-    (7,15) : 1.029693, # Rick hacked this to be the same as 6,15
-    (8,15) : 1.029693, # Rick hacked this to be the same as 6,15
-    }
-
+import pyquantetools as qt
+import xyztools as xt
 def writeEnergies(en,unit='', enstr=''):
     Ekcal, Eev, Ehart = ut.convertEnergy(en, unit)
     pt.write("{0: <24s} = {1:20.10f} kcal/mol = {2:20.10f} ev = {3:20.10f} Hartree".format(enstr,Ekcal, Eev, Ehart))
     return 0
-
-def getAlphaij(atnoi,atnoj):
-    "PyQuante: Part of the scale factor for the nuclear repulsion"
-    return axy[(min(atnoi,atnoj),max(atnoi,atnoj))]
-
-def getBeta0ij(atnoi,atnoj):
-    "PyQuante: Resonanace integral for coupling between different atoms"
-    return Bxy[(min(atnoi,atnoj),max(atnoi,atnoj))]
-
-def getGij(bfi,bfj):
-    "PyQuante: Coulomb-like term for orbitals on the same atom"
-    i,j = bfi.type,bfj.type
-    assert bfi.atom is bfj.atom, "Incorrect call to get_g"
-    if i==0 and j==0:
-        return bfi.atom.gss
-    elif i==0 or j==0:
-        return bfi.atom.gsp
-    elif i==j:
-        return bfi.atom.gpp
-    return bfi.atom.gppp
-
-def getHij(bfi,bfj):
-    "PyQuante: Exchange-like term for orbitals on the same atom"
-    i,j = bfi.type,bfj.type
-    assert bfi.atom is bfj.atom, "Incorrect call to get_h"
-    if i==0 or j==0:
-        return bfi.atom.hsp
-    return bfi.atom.hppp
-
-def getScaleij(atnoi,atnoj,R):
-    "PyQuante: Prefactor from the nuclear repulsion term"
-    alpha = getAlphaij(atnoi,atnoj)
-    if atnoi == 1:
-        if atnoj == 7 or atnoj == 8:
-            return alpha*np.exp(-R)
-    elif atnoj == 1:
-        if atnoi == 7 or atnoi == 8:
-            return alpha*np.exp(-R)
-    return np.exp(-alpha*R)
-
-def getGammaij(rhoi,rhoj,rij2):
-    """
-    PyQuante: Returns Coulomb repulsion that goes to the proper limit at R=0"
-    """
-    return ut.e2 / np.sqrt(rij2 + 0.25 * (rhoi + rhoj)**2.)
-
-def getNVE(atoms):
-    "PyQuante: Return number of valence electrons for given atoms."
-    nel = 0
-    for atom in atoms: 
-        nel += atom.Z
-    return nel
-
-def getNBF(atoms):
-    "PyQuante: Return number of basis functions for given atoms."
-    nbf = 0
-    for atom in atoms: 
-        nbf += atom.nbf
-    return nbf
-
-def getEref(atoms):
-    "Ref = heat of formation - energy of atomization"
-    eat = 0
-    hfat = 0
-    for atom in atoms:
-        eat += atom.Eref
-        hfat += atom.Hf
-    return hfat-eat * ut.ev2kcal
-
-def getEnukeij(atomi, atomj,Rij2=0):
-    """
-    Returns the nuclear repulsion energy between two atoms.
-    Rij2 is the square of the distance between the atoms given in bohr^2.
-    """
-    Zi      = atomi.Z
-    atnoi   = atomi.atno
-    rhoi    = atomi.rho
-    Zj      = atomj.Z
-    atnoj   = atomj.atno
-    rhoj    = atomj.rho
-    if not Rij2:
-        Rij2 = atomi.dist2(atomj)
-        if not Rij2:
-            return 0.
-    Rij2 = Rij2 * ut.bohr2ang * ut.bohr2ang   
-    Rij = np.sqrt(Rij2)
-    gammaij = getGammaij(rhoi, rhoj, Rij2)    
-    scaleij = getScaleij(atnoi,atnoj,Rij)
-    return ( Zi * Zj * gammaij +  abs(Zi * Zj * (ut.e2 / Rij - gammaij) * scaleij) )
-
-def getBasis(atoms,nbf):
-    """
-    Returns the basis set in the order of atoms.
-    """
-    basis = [atoms[0].basis[0]]*nbf
-    i=0
-    for atom in atoms:
-        for bf in atom.basis:
-            basis[i] = bf
-            i += 1
-    return basis 
-
-def getAtomIDs(basis):
-    nbf=len(basis)
-    tmp = np.zeros(nbf)
-    for i in xrange(nbf):
-        tmp[i]=basis[i].atom.atid
-    return tmp
 
 def getNuclearEnergySerial(nat,atoms,maxdist):
     maxdist2 = maxdist * maxdist * ut.ang2bohr * ut.ang2bohr
@@ -170,10 +21,14 @@ def getNuclearEnergySerial(nat,atoms,maxdist):
             atomj=atoms[j]
             distij2 = atomi.dist2(atomj) # (in bohr squared) * bohr2ang2
             if distij2 < maxdist2:
-                Enuc += getEnukeij(atomi, atomj, distij2)           
+                Enuc += qt.getEnukeij(atomi, atomj, distij2)           
     return Enuc
 
-def getNuclearEnergy(comm,atoms,maxdist):
+def getNuclearEnergy(comm,atoms,maxdist=1.E9):
+    """
+    Returns total nuclear energy in ev.
+    Maxdist is cutoff in Angstrom.
+    """
     Np=comm.size
     Na=len(atoms)
     rank=comm.rank
@@ -187,17 +42,18 @@ def getNuclearEnergy(comm,atoms,maxdist):
             atomj = atoms[j]
             distij2 = atomi.dist2(atomj) # (in bohr squared) * bohr2ang2
             if distij2 < maxdist2:
-                Enuc += getEnukeij(atomi, atomj, distij2)   
+                Enuc += qt.getEnukeij(atomi, atomj, distij2)   
     if remainder - rank > 0:
         atomi = atoms[Na-rank-1]
         for j in xrange(Na-rank-1):
             atomj = atoms[j]
             distij2 = atomi.dist2(atomj) # (in bohr squared) * bohr2ang2
             if distij2 < maxdist2:
-                Enuc += getEnukeij(atomi, atomj, distij2)   
+                Enuc += qt.getEnukeij(atomi, atomj, distij2)   
 
-    return pt.getCommSum(comm,Enuc)   
+    return pt.getCommSum(comm,Enuc)
 
+        
 def getNuclearEnergyFull(comm,atoms):
     """
     Computes nuclear energy as defined in MINDO/3 method.
@@ -218,17 +74,17 @@ def getNuclearEnergyFull(comm,atoms):
         for j in xrange(rank*Nc+i):
             atomj = atoms[j]
             distij2 = atomi.dist2(atomj) # (in bohr squared) * bohr2ang2
-            Enuc += getEnukeij(atomi, atomj, distij2)   
+            Enuc += qt.getEnukeij(atomi, atomj, distij2)   
     if remainder - rank > 0:
         atomi = atoms[Na-rank-1]
         for j in xrange(Na-rank-1):
             atomj = atoms[j]
             distij2 = atomi.dist2(atomj) # (in bohr squared) * bohr2ang2
-            Enuc += getEnukeij(atomi, atomj, distij2)   
+            Enuc += qt.getEnukeij(atomi, atomj, distij2)   
 
     return pt.getCommSum(comm,Enuc)   
 
-def getT(comm,basis,maxdist):
+def getT(comm,basis,maxdist,nnzinfo=None):
     """
     Computes a matrix for the two-center two-electron integrals.
     Matrix is symmetric, and upper-triangular is computed.
@@ -261,7 +117,9 @@ def getT(comm,basis,maxdist):
     t = pt.getWallTime(t0=t,str='Set Type')
     A.setSizes([(localsize,nbf),(localsize,nbf)])
     t = pt.getWallTime(t0=t,str='Set Sizes') 
-    dnnz,onnz,jmax = pt.getLocalNnzInfo(basis,rstart,rend,maxdist2)
+    if nnzinfo is None:
+        nnzinfo = pt.getLocalNnzInfoPQ(basis,rstart,rend,maxdist2)
+    dnnz,onnz,jmax = nnzinfo     
     nnz            = sum(dnnz) + sum(onnz)
     t              = pt.getWallTime(t0=t,str='Count nnz')
     if localsize > 0 :
@@ -273,7 +131,7 @@ def getT(comm,basis,maxdist):
         atomi   = basis[i].atom
         atnoi   = atomi.atno
         rhoi    = atomi.rho
-        gammaii = f03[atnoi]
+        gammaii = qt.f03[atnoi]
         nnzrow  = dnnz[k] + onnz[k]
         cols    = np.zeros((nnzrow,), dtype=np.int32)
         vals    = np.zeros(nnzrow)
@@ -299,7 +157,9 @@ def getT(comm,basis,maxdist):
                     cols[n] = j
                     vals[n] = gammaij
                     atnoj   = atomj.atno
-                    Enuc  += ( atomi.Z*atomj.Z*gammaij +  abs(atomi.Z*atomj.Z*(ut.e2/R-gammaij)*getScaleij(atnoi, atnoj, R)) ) / ( atomi.nbf * atomj.nbf )
+                    Enuc  +=  ( ( atomi.Z * atomj.Z * gammaij 
+                                  + abs(atomi.Z * atomj.Z * (ut.e2/R-gammaij) * qt.getScaleij(atnoi, atnoj, R)) ) 
+                               / (atomi.nbf * atomj.nbf) )
                     n += 1
         A.setValues(i,cols[0:n],vals[0:n],addv=pt.INSERT)
         k += 1            
@@ -315,6 +175,78 @@ def getT(comm,basis,maxdist):
     t = pt.getWallTime(t0=t,str='Add transpose')
     A.destroy()
     return  nnz,Enuc, B
+
+def getTDense(comm,basis):
+    """
+    Computes a matrix for the two-center two-electron integrals.
+    Matrix is symmetric, and upper-triangular is computed.
+    Diagonals assumes half of the real value since
+    at the end transpose of the matrix is added to make it symmetric.
+    Assumes spherical symmetry, no dependence on basis function, only atom types.
+    Parametrized for pairs of atoms. (Two-atom parameters)
+    This matrix also determines the nonzero structure of the Fock matrix.
+    Nuclear repulsion energy is also computed.
+    TODO:
+    Values are indeed based on atoms, not basis functions, so possible to improve performance by nbf/natom.
+    Use SBAIJ instead of AIJ
+    Cythonize
+    """
+    t            = pt.getWallTime()
+    nbf          = len(basis)
+    bohr2ang2    = ut.bohr2ang**2.
+    e2           = ut.e2
+    rstart, rend = pt.distributeN(comm, nbf)
+    localsize    = rend - rstart
+    Enuc         = 0.
+    k            = 0   
+    t            = pt.getWallTime(t0=t,str='Initialize')
+    pt.sync()
+    t            = pt.getWallTime(t0=t,str='Barrier - distribute')
+    A            = pt.createDenseMat([(localsize,nbf),(localsize,nbf)],comm=comm)
+    t = pt.getWallTime(t0=t,str='Create Dense Mat')
+    for i in xrange(rstart,rend):
+        atomi   = basis[i].atom
+        atnoi   = atomi.atno
+        rhoi    = atomi.rho
+        gammaii = qt.f03[atnoi]
+        cols    = np.zeros(nbf, dtype=np.int32)
+        vals    = np.zeros(nbf, dtype=np.int32)
+        cols[0] = i
+        vals[0] = gammaii / 2.
+        n       = 1
+        for j in xrange(i):
+            atomj = basis[j].atom
+            if atomi.atid == atomj.atid:
+                cols[n] = j
+                vals[n] = gammaii
+            else:                        
+                distij2 = atomi.dist2(atomj) # (in bohr squared) * bohr2ang2
+                rhoj    = atomj.rho 
+                distij2 = distij2 * bohr2ang2
+                gammaij = e2 / np.sqrt(distij2 + 0.25 * (rhoi + rhoj)**2.)
+                R       = np.sqrt(distij2)
+                cols[n] = j
+                vals[n] = gammaij
+                atnoj   = atomj.atno
+                Enuc  +=  ( ( atomi.Z * atomj.Z * gammaij 
+                              + abs(atomi.Z * atomj.Z * 
+                                    (ut.e2/R-gammaij) * 
+                                    qt.getScaleij(atnoi, atnoj, R) ) ) 
+                           / (atomi.nbf * atomj.nbf) )
+            n += 1
+        A.setValues(i,cols[0:n],vals[0:n],addv=pt.INSERT)
+        k += 1            
+    t = pt.getWallTime(t0=t,str='For loop')
+    A.assemblyBegin()
+    A.assemblyEnd()
+    t = pt.getWallTime(t0=t,str='Assemble mat')
+    Enuc = pt.getCommSum(comm, Enuc)
+    t = pt.getWallTime(t0=t,str='Reductions')
+    B = A.duplicate(copy=True)
+    B = B + A.transpose() 
+    t = pt.getWallTime(t0=t,str='Add transpose')
+    A.destroy()
+    return  Enuc, B
 
 def getTFromGuess(comm,guessmat,basis):
     """
@@ -340,7 +272,7 @@ def getTFromGuess(comm,guessmat,basis):
         atomi   = basis[i].atom
         atnoi   = atomi.atno
         rhoi    = atomi.rho
-        gammaii = f03[atnoi]
+        gammaii = qt.f03[atnoi]
         n       = 0
         for j in cols:
             atomj = basis[j].atom
@@ -354,7 +286,9 @@ def getTFromGuess(comm,guessmat,basis):
                 R       = np.sqrt(distij2)
                 vals[n] = gammaij
                 atnoj   = atomj.atno
-                Enuc  += ( atomi.Z*atomj.Z*gammaij +  abs(atomi.Z*atomj.Z*(ut.e2/R-gammaij)*getScaleij(atnoi, atnoj, R)) ) / ( atomi.nbf * atomj.nbf )
+                Enuc   += ( (atomi.Z*atomj.Z*gammaij 
+                           +  abs(atomi.Z*atomj.Z*(ut.e2/R-gammaij)*qt.getScaleij(atnoi, atnoj, R)) ) 
+                           / (atomi.nbf * atomj.nbf) )
             n += 1
         A.setValues(i,cols,vals,addv=pt.INSERT)
     t = pt.getWallTime(t0=t,str='For loop')
@@ -366,75 +300,6 @@ def getTFromGuess(comm,guessmat,basis):
     t = pt.getWallTime(t0=t,str='Reductions')
     return  nnz,Enuc, A
 
-def getTold(comm,basis,maxdist,preallocate=False):
-    """
-    Computes a matrix for the two-center two-electron integrals.
-    Assumes spherical symmetry, no dependence on basis function, only atom types.
-    Parametrized for pairs of atoms. (Two-atom parameters)
-    maxnnz: max number of nonzeros per row. If it is given performance might improve    
-    This matrix also determines the nonzero structure of the Fock matrix.
-    Nuclear repulsion energy is also computed.
-    TODO:
-    Values are indeed based on atoms, not basis functions, so possible to improve performance by nbf/natom.
-    Cythonize
-    """
-    t            = pt.getWallTime()
-    nbf          = len(basis)
-    nnz          = nbf*nbf
-    maxdist2     = maxdist * maxdist * ut.ang2bohr * ut.ang2bohr    
-    bohr2ang2    = ut.bohr2ang**2.
-    e2           = ut.e2
-    k            = 0   
-    Enuc        = 0.0
-    rstart, rend = pt.distributeN(comm, nbf)
-    localsize    = rend - rstart
-    t            = pt.getWallTime(t0=t,str='Initial')
-    A            = pt.createMat(comm=comm)
-    A.setType('aij')
-    A.setSizes([(localsize,nbf),(localsize,nbf)]) 
-    t = pt.getWallTime(t0=t,str='MatSetSizes')
-    if preallocate:
-        dnnz,onnz,jmax = pt.getLocalNnzInfo(basis,rstart,rend,maxdist2)
-        nnz            = sum(dnnz) + sum(onnz)
-        t              = pt.getWallTime(t0=t,str='Local nnz')
-        A.setPreallocationNNZ((dnnz,onnz)) 
-    else:
-        A.setPreallocationNNZ([nbf,nbf])
-        jmax           = np.array([nbf-1]*localsize)
-    t = pt.getWallTime(t0=t,str='Prealloc')
-    for i in xrange(rstart,rend):
-        atomi   = basis[i].atom
-        atnoi   = atomi.atno
-        rhoi    = atomi.rho
-        gammaii = f03[atnoi]
-        A[i,i]  = gammaii / 2.
-        for j in xrange(i+1,jmax[k]+1):
-            atomj = basis[j].atom
-            if atomi.atid == atomj.atid:
-                A[i,j] = gammaii
-            else:                        
-                distij2 = atomi.dist2(atomj) # (in bohr squared) * bohr2ang2
-                if distij2 < maxdist2:
-                    rhoj    = atomj.rho 
-                    distij2 = distij2 * bohr2ang2
-                    gammaij = e2 / np.sqrt(distij2 + 0.25 * (rhoi + rhoj)**2.)
-                    R       = np.sqrt(distij2)
-                    A[i,j]  = gammaij
-                    atnoj   = atomj.atno
-                    Enuc  += ( atomi.Z*atomj.Z*gammaij +  abs(atomi.Z*atomj.Z*(ut.e2/R-gammaij)*getScaleij(atnoi, atnoj, R)) ) / ( atomi.nbf * atomj.nbf )
-        k += 1            
-    t = pt.getWallTime(t0=t,str='For loop')
-    A.assemblyBegin()
-    Enuc =  comm.allreduce(Enuc)        
-    if preallocate:
-        nnz =  comm.allreduce(nnz) 
-    A.assemblyEnd()
-    B = A.duplicate(copy=True)
-    B = B + A.transpose() 
-    t = pt.getWallTime(t0=t,str='Assembly')
-    A.destroy()
-    return  nnz,Enuc, B
-       
 def getF0(atoms,basis,T):
     """
     Form the zero-iteration (density matrix independent) Fock matrix
@@ -459,7 +324,7 @@ def getF0(atoms,basis,T):
             atomj=basisj.atom
             if atomj != atomi:
                 tmp -= valsT[k] * atomj.Z / atomj.nbf # Ref1, Ref2 adopted sum to be over orbitals rather than atoms
-                betaij = getBeta0ij(atomi.atno,atomj.atno)
+                betaij = qt.getBeta0ij(atomi.atno,atomj.atno)
                 Sij = basisi.cgbf.overlap(basisj.cgbf)
                 IPij = ipi + basisj.ip
                 tmp2 =  betaij * IPij * Sij     # Ref1, Ref2 
@@ -469,7 +334,7 @@ def getF0(atoms,basis,T):
     A.assemble()
     return A
 
-def getD0(comm,basis,guessfile=None,T=None):
+def getD0(comm,basis,guessfile='',T=None):
     """
     Returns the guess (initial) density matrix.
     Guesfile is the path for a stored density matrix
@@ -492,8 +357,10 @@ def getD0(comm,basis,guessfile=None,T=None):
         rstart, rend = A.getOwnershipRange() 
         for i in xrange(rstart,rend):
             atomi=basis[i].atom
-            if atomi.atno == 1: A[i,i] = atomi.Z/1.
-            else:               A[i,i] = atomi.Z/4.
+            if atomi.atno == 1: 
+                A[i,i] = atomi.Z/1.
+            else:               
+                A[i,i] = atomi.Z/4.
         A.assemble()    
 
     return  A 
@@ -519,7 +386,7 @@ def getG(comm, basis, T=None):
         basisi  = basis[i]
         atomi   = basisi.atom
         nbfi    = atomi.nbf
-        A[i,i] = getGij(basisi,basisi)
+        A[i,i] = qt.getGij(basisi,basisi)
         if atomi.atno > 1:
             minj = max(0,i-nbfi)
             maxj = min(nbf,i+nbfi) 
@@ -527,7 +394,7 @@ def getG(comm, basis, T=None):
                 basisj = basis[j]
                 atomj   = basisj.atom
                 if atomi.atid == atomj.atid:
-                    A[i,j] = getGij(basisi,basisj)
+                    A[i,j] = qt.getGij(basisi,basisj)
     A.assemble()
     return A
 
@@ -552,7 +419,7 @@ def getH(basis, T=None,comm=None):
         basisi  = basis[i]
         atomi   = basisi.atom
         nbfi    = atomi.nbf
-        A[i,i] = getGij(basisi,basisi)
+        A[i,i] = qt.getGij(basisi,basisi)
         if atomi.atno > 1:
             minj = max(0,i-nbfi)
             maxj = min(nbf,i+nbfi) 
@@ -560,7 +427,7 @@ def getH(basis, T=None,comm=None):
                 basisj = basis[j]
                 atomj   = basisj.atom
                 if atomi.atid == atomj.atid and i != j:
-                    A[i,j] = getHij(basisi,basisj)
+                    A[i,j] = qt.getHij(basisi,basisj)
     A.assemble()
     return A
 
@@ -621,12 +488,13 @@ def getF(atomids, D, F0, T, G, H):
     t = pt.getWallTime(t0=t,str='Mat assemble')    
     return A
 
-def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
+def scf(nocc,atomids,D,F0,T,G,H):
     """
     Performs, self-consistent field  iterations until convergence, or max
     number of iterations reached.
     """
     t = pt.getWallTime()
+    opts          = pt.options
     maxiter       = opts.getInt('maxiter', 30)
     scfthresh     = opts.getReal('scfthresh',1.e-5)
     a, b          = opts.getReal('a',-50.) , opts.getReal('b', -10.)
@@ -682,7 +550,8 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
         pt.write("{0:*^60s}".format("Iteration "+str(k)))
         t0 = pt.getWallTime()
         if k==1:
-            stage, t = pt.getStageTime(newstage='F',oldstage=stage, t0=t0)
+#            stage, t = pt.getStageTime(newstage='F',oldstage=stage, t0=t0)
+            stage, t = pt.getStageTime(newstage='F', t0=t0)
             Ftmp = getF(atomids, D, F0, T, G, H)
             Ftmp = F0 + Ftmp
             F = Ftmp.copy(F,None)
@@ -756,7 +625,7 @@ def scf(opts,nocc,atomids,D,F0,T,G,H,stage):
             pt.write("Converged at iteration {0}".format(k))
             converged = True
             break
-    return converged, Eel, homo, lumo
+    return converged, Eel, homo, lumo, D
 
 def scfwithaccelerators(opts,nocc,atomids,D,F0,T,G,H,stage):
     """
@@ -918,24 +787,40 @@ def scfwithaccelerators(opts,nocc,atomids,D,F0,T,G,H,stage):
             return converged, Eel, homo, lumo
     return converged, Eel, homo, lumo
 
-def runMindo3(qmol,opts):
+def runMINDO3(qmol,s=None,xyz=None,opts=None):
+    """
+    Returns MINDO3 nuclear energy, total electronic energy and heat of formation 
+    in kcal/mol for a given PyQuante molecule.
+    """
     stage, t0   = pt.getStageTime(newstage='MINDO3')
-    maxdist     = opts.getReal('maxdist', 1.e6)
+    
+    opts        = pt.options
+    maxdist     = opts.getReal('maxdist', 100.)
     guess       = opts.getInt('guess', 0)
     guessfile   = opts.getString('guessfile', 'dens.bin')
     nuke        = opts.getBool('nuke',False)
     sync        = opts.getBool('sync',False)
     t           = pt.getWallTime(t0=t0,str='PyQuante initialization')  
-    atoms   = qmol.atoms
-    Eref    = getEref(qmol)
+    qmol = qt.initializeMindo3(qmol)
+    if sync: 
+        pt.sync()
+        t = pt.getWallTime(t0=t,str='Barrier - init')
+    t = pt.getWallTime(t,'Initialization')  
+    Eref    = qt.getEref(qmol)
     Enuc    = 0.
     Etot    = 0.
-    nbf     = getNBF(qmol)    
-    nel     = getNVE(atoms)
+    nbf     = qt.getNBF(qmol)    
+    nel     = qt.getNVE(qmol)
     nocc    = nel/2
-    basis   = getBasis(qmol, nbf)
-    atomids = getAtomIDs(basis)
+    basis   = qt.getBasis(qmol, nbf)
+    maxdist2= maxdist * maxdist
+    atomids = qt.getAtomIDs(basis)
     worldcomm = pt.getComm()
+    if xyz is None:
+        bxyz = qt.getXYZFromBasis(qmol,basis)
+    else:
+        nbfs = xt.getNBFsFromS(s)
+        bxyz = xt.getExtendedArray(nbfs,xyz)    
     if sync:
         pt.sync()
         t            = pt.getWallTime(t0=t,str='Barrier - options')
@@ -950,17 +835,19 @@ def runMindo3(qmol,opts):
     if guess > 0:
         nnz, Enuc, T            = getTFromGuess(worldcomm, D0, basis)
     else:
-        nnz, Enuc, T            = getT(worldcomm, basis, maxdist)
+        rstart, rend = pt.distributeN(worldcomm, nbf)
+        nnzinfo = pt.getLocalNnzInfo(bxyz, rstart, rend, maxdist2)
+        nnz, Enuc, T            = getT(worldcomm, basis, maxdist,nnzinfo)
     dennnz = (100. * nnz) / (nbf*nbf) 
     pt.write("Nonzero density percent : {0:6.3f}".format(dennnz))
     if nuke:
-            stage, t = pt.getStageTime(newstage='Nuclear', oldstage=stage,t0=t0)
-            Enukefull                = getNuclearEnergyFull(worldcomm, atoms)   
-            writeEnergies(Enukefull, unit='ev', enstr='Enucfull')
+        stage, t = pt.getStageTime(newstage='Nuclear', oldstage=stage,t0=t0)
+        Enukefull                = getNuclearEnergyFull(worldcomm, qmol)   
+        writeEnergies(Enukefull, unit='ev', enstr='Enucfull')
     writeEnergies(Eref, unit='kcal', enstr='Eref')
     writeEnergies(Enuc, unit='ev', enstr='Enuc')
     stage, t = pt.getStageTime(newstage='F0', oldstage=stage, t0=t)
-    F0    = getF0(atoms, basis, T)
+    F0    = getF0(qmol, basis, T)
     stage, t = pt.getStageTime(newstage='G', oldstage=stage, t0=t)
     G     = getG(worldcomm,basis)    
     stage, t = pt.getStageTime(newstage='H', oldstage=stage, t0=t)
@@ -968,20 +855,20 @@ def runMindo3(qmol,opts):
     pt.getStageTime(oldstage=stage, t0=t)
     pt.getWallTime(t0,str="Pre-SCF")
     t0          = pt.getWallTime()
-    converged, Eelec, homo, lumo = scf(opts,nocc,atomids,D0,F0,T,G,H,stage)
+    converged, Eelec, homo, lumo, D = scf(nocc,atomids,D0,F0,T,G,H)
     if converged:
         pt.getWallTime(t0,str="SCF achieved")
         gap = lumo - homo
         Etot   = Eelec + Enuc
-        Efinal = Etot*ut.ev2kcal+Eref
-        writeEnergies(Eref, unit='kcal', enstr='Eref')
+        Efinal = Etot+Eref
+        writeEnergies(Eref, unit='ev', enstr='Eref')
         writeEnergies(Enuc, 'ev', 'Enuc')
         writeEnergies(Eelec, unit='ev', enstr='Eel')
         writeEnergies(homo,unit='ev',enstr='HOMO')
         writeEnergies(lumo,unit='ev',enstr='LUMO')
         writeEnergies(gap,unit='ev',enstr='Gap')
         writeEnergies(Etot,unit='ev',enstr='Enuc+Eelec')
-        writeEnergies(Efinal, unit= 'kcal', enstr='Eref+Enuc+Eelec')
+        writeEnergies(Efinal, unit= 'ev', enstr='Eref+Enuc+Eelec')
     else:    
         pt.getWallTime(t0,str="SCF FAILED!!!")
     if nuke:
@@ -990,4 +877,37 @@ def runMindo3(qmol,opts):
         writeEnergies(Enukefull, 'ev', 'Enucfull')
         writeEnergies(Etotfull,unit='ev',enstr='Enucfull+Eelec')
         writeEnergies(Efinalfull, unit= 'kcal', enstr='Eref+Enucfull+Eelec')
-    return Etot*ut.ev2kcal,Eref
+    return Enuc,Etot,Efinal,D
+
+def testNuclearEnergy(atoms=None):
+    """
+    Tests getNuclearEnergy with PyQuante result.
+    """
+    if atoms == None:
+        atoms = qt.getH2O()
+        qt.initializeMindo3(atoms)
+    comm = pt.getComm()
+    thresh = 1.E-5
+    Epscf = getNuclearEnergy(comm, atoms)
+    if comm.rank == 0:
+        Epq = qt.getPQNuclearEnergy(atoms)   
+        assert (abs(Epscf-Epq) < thresh), "Nuclear energies differ more than 0.01 mev"
+    return True
+    
+def testMINDO3Energy(atoms=None):
+    """
+    Tests PSCF MINDO3 energy with PyQuante result.
+    Threshold is 0.001 ev since this is the threshold
+    of PyQuante SCF iterations.
+    """
+    if atoms == None:
+        atoms = qt.getH2O()
+        qt.initializeMindo3(atoms)
+    thresh = 0.001 # ev
+    comm = pt.getComm()
+    Epscf = runMINDO3(atoms)[2]
+    if comm.rank == 0:
+        Epq = qt.getPQMINDO3Energy(atoms)
+        assert (abs(Epscf-Epq) < thresh), "MINDO3 energies differ more than 0.001 ev"
+        pt.write("PSCF MINDO3 energy matches PyQuante value...")
+    return True    

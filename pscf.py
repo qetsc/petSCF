@@ -34,7 +34,7 @@ import slepctools as st
 import xyztools as xt
 import pyquantetools as qt
 import os.path
-from mindo3 import runMindo3
+from mindo3 import runMINDO3,testMINDO3Energy
 from hf import runHF
 
 def printGitHash():
@@ -70,23 +70,20 @@ def main():
     stage, t0   = pt.getStageTime(newstage='Read input')
     pt.sync()
     t = pt.getWallTime(t0=t0,str='Sync')  
-    opts        = pt.getOptions()
-    mol         = opts.getString('mol','')
+    opts        = pt.options
     xyzfile     = opts.getString('xyz','')
     solve       = opts.getInt('solve', 0)
     sort        = opts.getInt('sort', 0)
+    pivot       = opts.getReal('pivot', 0.)
     method      = opts.getString('method','mindo3').lower()
     writeXYZ    = opts.getBool('writeXYZ',False)
     sync        = opts.getBool('sync',False)
-
+    test        = opts.getBool('test',False)
     if sync: 
         pt.sync()
         t = pt.getWallTime(t0=t,str='Barrier - options')
-    qmol=None
-    if mol:
-        pt.write('xyz from mol input:{0}'.format(mol))  
-        qmol=qt.getMol(mol)
-    elif method == 'file':
+    qmol = None
+    if method == 'file':
         fA = opts.getString('fA','')
         fB = opts.getString('fB','')
         if os.path.isfile(fA):
@@ -106,22 +103,23 @@ def main():
             sys.exit()
     elif os.path.isfile(xyzfile):
         pt.write('xyz file:{0}'.format(xyzfile))
-        if sort > 0:
-            if rank == 0: 
-                xyz         = xt.readXYZ(xyzfile)
-                t = pt.getWallTime(t,str='Read xyz in')
-                sortedxyz   = xt.sortXYZ(xyz)
-                t = pt.getWallTime(t,str='Sorted xyz in')
-            else:
-                sortedxyz = None  
-            sortedxyz = comm.bcast(sortedxyz,root=0)     
-            pt.getWallTime(t,str='Bcast xyz in')
-            if writeXYZ: 
-                sortedfile  = xt.writeXYZ(sortedxyz)
-                pt.write('sorted xyz file:{0}'.format(sortedfile))
-            qmol        = qt.xyz2PyQuanteMol(sortedxyz)
-        else:   
-            qmol        = qt.xyzFile2PyQuanteMol(xyzfile)
+        if rank == 0: 
+            s, xyz       = xt.readSXYZ(xyzfile)
+            t = pt.getWallTime(t,str='Read xyz in')
+        else:
+            s, xyz = None, None
+        xyz = comm.bcast(xyz,root=0)     
+        s   = comm.bcast(s,root=0)
+        pt.getWallTime(t,str='Bcast xyz in')
+        if sort > 0:     
+            sortids   = xt.getSortingIndices(xyz, pivot=pivot)
+            s = s[sortids]
+            xyz = xyz[sortids]
+            t = pt.getWallTime(t,str='Sorted xyz in')  
+        if writeXYZ: 
+            sortedfile  = xt.writeXYZ(xyz)
+            pt.write('sorted xyz file:{0}'.format(sortedfile))
+        qmol        = qt.sxyz2PyQuanteMol(s,xyz)    
     else:
         pt.write("{0} not found".format(xyzfile))
         pt.write("A chain of atoms will be used.")
@@ -138,18 +136,16 @@ def main():
             t = pt.getWallTime(t0=t,str='Barrier - qmol')
         if method.startswith('hf'):
             t1 = pt.getWallTime()
-            stage.pop()        
+            stage.pop()
+            qmol        = qt.sxyz2PyQuanteMol(s,xyz)        
             runHF(qmol,opts)
             pt.getWallTime(t1,'MINDO3')
         elif method.startswith('mindo'):
-            t = pt.getWallTime()
-            qmol = qt.initializeMindo3(qmol)
-            if sync: 
-                pt.sync()
-                t = pt.getWallTime(t0=t,str='Barrier - init')
-            t = pt.getWallTime(t,'Initialization')            
-            stage.pop()        
-            runMindo3(qmol,opts)
+            stage.pop()
+            if test:
+                testMINDO3Energy(qmol)
+            else:            
+                runMINDO3(qmol,s=s,xyz=xyz)
             pt.getWallTime(t,'MINDO3')
         else:
             pt.write("No valid method specified")
