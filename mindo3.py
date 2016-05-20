@@ -844,7 +844,7 @@ def runMINDO3(qmol,s=None,xyz=None,opts=None):
         stage, t = pt.getStageTime(newstage='Nuclear', oldstage=stage,t0=t0)
         Enukefull                = getNuclearEnergyFull(worldcomm, qmol)   
         writeEnergies(Enukefull, unit='ev', enstr='Enucfull')
-    writeEnergies(Eref, unit='kcal', enstr='Eref')
+    writeEnergies(Eref, unit='ev', enstr='Eref')
     writeEnergies(Enuc, unit='ev', enstr='Enuc')
     stage, t = pt.getStageTime(newstage='F0', oldstage=stage, t0=t)
     F0    = getF0(qmol, basis, T)
