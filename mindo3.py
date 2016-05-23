@@ -84,7 +84,7 @@ def getNuclearEnergyFull(comm,atoms):
 
     return pt.getCommSum(comm,Enuc)   
 
-def getT(comm,basis,maxdist,nnzinfo=None):
+def getT(comm,basis,maxdist,nnzinfo=None,rrange=None):
     """
     Computes a matrix for the two-center two-electron integrals.
     Matrix is symmetric, and upper-triangular is computed.
@@ -101,10 +101,14 @@ def getT(comm,basis,maxdist,nnzinfo=None):
     """
     t            = pt.getWallTime()
     nbf          = len(basis)
-    maxdist2     = maxdist * maxdist * ut.ang2bohr * ut.ang2bohr    
+    maxdist2     = maxdist * maxdist    
+    maxdist2b    = maxdist2 * ut.ang2bohr * ut.ang2bohr    
     bohr2ang2    = ut.bohr2ang**2.
     e2           = ut.e2
-    rstart, rend = pt.distributeN(comm, nbf)
+    if rrange is None:
+        rstart, rend = pt.distributeN(comm, nbf)
+    else:
+        rstart, rend = rrange    
     localsize    = rend - rstart
     Enuc         = 0.
     k            = 0   
@@ -118,7 +122,7 @@ def getT(comm,basis,maxdist,nnzinfo=None):
     A.setSizes([(localsize,nbf),(localsize,nbf)])
     t = pt.getWallTime(t0=t,str='Set Sizes') 
     if nnzinfo is None:
-        nnzinfo = pt.getLocalNnzInfoPQ(basis,rstart,rend,maxdist2)
+        nnzinfo = pt.getLocalNnzInfoPQ(basis,rstart,rend,maxdist2b)
     dnnz,onnz,jmax = nnzinfo     
     nnz            = sum(dnnz) + sum(onnz)
     t              = pt.getWallTime(t0=t,str='Count nnz')
@@ -147,8 +151,8 @@ def getT(comm,basis,maxdist,nnzinfo=None):
                 vals[n] = gammaii
                 n += 1 
             else:                        
-                distij2 = atomi.dist2(atomj) # (in bohr squared) * bohr2ang2
-                if distij2 < maxdist2:
+                distij2 = atomi.dist2(atomj) 
+                if distij2 < maxdist2b:
                     rhoj    = atomj.rho 
                     distij2 = distij2 * bohr2ang2
                     gammaij = e2 / np.sqrt(distij2 + 0.25 * (rhoi + rhoj)**2.)
@@ -334,7 +338,32 @@ def getF0(atoms,basis,T):
     A.assemble()
     return A
 
-def getD0(comm,basis,guessfile='',T=None):
+def getD0Diagonal(comm,basis):
+    """
+    Returns the guess (initial) density matrix.
+    Guesfile is the path for a stored density matrix
+    If guess file is not found, a simple guess for the density 
+    matrix is returned. 
+    Default guess is a diagonal matrix based on valance electrons of atoms.   
+    """
+    
+    nbf=len(basis) 
+    A= pt.createMat(comm=comm)
+    A.setType('aij') 
+    A.setSizes([nbf,nbf])        
+    A.setPreallocationNNZ(1) 
+    A.setUp()
+    rstart, rend = A.getOwnershipRange() 
+    for i in xrange(rstart,rend):
+        atomi=basis[i].atom
+        if atomi.atno == 1: 
+            A[i,i] = atomi.Z/1.
+        else:               
+            A[i,i] = atomi.Z/4.
+    A.assemble()    
+    return  A 
+
+def getD0FromFile(comm,guessfile=''):
     """
     Returns the guess (initial) density matrix.
     Guesfile is the path for a stored density matrix
@@ -347,24 +376,26 @@ def getD0(comm,basis,guessfile='',T=None):
         pt.write("Read density matrix file: {0}".format(guessfile))
         A = pt.getMatFromFile(guessfile, comm) 
     else:
-        pt.write("Density matrix file not found: {0}".format(guessfile))            
-        nbf=len(basis) 
-        A= pt.createMat(comm=comm)
-        A.setType('aij') 
-        A.setSizes([nbf,nbf])        
-        A.setPreallocationNNZ(1) 
-        A.setUp()
-        rstart, rend = A.getOwnershipRange() 
-        for i in xrange(rstart,rend):
-            atomi=basis[i].atom
-            if atomi.atno == 1: 
-                A[i,i] = atomi.Z/1.
-            else:               
-                A[i,i] = atomi.Z/4.
-        A.assemble()    
-
+        pt.write("Can't find density matrix file: {0}".format(guessfile))
+        A = None
     return  A 
 
+def getD0Blocked(qmol,cstart,cend,napc,nbfpc,T):
+    A = T.duplicate()
+#    A.setUp()
+#                A            = pt.createMat(comm=worldcomm)
+#                A.setType('aij')
+#                A.setSizes([(localsize,nbf),(localsize,nbf)])
+    for c in range(cstart,cend):
+        astart  = c * napc
+        aend    = astart + napc
+        bstart  = c * nbfpc
+        bend    = bstart  + nbfpc
+        cqmols  = qmol.subsystem(str(c),indices=(range(astart,aend)))
+        Dc      = qt.runSCF(cqmols)[3]
+        A.setValuesBlocked(range(bstart,bend),range(bstart,bend),Dc[:,:])
+    A.assemble()      
+    return A
 def getG(comm, basis, T=None):
     """
     Returns the matrix for one-electron Coulomb term, (mu mu | nu nu) where mu and nu orbitals are centered on the same atom.
@@ -496,7 +527,7 @@ def scf(nocc,atomids,D,F0,T,G,H):
     t = pt.getWallTime()
     opts          = pt.options
     maxiter       = opts.getInt('maxiter', 30)
-    scfthresh     = opts.getReal('scfthresh',1.e-5)
+    scfthresh     = opts.getReal('scfthresh',1.e-3)
     a, b          = opts.getReal('a',-50.) , opts.getReal('b', -10.)
     bintype       = opts.getInt('bintype',1)
     rangebuffer   = opts.getReal('rangebuffer',0.25)
@@ -793,22 +824,28 @@ def runMINDO3(qmol,s=None,xyz=None,opts=None):
     in kcal/mol for a given PyQuante molecule.
     """
     stage, t0   = pt.getStageTime(newstage='MINDO3')
-    
-    opts        = pt.options
+    if opts is None:
+        opts        = pt.options
+    maxiter       = opts.getInt('maxiter', 30)
+    scfthresh     = opts.getReal('scfthresh',1.e-3)
     maxdist     = opts.getReal('maxdist', 100.)
     guess       = opts.getInt('guess', 0)
+    napc        = opts.getInt('napc', 3)
     guessfile   = opts.getString('guessfile', 'dens.bin')
     nuke        = opts.getBool('nuke',False)
     sync        = opts.getBool('sync',False)
+    serial        = opts.getBool('serial',False)
     t           = pt.getWallTime(t0=t0,str='PyQuante initialization')  
     qmol = qt.initializeMindo3(qmol)
     if sync: 
         pt.sync()
         t = pt.getWallTime(t0=t,str='Barrier - init')
     t = pt.getWallTime(t,'Initialization')  
+    if serial:
+        qt.runSCF(qmol, scfthresh=scfthresh, maxiter=maxiter)
+        return 
     Eref    = qt.getEref(qmol)
-    Enuc    = 0.
-    Etot    = 0.
+    nat     = len(qmol)
     nbf     = qt.getNBF(qmol)    
     nel     = qt.getNVE(qmol)
     nocc    = nel/2
@@ -829,15 +866,36 @@ def runMINDO3(qmol,s=None,xyz=None,opts=None):
     pt.write("Number of valance electrons: {0}".format(nel))
     pt.write("Number of occupied orbitals: {0} = Number of required eigenvalues".format(nocc))
     t           = pt.getWallTime(t0=t,str='Basis set')
-    stage, t = pt.getStageTime(newstage='D0', oldstage=stage ,t0=t)
-    D0     = getD0(worldcomm,basis,guessfile=guessfile)    
-    stage, t = pt.getStageTime(newstage='T', oldstage=stage,t0=t0)
-    if guess > 0:
-        nnz, Enuc, T            = getTFromGuess(worldcomm, D0, basis)
-    else:
+    D0 = None
+    if guess == 1:
+        stage, t = pt.getStageTime(newstage='D0', oldstage=stage ,t0=t)
+        D0 = getD0FromFile(worldcomm, guessfile)
+        if D0 is None:
+            guess = 0
+        else:
+            stage, t = pt.getStageTime(newstage='T', oldstage=stage,t0=t0)
+            nnz, Enuc, T            = getTFromGuess(worldcomm, D0, basis)
+    elif guess == 2:
+        if nat % napc != 0 or nbf % napc:
+            pt.write("Change number of atoms per cluster: {0}".format(napc))
+        else:
+            stage, t = pt.getStageTime(newstage='T', oldstage=stage,t0=t0)
+            ncluster = nat / napc
+            nbfpc    = nbf / ncluster 
+            cstart, cend = pt.distributeN(worldcomm,ncluster)
+            rstart, rend = cstart * nbfpc, cend * nbfpc
+            nnzinfo = pt.getLocalNnzInfo(bxyz, rstart, rend, maxdist2)
+            nnz, Enuc, T            = getT(worldcomm, basis, maxdist,nnzinfo,rrange=(rstart,rend))
+            stage, t = pt.getStageTime(newstage='D0', oldstage=stage ,t0=t)
+            D0 = getD0Blocked(qmol,cstart,cend, napc, nbfpc, T)    
+    elif guess == 0 or D0 is None:
+        stage, t = pt.getStageTime(newstage='D0', oldstage=stage ,t0=t)    
+        D0     = getD0Diagonal(worldcomm,basis)    
+        stage, t = pt.getStageTime(newstage='T', oldstage=stage,t0=t0)
         rstart, rend = pt.distributeN(worldcomm, nbf)
         nnzinfo = pt.getLocalNnzInfo(bxyz, rstart, rend, maxdist2)
         nnz, Enuc, T            = getT(worldcomm, basis, maxdist,nnzinfo)
+
     dennnz = (100. * nnz) / (nbf*nbf) 
     pt.write("Nonzero density percent : {0:6.3f}".format(dennnz))
     if nuke:
@@ -856,11 +914,17 @@ def runMINDO3(qmol,s=None,xyz=None,opts=None):
     pt.getWallTime(t0,str="Pre-SCF")
     t0          = pt.getWallTime()
     converged, Eelec, homo, lumo, D = scf(nocc,atomids,D0,F0,T,G,H)
+    if nuke:
+        Etotfull   = Eelec + Enukefull
+        Efinalfull = Etotfull*ut.ev2kcal+Eref
+        writeEnergies(Enukefull, 'ev', 'Enucfull')
+        writeEnergies(Etotfull,unit='ev',enstr='Enucfull+Eelec')
+        writeEnergies(Efinalfull, unit= 'kcal', enstr='Eref+Enucfull+Eelec')
+    gap = lumo - homo
+    Etot   = Eelec + Enuc
+    Efinal = Etot  + Eref
     if converged:
         pt.getWallTime(t0,str="SCF achieved")
-        gap = lumo - homo
-        Etot   = Eelec + Enuc
-        Efinal = Etot+Eref
         writeEnergies(Eref, unit='ev', enstr='Eref')
         writeEnergies(Enuc, 'ev', 'Enuc')
         writeEnergies(Eelec, unit='ev', enstr='Eel')
@@ -871,12 +935,6 @@ def runMINDO3(qmol,s=None,xyz=None,opts=None):
         writeEnergies(Efinal, unit= 'ev', enstr='Eref+Enuc+Eelec')
     else:    
         pt.getWallTime(t0,str="SCF FAILED!!!")
-    if nuke:
-        Etotfull   = Eelec + Enukefull
-        Efinalfull = Etotfull*ut.ev2kcal+Eref
-        writeEnergies(Enukefull, 'ev', 'Enucfull')
-        writeEnergies(Etotfull,unit='ev',enstr='Enucfull+Eelec')
-        writeEnergies(Efinalfull, unit= 'kcal', enstr='Eref+Enucfull+Eelec')
     return Enuc,Etot,Efinal,D
 
 def testNuclearEnergy(atoms=None):
@@ -894,7 +952,7 @@ def testNuclearEnergy(atoms=None):
         assert (abs(Epscf-Epq) < thresh), "Nuclear energies differ more than 0.01 mev"
     return True
     
-def testMINDO3Energy(atoms=None):
+def testMINDO3Energy(atoms=None,s=None,xyz=None):
     """
     Tests PSCF MINDO3 energy with PyQuante result.
     Threshold is 0.001 ev since this is the threshold
@@ -905,7 +963,7 @@ def testMINDO3Energy(atoms=None):
         qt.initializeMindo3(atoms)
     thresh = 0.001 # ev
     comm = pt.getComm()
-    Epscf = runMINDO3(atoms)[2]
+    Epscf = runMINDO3(atoms,s=s,xyz=xyz)[2]
     if comm.rank == 0:
         Epq = qt.getPQMINDO3Energy(atoms)
         assert (abs(Epscf-Epq) < thresh), "MINDO3 energies differ more than 0.001 ev"

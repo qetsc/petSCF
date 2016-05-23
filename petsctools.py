@@ -435,23 +435,28 @@ def getLocalNnzInfo(xyz,rstart,rend,maxdist2):
     -----
     Generates a new xyz shape array 
     """
-    nxyz=len(xyz)
-    localsize=rend-rstart
-    dnnz=np.zeros(localsize,dtype='int32')
-    onnz=np.zeros(localsize,dtype='int32')
-    jmax=np.zeros(localsize,dtype='int32')
-    k = 0
-    for i in range(rstart,rend):
-        dists2 = np.sum((xyz - xyz[i])**2,axis=1)
-        for j in range(nxyz):
-            if dists2[j] < maxdist2:
-                if j >= rstart and j < rend: 
-                    dnnz[k] += 1
-                else:
-                    onnz[k] += 1
-                if j > jmax[k]:
-                    jmax[k] = j
-        k += 1            
+    localsize = rend - rstart
+    if localsize > 0:
+        nxyz = len(xyz)
+        dnnz=np.zeros(localsize,dtype='int32')
+        onnz=np.zeros(localsize,dtype='int32')
+        jmax=np.zeros(localsize,dtype='int32')
+        k = 0
+        for i in range(rstart,rend):
+            dists2 = np.sum((xyz - xyz[i])**2,axis=1)
+            for j in range(nxyz):
+                if dists2[j] < maxdist2:
+                    if j >= rstart and j < rend: 
+                        dnnz[k] += 1
+                    else:
+                        onnz[k] += 1
+                    if j > jmax[k]:
+                        jmax[k] = j
+            k += 1            
+    else:
+        dnnz = 0
+        onnz = 0
+        jmax = 0    
     return dnnz, onnz, jmax
 
 def getLocalNnzInfoLessMemory(xyz,rstart,rend,maxdist2):

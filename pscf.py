@@ -143,7 +143,7 @@ def main():
         elif method.startswith('mindo'):
             stage.pop()
             if test:
-                testMINDO3Energy(qmol)
+                testMINDO3Energy(qmol,s=s,xyz=xyz)
             else:            
                 runMINDO3(qmol,s=s,xyz=xyz)
             pt.getWallTime(t,'MINDO3')
