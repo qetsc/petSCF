@@ -123,7 +123,7 @@ def getT(comm,basis,maxdist,nnzinfo=None,rrange=None):
     t = pt.getWallTime(t0=t,str='Set Sizes') 
     if nnzinfo is None:
         nnzinfo = pt.getLocalNnzInfoPQ(basis,rstart,rend,maxdist2b)
-    dnnz,onnz,jmax = nnzinfo     
+    dnnz,onnz,jmax = nnzinfo
     nnz            = sum(dnnz) + sum(onnz)
     t              = pt.getWallTime(t0=t,str='Count nnz')
     if localsize > 0 :
@@ -871,9 +871,7 @@ def runMINDO3(qmol,s=None,xyz=None,opts=None):
     if guess == 1:
         stage, t = pt.getStageTime(newstage='D0', oldstage=stage ,t0=t)
         D0 = getD0FromFile(worldcomm, guessfile)
-        if D0 is None:
-            guess = 0
-        else:
+        if D0:
             stage, t = pt.getStageTime(newstage='T', oldstage=stage,t0=t0)
             nnz, Enuc, T            = getTFromGuess(worldcomm, D0, basis)
     elif guess == 2:
@@ -889,7 +887,7 @@ def runMINDO3(qmol,s=None,xyz=None,opts=None):
             nnz, Enuc, T            = getT(worldcomm, basis, maxdist,nnzinfo,rrange=(rstart,rend))
             stage, t = pt.getStageTime(newstage='D0', oldstage=stage ,t0=t)
             D0 = getD0Blocked(qmol,cstart,cend, napc, nbfpc, T)    
-    elif guess == 0 or D0 is None:
+    if guess == 0 or D0 is None:
         stage, t = pt.getStageTime(newstage='D0', oldstage=stage ,t0=t)    
         D0     = getD0Diagonal(worldcomm,basis)    
         stage, t = pt.getStageTime(newstage='T', oldstage=stage,t0=t0)

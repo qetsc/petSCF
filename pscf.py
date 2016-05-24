@@ -74,6 +74,7 @@ def main():
     xyzfile     = opts.getString('xyz','')
     solve       = opts.getInt('solve', 0)
     sort        = opts.getInt('sort', 0)
+    ncluster    = opts.getInt('ncluster', 0)
     pivot       = opts.getReal('pivot', 0.)
     method      = opts.getString('method','mindo3').lower()
     writeXYZ    = opts.getBool('writeXYZ',False)
@@ -111,10 +112,11 @@ def main():
         xyz = comm.bcast(xyz,root=0)     
         s   = comm.bcast(s,root=0)
         pt.getWallTime(t,str='Bcast xyz in')
-        if sort > 0:     
-            sortids   = xt.getSortingIndices(xyz, pivot=pivot)
-            s = s[sortids]
-            xyz = xyz[sortids]
+        if sort == 1:     
+            s, xyz = xt.getSortedSXYZ(s,xyz,pivot)
+            t = pt.getWallTime(t,str='Sorted xyz in')  
+        elif sort == 2:     
+            s, xyz = xt.getOrderedSXYZ(s, xyz, ncluster, pivot)
             t = pt.getWallTime(t,str='Sorted xyz in')  
         if writeXYZ: 
             sortedfile  = xt.writeXYZ(xyz)

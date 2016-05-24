@@ -454,9 +454,9 @@ def getLocalNnzInfo(xyz,rstart,rend,maxdist2):
                         jmax[k] = j
             k += 1            
     else:
-        dnnz = 0
-        onnz = 0
-        jmax = 0    
+        dnnz = np.array([0])
+        onnz = np.array([0])
+        jmax = np.array([0])    
     return dnnz, onnz, jmax
 
 def getLocalNnzInfoLessMemory(xyz,rstart,rend,maxdist2):
