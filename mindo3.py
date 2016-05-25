@@ -364,6 +364,31 @@ def getD0Diagonal(comm,basis):
     A.assemble()    
     return  A 
 
+def getDiagonalD0(T,basis,nbfs):
+    """
+    Returns the guess (initial) density matrix
+    based on the number of valance electrons
+    and the number of basis functions
+    to satisfy Tr(D) = sum(nves)
+    Notes
+    -----
+    ToDo:
+    Do not duplicate T, 
+    simply create a diagonal matrix, or
+    just use a vec.
+    Use a list of number of valance e's instead
+    of using pyquante atom object attribute.   
+    """
+    A = T.duplicate()
+    diag = A.getVecLeft()  
+    diag.array_w = [1.]*len(basis)
+    for i,nbf in enumerate(nbfs):
+        if nbf != 1:             
+            diag.array_w[i] = basis[i].atom.Z / 4. 
+    A.setDiagonal(diag)
+    A.assemble()            
+    return A
+
 def getD0FromFile(comm,guessfile=''):
     """
     Returns the guess (initial) density matrix.
@@ -813,7 +838,7 @@ def runMINDO3(qmol,s=None,xyz=None,opts=None):
         opts        = pt.options
     maxiter       = opts.getInt('maxiter', 30)
     scfthresh     = opts.getReal('scfthresh',1.e-3)
-    maxdist     = opts.getReal('maxdist', 100.)
+    maxdist     = opts.getReal('maxdist', 10.)
     guess       = opts.getInt('guess', 0)
     napc        = opts.getInt('napc', 3)
     guessfile   = opts.getString('guessfile', 'dens.bin')
@@ -840,11 +865,7 @@ def runMINDO3(qmol,s=None,xyz=None,opts=None):
     atomids = qt.getAtomIDs(basis)
     worldcomm = pt.getComm()
     nrank = worldcomm.size
-    if xyz is None:
-        bxyz = qt.getXYZFromBasis(qmol,basis)
-    else:
-        nbfs = xt.getNBFsFromS(s)
-        bxyz = xt.getExtendedArray(nbfs,xyz)    
+ 
     if sync:
         pt.sync()
         t            = pt.getWallTime(t0=t,str='Barrier - options')
@@ -855,6 +876,11 @@ def runMINDO3(qmol,s=None,xyz=None,opts=None):
     pt.write("Number of occupied orbitals: {0} = Number of required eigenvalues".format(nocc))
     t           = pt.getWallTime(t0=t,str='Basis set')
     D0 = None
+    if xyz is None:
+        bxyz = qt.getXYZFromBasis(qmol,basis)
+    else:
+        nbfs = xt.getNBFsFromS(s)
+        bxyz = xt.getExtendedArray(nbfs,xyz)  
     if guess == 1:
         pt.write("Reading density matrix from file")
         stage, t = pt.getStageTime(newstage='D0', oldstage=stage ,t0=t)
@@ -870,6 +896,7 @@ def runMINDO3(qmol,s=None,xyz=None,opts=None):
         else:
             pt.write("Generating block-diagonal density matrix")
             stage, t = pt.getStageTime(newstage='T', oldstage=stage,t0=t0)
+             
             nbfpc    = nbf / ncluster 
             cstart, cend = pt.distributeN(worldcomm,ncluster)
             rstart, rend = cstart * nbfpc, cend * nbfpc
@@ -879,15 +906,15 @@ def runMINDO3(qmol,s=None,xyz=None,opts=None):
             stage, t = pt.getStageTime(newstage='D0', oldstage=stage ,t0=t)
             D0 = getD0Blocked(qmol,cstart,cend, napc, nbfpc, T) 
             t = pt.getWallTime(t0=t,str='D0 generated')
-    if guess == 0 or D0 is None:
-        pt.write("Generating diagonal density matrix")
-        stage, t = pt.getStageTime(newstage='D0', oldstage=stage ,t0=t)    
-        D0     = getD0Diagonal(worldcomm,basis)    
+    if guess == 0 or D0 is None:   
         stage, t = pt.getStageTime(newstage='T', oldstage=stage,t0=t0)
         rstart, rend = pt.distributeN(worldcomm, nbf)
         nnzinfo = pt.getLocalNnzInfo(bxyz, rstart, rend, maxdist2)
         nnz, Enuc, T            = getT(worldcomm, basis, maxdist,nnzinfo)
-
+        pt.write("Generating diagonal density matrix")
+        stage, t = pt.getStageTime(newstage='D0', oldstage=stage ,t0=t)
+        bnbfs = xt.getExtendedArray(nbfs,nbfs)      
+        D0     = getDiagonalD0(T,basis[rstart:rend],bnbfs[rstart:rend]) 
     dennnz = (100. * nnz) / (nbf*nbf) 
     pt.write("Nonzero density percent : {0:6.3f}".format(dennnz))
     if nuke:
