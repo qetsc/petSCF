@@ -134,6 +134,39 @@ def sortXYZlist(xyz,pivot=[0.,0.,0.]):
     """
     return sorted(xyz,key=lambda x: (x[1]-pivot[0])**2+(x[2]-pivot[1])**2+(x[3]-pivot[2])**2)
 
+def sortWaterClusters(s,xyz,pivot=None):
+    """
+    Custom sorting and clustering algorithm
+    for water clusters.
+    1) Sort oxygen atoms based on their distance from a pivot point. (any
+        point far from all atoms will work)
+    2) Loop over oxygen atoms:
+         2a) Find the distance of picked O from H atoms
+         2b) Pick 2 closest H atoms
+         2c) Add picked 1 O and 2 H atoms to the new xyz list
+    Notes
+    -----
+    ToDo:
+    New arrays are created, which could be avoided
+    by just using indices.
+    For 2a) One could exclude already used H positions
+    to make the loop faster at each iteration.     
+    """
+    hxyz = xyz[s=='H']
+    sortedOxyz = getSortedSXYZ(s[s=='O'],xyz[s=='O'],pivot)
+    nat  = len(xyz)
+    napc = 3
+    nc   = nat / napc
+    xyznew = np.empty(xyz.shape)
+    snew   = np.array(['O','H','H']*nc)
+    for i,x in enumerate(sortedOxyz[1]):
+        k = i * napc
+        idx = getSortingIndices(hxyz,pivot=x)
+        xyznew[k,:]   = x
+        xyznew[k+1,:] = hxyz[idx][0]
+        xyznew[k+2,:] = hxyz[idx][1]
+    return snew, xyznew 
+
 def readXYZlist(xyzfile):
     """
     Reads an xyz formatted file (in Angstroms) and returns the coordinates in a list.
@@ -196,10 +229,7 @@ def getSortingIndices(xyz,pivot = 0):
     Returns the indices of xyz, sorted by the distance
     from a pivot point.
     """
-    if pivot != 0.:
-        dist = np.linalg.norm(xyz,axis=1)
-    else:
-        dist = np.linalg.norm(xyz-pivot,axis=1)
+    dist = np.linalg.norm(xyz-pivot,axis=1)
     return np.argsort(dist)
 
 def getSortedXYZ(xyz,pivot = None):

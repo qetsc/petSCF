@@ -118,6 +118,9 @@ def main():
         elif sort == 2:     
             s, xyz = xt.getOrderedSXYZ(s, xyz, ncluster, pivot)
             t = pt.getWallTime(t,str='Sorted xyz in')  
+        elif sort == 3:     
+            s, xyz = xt.sortWaterClusters(s, xyz, pivot)
+            t = pt.getWallTime(t,str='Sorted xyz in')  
         if writeXYZ: 
             sortedfile  = xt.writeXYZ(xyz)
             pt.write('sorted xyz file:{0}'.format(sortedfile))
