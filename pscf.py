@@ -112,13 +112,16 @@ def main():
         xyz = comm.bcast(xyz,root=0)     
         s   = comm.bcast(s,root=0)
         pt.getWallTime(t,str='Bcast xyz in')
-        if sort == 1:     
+        if sort == 1:
+            pt.write("Sorting atoms...")     
             s, xyz = xt.getSortedSXYZ(s,xyz,pivot)
             t = pt.getWallTime(t,str='Sorted xyz in')  
-        elif sort == 2:     
+        elif sort == 2:            
+            pt.write("Find clusters with k-means and sort them...")     
             s, xyz = xt.getOrderedSXYZ(s, xyz, ncluster, pivot)
             t = pt.getWallTime(t,str='Sorted xyz in')  
-        elif sort == 3:     
+        elif sort == 3:
+            pt.write("Find water molecules and sort them...")     
             s, xyz = xt.sortWaterClusters(s, xyz, pivot)
             t = pt.getWallTime(t,str='Sorted xyz in')  
         if writeXYZ: 
@@ -134,8 +137,8 @@ def main():
         qmol    = xt.getChainMol(N=N, Z=Z, d=dist)
         
     if qmol:
-        pt.write("Number of atoms: %i" % (len(qmol.atoms)))
-        pt.write("Number of electrons: %i" % (qmol.get_nel()))
+        pt.write("Number of atoms: {0}".format(len(qmol.atoms)))
+        pt.write("Number of electrons: {0}".format(qmol.get_nel()))
         if sync: 
             pt.sync()
             t = pt.getWallTime(t0=t,str='Barrier - qmol')

@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 import logging
 import numpy as np
-from sklearn.cluster import KMeans
 
 def initializeLog(debug=False,warning=False,silent=False):
     import sys
@@ -272,6 +271,7 @@ def getOrderedSXYZ(s,xyz,ncluster,pivot = None):
     the matrix with a cutoff distance.
     There could be a simpler way.
     """
+    from sklearn.cluster import KMeans
     s,xyz = getSortedSXYZ(s,xyz,pivot)
     clusterids = KMeans(n_clusters=ncluster).fit_predict(xyz)
     idx=np.unique(clusterids,return_index=1)[1]

@@ -3,9 +3,16 @@ import slepctools as st
 import unittools as ut
 import numpy as np
 import scftools as ft
-from os.path import isfile
+import os.path
 import pyquantetools as qt
 import xyztools as xt
+try:
+    import SIPs.sips as sips
+    usesips = True
+except:
+    pt.write("Error: SIPs not found")
+    usesips = False
+            
 def writeEnergies(en,unit='', enstr=''):
     Ekcal, Eev, Ehart = ut.convertEnergy(en, unit)
     pt.write("{0: <24s} = {1:20.10f} kcal/mol = {2:20.10f} ev = {3:20.10f} Hartree".format(enstr,Ekcal, Eev, Ehart))
@@ -372,7 +379,7 @@ def getD0FromFile(comm,guessfile=''):
     Default guess is a diagonal matrix based on valance electrons of atoms.   
     """
 
-    if isfile(guessfile):
+    if os.path.isfile(guessfile):
         pt.write("Read density matrix file: {0}".format(guessfile))
         A = pt.getMatFromFile(guessfile, comm) 
     else:
@@ -533,7 +540,6 @@ def scf(nocc,atomids,D,F0,T,G,H):
     bintype       = opts.getInt('bintype',1)
     rangebuffer   = opts.getReal('rangebuffer',0.25)
     eigsfile      = opts.getString('eigsfile','eigs.txt')
-    usesips       = opts.getBool('sips',True)
     local         = opts.getBool('local',True)
     nbin          = opts.getInt('eps_krylovschur_partitions',1)
     sync          = opts.getBool('sync',False)
@@ -555,17 +561,9 @@ def scf(nocc,atomids,D,F0,T,G,H):
     if sync:
         pt.sync()
         t            = pt.getWallTime(t0=t,str='Barrier - SCF options')           
-    if usesips:
-        try:
-            import SIPs.sips as sips
-            if sync:
-                pt.sync()
-                t            = pt.getWallTime(t0=t,str='Barrier - import sips')
-        except:
-            pt.write("Error: SIPs not found")
-            usesips = False
+
     eigs  = []
-    if isfile(eigsfile) and bintype > 0: 
+    if os.path.isfile(eigsfile) and bintype > 0: 
         if not pt.rank:
             eigs = np.loadtxt(eigsfile)
             print("{0} eigenvalues read from file {1}".format(len(eigs),eigsfile))
@@ -582,7 +580,6 @@ def scf(nocc,atomids,D,F0,T,G,H):
         pt.write("{0:*^60s}".format("Iteration "+str(k)))
         t0 = pt.getWallTime()
         if k==1:
-#            stage, t = pt.getStageTime(newstage='F',oldstage=stage, t0=t0)
             stage, t = pt.getStageTime(newstage='F', t0=t0)
             Ftmp = getF(atomids, D, F0, T, G, H)
             Ftmp = F0 + Ftmp
@@ -590,7 +587,9 @@ def scf(nocc,atomids,D,F0,T,G,H):
             Eold = Eel
             stage, t = pt.getStageTime(newstage='Trace',oldstage=stage, t0=t)
             Eel  = 0.5 * pt.getTraceProductAIJ(D, F0+F)
-            stage, t = pt.getStageTime(newstage='SetupEPS',oldstage=stage, t0=t)    
+            if maxiter < 2:
+                break
+            stage, t = pt.getStageTime(newstage='SetupEPS',oldstage=stage, t0=t)  
             eps = st.setupEPS(F, B=None,binedges=binedges)  
         else:
             Eold = Eel
@@ -694,12 +693,6 @@ def scfwithaccelerators(opts,nocc,atomids,D,F0,T,G,H,stage):
         pt.write("Subintervals will be adjusted at each iteration")
     else:
         pt.write("Not available")   
-    if usesips:
-        try:
-            import SIPs.sips as sips
-        except:
-            pt.write("SIPs not found")
-            usesips = False
     if  scfacc == 1:
         pt.write("Pulay's DIIS for F with sizediis: {0}",format(sizediis))
         pt.write("                   with errdiis: {0}".format(errdiis))
@@ -884,9 +877,11 @@ def runMINDO3(qmol,s=None,xyz=None,opts=None):
             cstart, cend = pt.distributeN(worldcomm,ncluster)
             rstart, rend = cstart * nbfpc, cend * nbfpc
             nnzinfo = pt.getLocalNnzInfo(bxyz, rstart, rend, maxdist2)
+            t = pt.getWallTime(t0=t,str='Count nnz')
             nnz, Enuc, T            = getT(worldcomm, basis, maxdist,nnzinfo,rrange=(rstart,rend))
             stage, t = pt.getStageTime(newstage='D0', oldstage=stage ,t0=t)
-            D0 = getD0Blocked(qmol,cstart,cend, napc, nbfpc, T)    
+            D0 = getD0Blocked(qmol,cstart,cend, napc, nbfpc, T) 
+            t = pt.getWallTime(t0=t,str='D0 generated')
     if guess == 0 or D0 is None:
         stage, t = pt.getStageTime(newstage='D0', oldstage=stage ,t0=t)    
         D0     = getD0Diagonal(worldcomm,basis)    
