@@ -1,7 +1,7 @@
 import sys, petsc4py
 petsc4py.init(sys.argv)
-from petsc4py import PETSc
-from mpi4py import MPI
+import petsc4py.PETSc as PETSc 
+import mpi4py.MPI as MPI
 import numpy as np
 #from numba.decorators import autojit
 #from numba import jit

@@ -119,20 +119,15 @@ def getT(comm,basis,maxdist,nnzinfo=None,rrange=None):
     localsize    = rend - rstart
     Enuc         = 0.
     k            = 0   
-    t            = pt.getWallTime(t0=t,str='Initialize')
-    pt.sync()
-    t            = pt.getWallTime(t0=t,str='Barrier - distribute')
     A            = pt.createMat(comm=comm)
     t = pt.getWallTime(t0=t,str='Create Mat')
     A.setType('aij')
-    t = pt.getWallTime(t0=t,str='Set Type')
     A.setSizes([(localsize,nbf),(localsize,nbf)])
-    t = pt.getWallTime(t0=t,str='Set Sizes') 
     if nnzinfo is None:
         nnzinfo = pt.getLocalNnzInfoPQ(basis,rstart,rend,maxdist2b)
+        t       = pt.getWallTime(t0=t,str='Count nnz')
     dnnz,onnz,jmax = nnzinfo
     nnz            = sum(dnnz) + sum(onnz)
-    t              = pt.getWallTime(t0=t,str='Count nnz')
     if localsize > 0 :
         A.setPreallocationNNZ((dnnz,onnz))
     else: 
@@ -184,7 +179,6 @@ def getT(comm,basis,maxdist,nnzinfo=None,rrange=None):
     B = A.duplicate(copy=True)
     B = B + A.transpose() 
     t = pt.getWallTime(t0=t,str='Add transpose')
-    A.destroy()
     return  nnz,Enuc, B
 
 def getTDense(comm,basis):
@@ -475,16 +469,13 @@ def getF(atomids, D, F0, T, G, H):
     """
     t            = pt.getWallTime()
     diagD = D.getDiagonal()
-    t = pt.getWallTime(t0=t,str='Diag D')
 #    diagD = pt.getSeqArr(diagD) 
     diagD = pt.convert2SeqVec(diagD) 
     t = pt.getWallTime(t0=t,str='AllGather Diag')
     A     = T.duplicate()
-    t = pt.getWallTime(t0=t,str='Mat duplicate')    
     A.setUp()
-    t = pt.getWallTime(t0=t,str='Mat setup')    
     rstart, rend = A.getOwnershipRange()
-    t = pt.getWallTime(t0=t,str='Ownership')
+    t = pt.getWallTime(t0=t,str='Mat ops')    
     for i in xrange(rstart,rend):
         atomi        = atomids[i]
         colsT, valsT = T.getRow(i)

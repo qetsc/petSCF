@@ -34,7 +34,7 @@ import slepctools as st
 import xyztools as xt
 import pyquantetools as qt
 import os.path
-from mindo3 import runMINDO3,testMINDO3Energy
+import mindo3
 from hf import runHF
 
 def printGitHash():
@@ -151,9 +151,9 @@ def main():
         elif method.startswith('mindo'):
             stage.pop()
             if test:
-                testMINDO3Energy(qmol,s=s,xyz=xyz)
+                mindo3.testMINDO3Energy(qmol,s=s,xyz=xyz)
             else:            
-                runMINDO3(qmol,s=s,xyz=xyz)
+                mindo3.runMINDO3(qmol,s=s,xyz=xyz)
             pt.getWallTime(t,'MINDO3')
         else:
             pt.write("No valid method specified")
