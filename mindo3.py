@@ -831,6 +831,7 @@ def runMINDO3(qmol,s=None,xyz=None,opts=None):
         return 
     Eref    = qt.getEref(qmol)
     nat     = len(qmol)
+    ncluster = nat / napc
     nbf     = qt.getNBF(qmol)    
     nel     = qt.getNVE(qmol)
     nocc    = nel/2
@@ -838,6 +839,7 @@ def runMINDO3(qmol,s=None,xyz=None,opts=None):
     maxdist2= maxdist * maxdist
     atomids = qt.getAtomIDs(basis)
     worldcomm = pt.getComm()
+    nrank = worldcomm.size
     if xyz is None:
         bxyz = qt.getXYZFromBasis(qmol,basis)
     else:
@@ -849,10 +851,12 @@ def runMINDO3(qmol,s=None,xyz=None,opts=None):
     pt.write("Distance cutoff: {0:5.3f}".format(maxdist))
     pt.write("Number of basis functions  : {0} = Matrix size".format(nbf))
     pt.write("Number of valance electrons: {0}".format(nel))
+    pt.write("Number of clusters: {0}".format(ncluster))
     pt.write("Number of occupied orbitals: {0} = Number of required eigenvalues".format(nocc))
     t           = pt.getWallTime(t0=t,str='Basis set')
     D0 = None
     if guess == 1:
+        pt.write("Reading density matrix from file")
         stage, t = pt.getStageTime(newstage='D0', oldstage=stage ,t0=t)
         D0 = getD0FromFile(worldcomm, guessfile)
         if D0:
@@ -861,9 +865,11 @@ def runMINDO3(qmol,s=None,xyz=None,opts=None):
     elif guess == 2:
         if nat % napc != 0 or nbf % napc:
             pt.write("Change number of atoms per cluster: {0}".format(napc))
+        elif ncluster < nrank:
+            pt.write("Number of clusters is less than number of ranks!")   
         else:
+            pt.write("Generating block-diagonal density matrix")
             stage, t = pt.getStageTime(newstage='T', oldstage=stage,t0=t0)
-            ncluster = nat / napc
             nbfpc    = nbf / ncluster 
             cstart, cend = pt.distributeN(worldcomm,ncluster)
             rstart, rend = cstart * nbfpc, cend * nbfpc
@@ -874,6 +880,7 @@ def runMINDO3(qmol,s=None,xyz=None,opts=None):
             D0 = getD0Blocked(qmol,cstart,cend, napc, nbfpc, T) 
             t = pt.getWallTime(t0=t,str='D0 generated')
     if guess == 0 or D0 is None:
+        pt.write("Generating diagonal density matrix")
         stage, t = pt.getStageTime(newstage='D0', oldstage=stage ,t0=t)    
         D0     = getD0Diagonal(worldcomm,basis)    
         stage, t = pt.getStageTime(newstage='T', oldstage=stage,t0=t0)
