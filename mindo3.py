@@ -91,7 +91,81 @@ def getNuclearEnergyFull(comm,atoms):
 
     return pt.getCommSum(comm,Enuc)   
 
-def getT(comm,basis,maxdist,nnzinfo=None,rrange=None):
+def getT(comm,pos,basis,maxdist,nnzinfo=None,rrange=None):
+    """
+    Computes a matrix for the two-center two-electron integrals.
+    Assumes spherical symmetry, no dependence on basis function, only atom types.
+    Parametrized for pairs of atoms. (Two-atom parameters)
+    This matrix also determines the nonzero structure of the Fock matrix.
+    Nuclear repulsion energy is also computed.
+    TODO:
+    Nuclear energy better be removed from here.    
+    Values are indeed based on atoms, not basis functions, so computations can be
+    reduced by nbf/natom, but not sure how to vectorize.
+    Use SBAIJ instead of AIJ
+    Cythonize
+    """
+    t            = pt.getWallTime()
+    nbf          = len(basis)
+    maxdist2     = maxdist * maxdist    
+    e2           = ut.e2
+    if rrange is None:
+        rstart, rend = pt.distributeN(comm, nbf)
+    else:
+        rstart, rend = rrange    
+    localsize    = rend - rstart
+    Enuc         = 0.
+    A            = pt.createMat(comm=comm)
+    t = pt.getWallTime(t0=t,str='Create Mat')
+    A.setType('aij')
+    A.setSizes([(localsize,nbf),(localsize,nbf)])
+    if nnzinfo is None:
+        nnzinfo = pt.getLocalNnzInfo(pos,maxdist2,rrange)
+        t       = pt.getWallTime(t0=t,str='Count nnz')
+    dnnz, onnz  = nnzinfo
+    nnz            = sum(dnnz) + sum(onnz)
+    if localsize > 0 :
+        A.setPreallocationNNZ((dnnz,onnz))
+    else: 
+        A.setPreallocationNNZ((0,0))
+    t = pt.getWallTime(t0=t,str='Preallocate')
+    baseidx = np.arange(nbf,dtype='int32')
+    for k, i in enumerate(range(rstart,rend)):
+        atomi   = basis[i].atom
+        atnoi   = atomi.atno
+        rhoi    = atomi.rho
+        gammaii = qt.f03[atnoi]
+        nnzrow  = dnnz[k] + onnz[k]
+        vals    = np.zeros(nnzrow)
+        n       = 1
+        dists2 = np.sum((pos - pos[i])**2,axis=1)
+        cols   = baseidx[dists2 < maxdist2]
+        vals   = np.zeros(len(cols))
+        for n, j in enumerate(cols):
+            atomj = basis[j].atom
+            if atomi.atid == atomj.atid:
+                vals[n] = gammaii
+            else:                        
+                distij2 = dists2[j]
+                rhoj    = atomj.rho 
+                gammaij = e2 / np.sqrt(distij2 + 0.25 * (rhoi + rhoj)*(rhoi + rhoj))
+                R       = np.sqrt(distij2)
+                vals[n] = gammaij
+                atnoj   = atomj.atno
+                Enuc  +=  ( ( atomi.Z * atomj.Z * gammaij 
+                              + abs(atomi.Z * atomj.Z * (e2/R-gammaij) * qt.getScaleij(atnoi, atnoj, R)) ) 
+                           / (atomi.nbf * atomj.nbf) )
+        A.setValues(i,cols,vals,addv=pt.INSERT)
+    t = pt.getWallTime(t0=t,str='For loop')
+    A.assemblyBegin()
+    A.assemblyEnd()
+    t = pt.getWallTime(t0=t,str='Assemble mat')
+    Enuc = 0.5 * pt.getCommSum(comm, Enuc)
+    nnz =  pt.getCommSum(comm, nnz, integer=True) 
+    t = pt.getWallTime(t0=t,str='Reductions')
+    return  nnz,Enuc, A
+
+def getTold(comm,basis,maxdist,nnzinfo=None,rrange=None):
     """
     Computes a matrix for the two-center two-electron integrals.
     Matrix is symmetric, and upper-triangular is computed.
@@ -845,12 +919,11 @@ def runMINDO3(qmol,s=None,xyz=None,opts=None):
     nuke        = opts.getBool('nuke',False)
     sync        = opts.getBool('sync',False)
     serial        = opts.getBool('serial',False)
-    t           = pt.getWallTime(t0=t0,str='PyQuante initialization')  
     qmol = qt.initializeMindo3(qmol)
+    t           = pt.getWallTime(t0=t0,str='PyQuante initialization')  
     if sync: 
         pt.sync()
         t = pt.getWallTime(t0=t,str='Barrier - init')
-    t = pt.getWallTime(t,'Initialization')  
     if serial:
         qt.runSCF(qmol, scfthresh=scfthresh, maxiter=maxiter)
         return 
@@ -865,7 +938,6 @@ def runMINDO3(qmol,s=None,xyz=None,opts=None):
     atomids = qt.getAtomIDs(basis)
     worldcomm = pt.getComm()
     nrank = worldcomm.size
- 
     if sync:
         pt.sync()
         t            = pt.getWallTime(t0=t,str='Barrier - options')
@@ -900,21 +972,23 @@ def runMINDO3(qmol,s=None,xyz=None,opts=None):
             nbfpc    = nbf / ncluster 
             cstart, cend = pt.distributeN(worldcomm,ncluster)
             rstart, rend = cstart * nbfpc, cend * nbfpc
-            nnzinfo = pt.getLocalNnzInfo(bxyz, rstart, rend, maxdist2)
+            nnzinfo = pt.getLocalNnzInfo(bxyz,maxdist2,(rstart,rend))
             t = pt.getWallTime(t0=t,str='Count nnz')
-            nnz, Enuc, T            = getT(worldcomm, basis, maxdist,nnzinfo,rrange=(rstart,rend))
+            nnz, Enuc, T            = getT(worldcomm,bxyz,basis,maxdist,nnzinfo,rrange=(rstart,rend))
             stage, t = pt.getStageTime(newstage='D0', oldstage=stage ,t0=t)
             D0 = getD0Blocked(qmol,cstart,cend, napc, nbfpc, T) 
-            t = pt.getWallTime(t0=t,str='D0 generated')
+            t = pt.getWallTime(t0=t,str='D0 generated in')
     if guess == 0 or D0 is None:   
         stage, t = pt.getStageTime(newstage='T', oldstage=stage,t0=t0)
         rstart, rend = pt.distributeN(worldcomm, nbf)
-        nnzinfo = pt.getLocalNnzInfo(bxyz, rstart, rend, maxdist2)
-        nnz, Enuc, T            = getT(worldcomm, basis, maxdist,nnzinfo)
-        pt.write("Generating diagonal density matrix")
+        nnzinfo = pt.getLocalNnzInfo(bxyz,maxdist2,(rstart,rend))
+        t = pt.getWallTime(t0=t,str='Count nnz')
+        nnz, Enuc, T            = getT(worldcomm,bxyz,basis, maxdist,nnzinfo,rrange=(rstart,rend))
         stage, t = pt.getStageTime(newstage='D0', oldstage=stage ,t0=t)
+        pt.write("Generating diagonal density matrix")
         bnbfs = xt.getExtendedArray(nbfs,nbfs)      
         D0     = getDiagonalD0(T,basis[rstart:rend],bnbfs[rstart:rend]) 
+        t = pt.getWallTime(t0=t,str='D0 generated in')
     dennnz = (100. * nnz) / (nbf*nbf) 
     pt.write("Nonzero density percent : {0:6.3f}".format(dennnz))
     if nuke:
