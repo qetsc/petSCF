@@ -3,7 +3,9 @@ import PyQuante.Molecule as Molecule
 import PyQuante.MINDO3 as MINDO3
 import unittools as ut
 import numpy as np
-
+from PyQuante.Slater import gauss_powers,gexps,gcoefs,s_or_p
+from PyQuante.CGBF import CGBF
+from PyQuante.Bunch import Bunch # Generic object to hold basis functions
 # Some PyQuante functions/files are included here for convenience.
 # Below is MINDO3_Parameters.py from PyQuante
 # TODO: Check if this violates any license aggreements.
@@ -160,6 +162,46 @@ NQN = [ None, 1, 1, # principle quantum number N
         2, 2, 2, 2, 2, 2, 2, 2,
         3, 3, 3, 3, 3, 3, 3, 3]
 ###################################################################################
+def initialize(atoms):
+    "PyQuante: Assign parameters for the rest of the calculation"
+
+    ibf = 0 # Counter to overall basis function count
+    for atom in atoms:
+        xyz = atom.pos()
+        atom.Z = CoreQ[atom.atno]
+        atom.basis = []
+        atom.rho = ut.e2/f03[atom.atno]
+        atom.nbf = nbfat[atom.atno]
+        atom.Eref = Eat[atom.atno]
+        atom.Hf = Hfat[atom.atno]
+        atom.gss = gss[atom.atno]
+        atom.gsp = gsp[atom.atno]
+        atom.gpp = gpp[atom.atno]
+        atom.gppp = gppp[atom.atno]
+        atom.hsp = hsp[atom.atno]
+        atom.hppp = hppp[atom.atno]
+        for i in xrange(atom.nbf):
+            bfunc = Bunch()
+            atom.basis.append(bfunc)
+            bfunc.index = ibf # pointer to overall basis function index
+            ibf += 1
+            bfunc.type = i # s,x,y,z
+            bfunc.atom = atom # pointer to parent atom
+            bfunc.cgbf = CGBF(xyz,gauss_powers[i])
+            zi = gexps[(NQN[atom.atno],s_or_p[i])]
+            ci = gcoefs[(NQN[atom.atno],s_or_p[i])]
+            if i:
+                zeta = zetap[atom.atno]
+                bfunc.u = Upp[atom.atno]
+                bfunc.ip = IPp[atom.atno]
+            else:
+                zeta = zetas[atom.atno]
+                bfunc.u = Uss[atom.atno]
+                bfunc.ip = IPs[atom.atno]
+            for j in xrange(len(zi)):
+                bfunc.cgbf.add_primitive(zi[j]*zeta*zeta,ci[j])
+            bfunc.cgbf.normalize()
+    return atoms
 
 def initializeMindo3(atoms):
     """

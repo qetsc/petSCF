@@ -110,18 +110,17 @@ def getT(comm,pos,basis,maxdist,nnzinfo=None,rrange=None):
     maxdist2     = maxdist * maxdist    
     e2           = ut.e2
     if rrange is None:
-        rstart, rend = pt.distributeN(comm, nbf)
-    else:
-        rstart, rend = rrange    
+        rrange   = pt.distributeN(comm, nbf)
+    if nnzinfo is None:
+        nnzinfo  = pt.getLocalNnzInfo(pos,maxdist2,rrange)
+        t        = pt.getWallTime(t0=t,str='Count nnz')
+    rstart, rend = rrange    
     localsize    = rend - rstart
     Enuc         = 0.
     A            = pt.createMat(comm=comm)
     t = pt.getWallTime(t0=t,str='Create Mat')
     A.setType('aij')
     A.setSizes([(localsize,nbf),(localsize,nbf)])
-    if nnzinfo is None:
-        nnzinfo = pt.getLocalNnzInfo(pos,maxdist2,rrange)
-        t       = pt.getWallTime(t0=t,str='Count nnz')
     dnnz, onnz  = nnzinfo
     nnz            = sum(dnnz) + sum(onnz)
     if localsize > 0 :
@@ -385,7 +384,8 @@ def getF0(atoms,basis,T):
     Ref 1: DOI:10.1021/ja00839a001
     Ref 2: ISBN:089573754X
     Ref 3: DOI:10.1002/wcms.1141
-    TODO: 
+    ToDo:
+    Vectorize 
     Cythonize
     """
     A = T.duplicate()
@@ -401,10 +401,10 @@ def getF0(atoms,basis,T):
         for j in cols:
             basisj=basis[j]
             atomj=basisj.atom
-            if atomj != atomi:
+            if atomj.atid != atomi.atid:
                 tmp -= valsT[k] * atomj.Z / atomj.nbf # Ref1, Ref2 adopted sum to be over orbitals rather than atoms
                 betaij = qt.getBeta0ij(atomi.atno,atomj.atno)
-                Sij = basisi.cgbf.overlap(basisj.cgbf)
+                Sij = basisi.cgbf.overlap(basisj.cgbf) #bottleneck
                 IPij = ipi + basisj.ip
                 tmp2 =  betaij * IPij * Sij     # Ref1, Ref2 
                 A[i,j] = tmp2
@@ -919,7 +919,7 @@ def runMINDO3(qmol,s=None,xyz=None,opts=None):
     nuke        = opts.getBool('nuke',False)
     sync        = opts.getBool('sync',False)
     serial        = opts.getBool('serial',False)
-    qmol = qt.initializeMindo3(qmol)
+    qmol = qt.initialize(qmol)
     t           = pt.getWallTime(t0=t0,str='PyQuante initialization')  
     if sync: 
         pt.sync()
@@ -966,9 +966,7 @@ def runMINDO3(qmol,s=None,xyz=None,opts=None):
         elif ncluster < nrank:
             pt.write("Number of clusters is less than number of ranks!")   
         else:
-            pt.write("Generating block-diagonal density matrix")
             stage, t = pt.getStageTime(newstage='T', oldstage=stage,t0=t0)
-             
             nbfpc    = nbf / ncluster 
             cstart, cend = pt.distributeN(worldcomm,ncluster)
             rstart, rend = cstart * nbfpc, cend * nbfpc
@@ -976,6 +974,7 @@ def runMINDO3(qmol,s=None,xyz=None,opts=None):
             t = pt.getWallTime(t0=t,str='Count nnz')
             nnz, Enuc, T            = getT(worldcomm,bxyz,basis,maxdist,nnzinfo,rrange=(rstart,rend))
             stage, t = pt.getStageTime(newstage='D0', oldstage=stage ,t0=t)
+            pt.write("Generating block-diagonal density matrix")
             D0 = getD0Blocked(qmol,cstart,cend, napc, nbfpc, T) 
             t = pt.getWallTime(t0=t,str='D0 generated in')
     if guess == 0 or D0 is None:   
