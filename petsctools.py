@@ -421,7 +421,7 @@ def getLocalNnzInfoPQ(basis,rstart,rend,maxdist2):
         k += 1 
     return dnnz, onnz, jmax
 
-def getLocalNnzInfo(xyz,rstart,rend,maxdist2):
+def getLocalNnzInfoLoop(xyz,rstart,rend,maxdist2):
     """
     Returns three arrays that contains: 
     dnnz: local numbers of nonzseros per row in diagonal blocks (square) 
@@ -458,6 +458,55 @@ def getLocalNnzInfo(xyz,rstart,rend,maxdist2):
         onnz = np.array([0])
         jmax = np.array([0])    
     return dnnz, onnz, jmax
+
+
+def getLocalNnzInfo(pos,maxdist2,rrange=None):
+    """
+    Returns nonzero information for petsc matrices.
+    Nonzeros are based on a cutoff distance squared.
+    TODO:
+    Exploit symmetry
+    Cython
+    Parameters
+    ----------
+    pos: (N,3) array
+    maxdist2: float,  distance cutoff
+    rrange: (rstart,rend) tuple of two integers to set
+    the portion of calculation.
+    Returns
+    -------
+    dnnz: integer array of size rend - rstart
+          local numbers of nonzseros per row in diagonal blocks (square) 
+    onnz: integer array of size rend - rstart
+          local numbers of nonzeros per row in off-diagonal blocks (rectangular)
+    Notes
+    -----
+    Current use is for basis function centers,
+    it should be possible to use atom centers, and
+    convert to basis set indices. Savings could be
+    1 to 4 fold. 
+    """
+    npos = len(pos)
+    if rrange is None:
+        rstart = 0
+        rend   = npos
+    else:
+        rstart, rend = rrange    
+    localsize = rend - rstart
+    if localsize > 0:
+        dnnz=np.zeros(localsize,dtype='int32')
+        onnz=np.zeros(localsize,dtype='int32')
+        baseidx = np.arange(npos,dtype='int32')
+        for i in range(localsize):
+            dists2 = np.sum((pos - pos[rstart+i])**2,axis=1)
+            idx    = baseidx[dists2 < maxdist2]
+            dnnz[i]   = len(idx[(idx >=rstart) & (idx<rend)])
+            onnz[i]   = len(idx) - dnnz[i]
+    else:
+        dnnz = np.array([0])
+        onnz = np.array([0])
+    return dnnz, onnz
+
 
 def getLocalNnzInfoLessMemory(xyz,rstart,rend,maxdist2):
     """
