@@ -28,6 +28,8 @@ sample options_qetsc:
 -eps_view_values # prints eigenvalues to STD OUT
 -eps_view_values ascii:eigs.txt #writes eigenvalues to a file (overwrites if there are many iterations)
 """
+import timeit
+t_import0 = timeit.default_timer()
 import sys
 import petsctools as pt
 import slepctools as st
@@ -35,7 +37,7 @@ import xyztools as xt
 import pyquantetools as qt
 import os.path
 import mindo3
-from hf import runHF
+t_import1 = timeit.default_timer()
 
 def printGitHash():
     """
@@ -67,6 +69,7 @@ def main():
         printDateTime()
         printHostName()
         print("Number of MPI ranks: {0}".format(nrank))
+        print("Import time: {}0".format(t_import1-t_import1))
     stage, t0   = pt.getStageTime(newstage='Read input')
     pt.sync()
     t = pt.getWallTime(t0=t0,str='Sync')  
@@ -143,6 +146,7 @@ def main():
             pt.sync()
             t = pt.getWallTime(t0=t,str='Barrier - qmol')
         if method.startswith('hf'):
+            from hf import runHF
             t1 = pt.getWallTime()
             stage.pop()
             qmol        = qt.sxyz2PyQuanteMol(s,xyz)        
