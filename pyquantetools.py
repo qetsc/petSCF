@@ -1,14 +1,14 @@
 #!/usr/bin/env python
+import numpy as np
 import PyQuante.Molecule as Molecule
 import PyQuante.MINDO3 as MINDO3
 import unittools as ut
-import numpy as np
-from PyQuante.Slater import gauss_powers,gexps,gcoefs,s_or_p
 from PyQuante.CGBF import CGBF
-from PyQuante.Bunch import Bunch # Generic object to hold basis functions
-# Some PyQuante functions/files are included here for convenience.
+from Bunch import Bunch # Generic object to hold basis functions
+from PyQuante.cints import overlap
+# PyQuante functions/files are included here for convenience.
 # Below is MINDO3_Parameters.py from PyQuante
-# TODO: Check if this violates any license aggreements.
+# TODO: Check if this violates any license agreements.
 ###################################################################################
 """\
  MINDO3.py: Dewar's MINDO/3 Semiempirical Method
@@ -162,9 +162,75 @@ NQN = [ None, 1, 1, # principle quantum number N
         2, 2, 2, 2, 2, 2, 2, 2,
         3, 3, 3, 3, 3, 3, 3, 3]
 ###################################################################################
+"""\
+ Slater.py: Coefficients for fitting Gaussian functions to Slater
+   Functions.These functions are STO-6G fits to Slater exponents
+   with exponents of 1. To fit to exponents of \zeta, one need only
+   multiply each exponent by \zeta^2. For STO-1G, STO-2G and other
+   levels of fit, see the paper.
+
+ Reference: RF Stewart, JCP 52, 431 (1970)
+
+ This program is part of the PyQuante quantum chemistry program suite.
+
+ Copyright (c) 2004, Richard P. Muller. All Rights Reserved. 
+
+ PyQuante version 1.2 and later is covered by the modified BSD
+ license. Please see the file LICENSE that is part of this
+ distribution. 
+"""
+gauss_powers = [(0,0,0),(1,0,0),(0,1,0),(0,0,1)]
+# Gaussian functions for fitting to Slaters. These functions are
+# STO-6G fits to slater exponents with exponents of 1. To fit
+# to exponents of \zeta, you need only multiply each
+# exponent by \zeta^2
+# The rest of these functions can be obtained from Stewart,
+#  JCP 52, 431 (1970)
+
+gexps_1s = [2.310303149e01,4.235915534e00,1.185056519e00,
+            4.070988982e-01,1.580884151e-01,6.510953954e-02]
+gcoefs_1s = [9.163596280e-03,4.936149294e-02,1.685383049e-01,
+             3.705627997e-01,4.164915298e-01,1.303340841e-01]
+
+gexps_2s = [2.768496241e01,5.077140627e00,1.426786050e00,
+            2.040335729e-01,9.260298399e-02,4.416183978e-02]
+gcoefs_2s = [-4.151277819e-03,-2.067024148e-02,-5.150303337e-02,
+             3.346271174e-01,5.621061301e-01,1.712994697e-01]
+
+gexps_2p = [5.868285913e00,1.530329631e00,5.475665231e-01,
+            2.288932733e-01,1.046655969e-01,4.948220127e-02]
+gcoefs_2p = [7.924233646e-03,5.144104825e-02,1.898400060e-01,
+             4.049863191e-01,4.012362861e-01,1.051855189e-01]
+gexps_3s = [3.273031938e00,9.200611311e-01,3.593349765e-01,
+            8.636686991e-02,4.797373812e-02,2.724741144e-02]
+gcoefs_3s = [-6.775596947e-03,-5.639325779e-02,-1.587856086e-01,
+             5.534527651e-01,5.015351020e-01,7.223633674e-02]
+
+gexps_3p = [5.077973607e00,1.340786940e00,2.248434849e-01,
+            1.131741848e-01,6.076408893e-02,3.315424265e-02]
+gcoefs_3p = [-3.329929840e-03,-1.419488340e-02,1.639395770e-01,
+             4.485358256e-01,3.908813050e-01,7.411456232e-02]
+
+gexps = { # indexed by N,s_or_p:
+    (1,0) : gexps_1s,
+    (2,0) : gexps_2s,
+    (2,1) : gexps_2p,
+    (3,0) : gexps_3s,
+    (3,1) : gexps_3p
+    }
+
+gcoefs = {  # indexed by N,s_or_p:
+    (1,0) : gcoefs_1s,
+    (2,0) : gcoefs_2s,
+    (2,1) : gcoefs_2p,
+    (3,0) : gcoefs_3s,
+    (3,1) : gcoefs_3p
+    }
+s_or_p = [0,1,1,1] # whether the func is s or p type, based on the L QN
+###################################################################################
+
 def initialize(atoms):
     "PyQuante: Assign parameters for the rest of the calculation"
-
     ibf = 0 # Counter to overall basis function count
     for atom in atoms:
         xyz = atom.pos()
@@ -213,6 +279,19 @@ def initializeMindo3(atoms):
     MINDO3.initialize(atoms)
     return atoms
 
+def getOverlap(a,b):
+        "Overlap matrix element with another CGBF"
+        Sij = 0.
+        for ipbf in a.prims:
+            for jpbf in b.prims:
+                Sij = Sij + (ipbf.coef*
+                             jpbf.coef*
+                             ipbf.norm*
+                             jpbf.norm*
+                             overlap(ipbf.exp,ipbf.powers,ipbf.origin,
+                                     jpbf.exp,jpbf.powers,jpbf.origin) )
+        return a.norm*b.norm*Sij
+    
 def getH2O():
     return Molecule('H2O',
                    [(8,  ( 0.00000000,     0.00000000,     0.04851804)),
