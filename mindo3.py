@@ -388,11 +388,12 @@ def getF0(atoms,basis,T):
     Vectorize 
     Cythonize
     """
-    A = T.duplicate()
+    A = T.duplicate(copy=2)
     A.setUp()
     rstart, rend = A.getOwnershipRange()
     for i in xrange(rstart,rend):
         basisi      = basis[i]
+        cgbfi       = basisi.cgbf
         ipi         = basisi.ip
         atomi       = basisi.atom
         cols, valsT = T.getRow(i)
@@ -401,10 +402,12 @@ def getF0(atoms,basis,T):
         for j in cols:
             basisj=basis[j]
             atomj=basisj.atom
+            cgbfj      = basisj.cgbf
             if atomj.atid != atomi.atid:
                 tmp -= valsT[k] * atomj.Z / atomj.nbf # Ref1, Ref2 adopted sum to be over orbitals rather than atoms
                 betaij = qt.getBeta0ij(atomi.atno,atomj.atno)
-                Sij = basisi.cgbf.overlap(basisj.cgbf) #bottleneck
+#                Sij = basisi.cgbf.overlap(basisj.cgbf) #bottleneck
+                Sij = qt.getOverlap(cgbfi,cgbfj) #bottleneck
                 IPij = ipi + basisj.ip
                 tmp2 =  betaij * IPij * Sij     # Ref1, Ref2 
                 A[i,j] = tmp2
@@ -504,7 +507,7 @@ def getG(comm, basis, T=None):
     """
     nbf             = len(basis)
     if T:
-        A = T.duplicate()
+        A = T.duplicate(copy=2)
     else:        
         maxnnzperrow    = 4
         A               = pt.createMat(comm=comm)
@@ -537,7 +540,7 @@ def getH(basis, T=None,comm=None):
     """
     nbf             = len(basis)
     if T:
-        A = T.duplicate()
+        A = T.duplicate(copy=2)
     else:        
         maxnnzperrow    = 4
         A               = pt.createMat(comm=comm)
@@ -571,7 +574,7 @@ def getF(atomids, D, F0, T, G, H):
 #    diagD = pt.getSeqArr(diagD) 
     diagD = pt.convert2SeqVec(diagD) 
     t = pt.getWallTime(t0=t,str='AllGather Diag')
-    A     = T.duplicate()
+    A     = T.duplicate(copy=2)
     A.setUp()
     rstart, rend = A.getOwnershipRange()
     t = pt.getWallTime(t0=t,str='Mat ops')    
@@ -919,7 +922,7 @@ def runMINDO3(qmol,s=None,xyz=None,opts=None):
     nuke        = opts.getBool('nuke',False)
     sync        = opts.getBool('sync',False)
     serial        = opts.getBool('serial',False)
-    qmol = qt.initialize(qmol)
+    qmol = qt.initialize(qmol) #bottleneck
     t           = pt.getWallTime(t0=t0,str='PyQuante initialization')  
     if sync: 
         pt.sync()
