@@ -388,7 +388,7 @@ def getF0(atoms,basis,T):
     Vectorize 
     Cythonize
     """
-    A = T.duplicate(copy=2)
+    A = T.duplicate( )
     A.setUp()
     rstart, rend = A.getOwnershipRange()
     for i in xrange(rstart,rend):
@@ -507,7 +507,7 @@ def getG(comm, basis, T=None):
     """
     nbf             = len(basis)
     if T:
-        A = T.duplicate(copy=2)
+        A = T.duplicate( )
     else:        
         maxnnzperrow    = 4
         A               = pt.createMat(comm=comm)
@@ -540,7 +540,7 @@ def getH(basis, T=None,comm=None):
     """
     nbf             = len(basis)
     if T:
-        A = T.duplicate(copy=2)
+        A = T.duplicate( )
     else:        
         maxnnzperrow    = 4
         A               = pt.createMat(comm=comm)
@@ -574,7 +574,7 @@ def getF(atomids, D, F0, T, G, H):
 #    diagD = pt.getSeqArr(diagD) 
     diagD = pt.convert2SeqVec(diagD) 
     t = pt.getWallTime(t0=t,str='AllGather Diag')
-    A     = T.duplicate(copy=2)
+    A     = T.duplicate( )
     A.setUp()
     rstart, rend = A.getOwnershipRange()
     t = pt.getWallTime(t0=t,str='Mat ops')    
