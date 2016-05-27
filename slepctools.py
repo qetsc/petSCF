@@ -91,7 +91,7 @@ def getBinEdges2(x,nbin,binbuffer=0.001):
         else:
             break
     if i == maxtrial :
-        Print("Bin optimization failed for bintype 2. Found {1} clusters".format(ncluster))
+        Print("Bin optimization failed for bintype 2, switching to bintype 1. Found {0} clusters".format(ncluster))
         Print("Adjust bin edges based on prior knowledge to have a uniform number of eigenvalues in each bin")
         b = getBinEdges1(x,nbin)[0]
     else:
