@@ -134,9 +134,6 @@ def getT(comm,pos,basis,maxdist,nnzinfo=None,rrange=None):
         atnoi   = atomi.atno
         rhoi    = atomi.rho
         gammaii = qt.f03[atnoi]
-        nnzrow  = dnnz[k] + onnz[k]
-        vals    = np.zeros(nnzrow)
-        n       = 1
         dists2 = np.sum((pos - pos[i])**2,axis=1)
         cols   = baseidx[dists2 < maxdist2]
         vals   = np.zeros(len(cols))
@@ -397,22 +394,23 @@ def getF0(atoms,basis,T):
         ipi         = basisi.ip
         atomi       = basisi.atom
         cols, valsT = T.getRow(i)
+        vals        = np.zeros_like(valsT)
         tmp = basisi.u # Ref1, Ref2
-        k = 0
-        for j in cols:
+        for k,j in enumerate(cols):
             basisj=basis[j]
             atomj=basisj.atom
             cgbfj      = basisj.cgbf
-            if atomj.atid != atomi.atid:
+            if i==j:
+                kdiag = k
+            elif atomj.atid != atomi.atid:
                 tmp -= valsT[k] * atomj.Z / atomj.nbf # Ref1, Ref2 adopted sum to be over orbitals rather than atoms
                 betaij = qt.getBeta0ij(atomi.atno,atomj.atno)
 #                Sij = basisi.cgbf.overlap(basisj.cgbf) #bottleneck
                 Sij = qt.getOverlap(cgbfi,cgbfj) #bottleneck
                 IPij = ipi + basisj.ip
-                tmp2 =  betaij * IPij * Sij     # Ref1, Ref2 
-                A[i,j] = tmp2
-            k = k + 1    
-        A[i,i] = tmp        
+                vals[k] = betaij * IPij * Sij     # Ref1, Ref2 
+        vals[kdiag] = tmp
+        A.setValues(i,cols,vals)        
     A.assemble()
     return A
 
@@ -499,6 +497,7 @@ def getD0Blocked(qmol,cstart,cend,napc,nbfpc,T):
         A.setValuesBlocked(range(bstart,bend),range(bstart,bend),Dc[:,:])
     A.assemble()      
     return A
+
 def getG(comm, basis, T=None):
     """
     Returns the matrix for one-electron Coulomb term, (mu mu | nu nu) where mu and nu orbitals are centered on the same atom.
@@ -566,6 +565,54 @@ def getH(basis, T=None,comm=None):
     return A
 
 def getF(atomids, D, F0, T, G, H):
+    """
+    Density matrix dependent terms of the Fock matrix
+    """
+    t            = pt.getWallTime()
+    diagD = D.getDiagonal()
+#    diagD = pt.getSeqArr(diagD) 
+    diagD = pt.convert2SeqVec(diagD) 
+    t = pt.getWallTime(t0=t,str='AllGather Diag')
+    A     = T.duplicate( )
+    A.setUp()
+    rstart, rend = A.getOwnershipRange()
+    t = pt.getWallTime(t0=t,str='Mat ops')    
+    for i in xrange(rstart,rend):
+        atomi        = atomids[i]
+        cols, valsT  = T.getRow(i)
+        valsG        = G.getRow(i)[1]
+        valsD        = D.getRow(i)[1] # cols same as T
+        valsH        = H.getRow(i)[1] # cols same as G
+        valsF        = np.zeros_like(valsT)
+        tmpii = 0.5 * diagD[i] * G[i,i] # Since g[i,i]=h[i,i]
+        for k,j in enumerate(cols):
+            atomj=atomids[j]
+            if i != j:
+                Djj   = diagD[j] # D[j,j]
+                if len(valsD)>1:
+                    Dij    = valsD[k]
+                else:
+                    Dij    = 0.
+                Tij   = valsT[k]
+                if atomj  == atomi:
+                    Gij    = valsG[k]
+                    Hij    = valsH[k]
+                    tmpii += Djj * ( Gij - 0.5 * Hij ) # Ref1 and PyQuante, In Ref2, Ref3, when i==j, g=h
+                    tmpij  =  0.5 * Dij * ( 3. * Hij - Gij ) # Ref3, PyQuante, I think this term is an improvement to MINDO3 (it is in MNDO) so not found in Ref1 and Ref2  
+                else:
+                    tmpii += Tij * Djj     # Ref1, Ref2, Ref3
+                    tmpij = -0.5 * Tij * Dij   # Ref1, Ref2, Ref3  
+                valsF[k] = tmpij
+            else:
+                kdiag = k    
+        valsF[kdiag] = tmpii
+        A.setValues(i,cols,valsF,addv=pt.INSERT)        
+    t = pt.getWallTime(t0=t,str='For loop')        
+    A.assemble()
+    t = pt.getWallTime(t0=t,str='Mat assemble')    
+    return A
+
+def getFold(atomids, D, F0, T, G, H):
     """
     Density matrix dependent terms of the Fock matrix
     """
@@ -917,11 +964,13 @@ def runMINDO3(qmol,s=None,xyz=None,opts=None):
     scfthresh     = opts.getReal('scfthresh',1.e-3)
     maxdist     = opts.getReal('maxdist', 10.)
     guess       = opts.getInt('guess', 0)
-    napc        = opts.getInt('napc', 3)
     guessfile   = opts.getString('guessfile', 'dens.bin')
     nuke        = opts.getBool('nuke',False)
     sync        = opts.getBool('sync',False)
     serial        = opts.getBool('serial',False)
+    napc        = opts.getInt('napc', 3) # number of atoms per cluster
+    ncpb        = opts.getInt('ncpb', 1) # number of clusters per block
+    napb        = ncpb * napc            # number of atoms per block
     qmol = qt.initialize(qmol) #bottleneck
     t           = pt.getWallTime(t0=t0,str='PyQuante initialization')  
     if sync: 
@@ -967,8 +1016,10 @@ def runMINDO3(qmol,s=None,xyz=None,opts=None):
         if nat % napc != 0 or nbf % napc:
             pt.write("Change number of atoms per cluster: {0}".format(napc))
         elif ncluster < nrank:
-            pt.write("Number of clusters is less than number of ranks!")   
+            pt.write("Number of clusters, {0}, is less than number of ranks!".format(ncluster))   
         else:
+            nblock = nat / napb
+            pt.write("Number of blocks, {0}".format(nblock))
             stage, t = pt.getStageTime(newstage='T', oldstage=stage,t0=t0)
             nbfpc    = nbf / ncluster 
             cstart, cend = pt.distributeN(worldcomm,ncluster)
