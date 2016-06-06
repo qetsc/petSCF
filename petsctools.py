@@ -494,17 +494,18 @@ def getLocalNnzInfo(pos,maxdist2,rrange=None):
         rstart, rend = rrange    
     localsize = rend - rstart
     if localsize > 0:
-        dnnz=np.zeros(localsize,dtype='int32')
-        onnz=np.zeros(localsize,dtype='int32')
+        dnnz    = np.zeros(localsize,dtype='int32')
+        onnz    = np.zeros(localsize,dtype='int32')
         baseidx = np.arange(npos,dtype='int32')
         for i in range(localsize):
-            dists2 = np.sum((pos - pos[rstart+i])**2,axis=1)
-            idx    = baseidx[dists2 < maxdist2]
-            dnnz[i]   = len(idx[(idx >=rstart) & (idx<rend)])
-            onnz[i]   = len(idx) - dnnz[i]
+            dpos    = pos - pos[rstart+i]
+            dists2  = np.sum(dpos * dpos,axis=1)
+            idx     = baseidx[dists2 < maxdist2]
+            dnnz[i] = len(idx[(idx >=rstart) & (idx<rend)])
+            onnz[i] = len(idx) - dnnz[i]
     else:
-        dnnz = np.array([0])
-        onnz = np.array([0])
+        dnnz = np.array([0],dtype='int32')
+        onnz = np.array([0],dtype='int32')
     return dnnz, onnz
 
 
