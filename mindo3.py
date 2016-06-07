@@ -6,6 +6,7 @@ import scftools as ft
 import os.path
 import pyquantetools as qt
 import xyztools as xt
+from sys import exit
 try:
     import SIPs.sips as sips
     usesips = True
@@ -129,14 +130,15 @@ def getT(comm,pos,basis,maxdist,nnzinfo=None,rrange=None):
         A.setPreallocationNNZ((0,0))
     t = pt.getWallTime(t0=t,str='Preallocate')
     baseidx = np.arange(nbf,dtype='int32')
-    for k, i in enumerate(range(rstart,rend)):
+    for i in range(rstart,rend):
         atomi   = basis[i].atom
         atnoi   = atomi.atno
         rhoi    = atomi.rho
         gammaii = qt.f03[atnoi]
-        dists2 = np.sum((pos - pos[i])**2,axis=1)
-        cols   = baseidx[dists2 < maxdist2]
-        vals   = np.zeros(len(cols))
+        disti   = pos - pos[i]
+        dists2  = np.sum(disti * disti,axis=1)
+        cols    = baseidx[dists2 < maxdist2]
+        vals    = np.zeros(len(cols))
         for n, j in enumerate(cols):
             atomj = basis[j].atom
             if atomi.atid == atomj.atid:
@@ -464,6 +466,29 @@ def getDiagonalD0(T,basis,nbfs):
     A.assemble()            
     return A
 
+def getD0ScaledT(T,basis,nbfs,tscale=0.001):
+    """
+    Returns the guess (initial) density matrix
+    with a diagonal based on the number of valance electrons
+    and the number of basis functions
+    to satisfy Tr(D) = sum(nves)
+    Off-diagonal nonzeros are nonzeros of T scaled
+    by a given scale
+    Notes
+    -----
+  
+    """
+    A = T.duplicate(copy=True)
+    A.scale(tscale)
+    diag = A.getVecLeft()  
+    diag.array_w = [1.]*len(basis)
+    for i,nbf in enumerate(nbfs):
+        if nbf != 1:             
+            diag.array_w[i] = basis[i].atom.Z / 4. 
+    A.setDiagonal(diag)
+    A.assemble()            
+    return A
+
 def getD0FromFile(comm,guessfile=''):
     """
     Returns the guess (initial) density matrix.
@@ -481,20 +506,45 @@ def getD0FromFile(comm,guessfile=''):
         A = None
     return  A 
 
-def getD0Blocked(qmol,cstart,cend,napc,nbfpc,T):
+def getD0BlockedFast(qmol,bstart,bend,napb,nbfpb,T):
+    """
+    Returns a density matrix with nonzeros on block diagonals
+    based on the scf solutions for subsystems.
+    """
     A = T.duplicate()
-#    A.setUp()
-#                A            = pt.createMat(comm=worldcomm)
-#                A.setType('aij')
-#                A.setSizes([(localsize,nbf),(localsize,nbf)])
-    for c in range(cstart,cend):
-        astart  = c * napc
-        aend    = astart + napc
-        bstart  = c * nbfpc
-        bend    = bstart  + nbfpc
-        cqmols  = qmol.subsystem(str(c),indices=(range(astart,aend)))
+    for b in range(bstart,bend):
+        astart  = b * napb
+        aend    = astart + napb
+        rstart  = b * nbfpb
+        rend    = rstart  + nbfpb
+        cqmols  = qmol.subsystem(str(b),indices=(range(astart,aend)))
+        Dc      = qt.runSCF(cqmols)[3]    
+        try:
+            A.setValuesBlocked(range(rstart,rend),range(rstart,rend),Dc[:,:])
+        except:
+            pt.write("New nonzero in rows {0}:{1}".format(rstart,rend))
+            import sys
+            sys.exit('Error in getD0BlockedFast')    
+    A.assemble()      
+    return A
+
+def getD0Blocked(qmol,bstart,bend,napb,nbfpb,T):
+    """
+    Returns a density matrix with nonzeros on block diagonals
+    based on the scf solutions for subsystems.
+    """
+    A = T.duplicate()
+    for b in range(bstart,bend):
+        astart  = b * napb
+        aend    = astart + napb
+        rstart  = b * nbfpb
+        rend    = rstart  + nbfpb
+        cqmols  = qmol.subsystem(str(b),indices=(range(astart,aend)))
         Dc      = qt.runSCF(cqmols)[3]
-        A.setValuesBlocked(range(bstart,bend),range(bstart,bend),Dc[:,:])
+        for i in range(rstart,rend):
+            cols = T.getRow(i)[0]
+            cols = cols[(cols>=rstart) & (cols<rend)]
+            A.setValues(i,cols,Dc[i-rstart,cols-rstart])    
     A.assemble()      
     return A
 
@@ -959,19 +1009,19 @@ def runMINDO3(qmol,s=None,xyz=None,opts=None):
     """
     stage, t0   = pt.getStageTime(newstage='MINDO3')
     if opts is None:
-        opts        = pt.options
-    maxiter       = opts.getInt('maxiter', 30)
-    scfthresh     = opts.getReal('scfthresh',1.e-3)
+        opts    = pt.options
+    maxiter     = opts.getInt('maxiter', 30)
+    scfthresh   = opts.getReal('scfthresh',1.e-3)
     maxdist     = opts.getReal('maxdist', 10.)
     guess       = opts.getInt('guess', 0)
+    tscale      = opts.getReal('tscale', 0.001)
     guessfile   = opts.getString('guessfile', 'dens.bin')
     nuke        = opts.getBool('nuke',False)
     sync        = opts.getBool('sync',False)
-    serial        = opts.getBool('serial',False)
+    serial      = opts.getBool('serial',False)
     napc        = opts.getInt('napc', 3) # number of atoms per cluster
-    ncpb        = opts.getInt('ncpb', 1) # number of clusters per block
-    napb        = ncpb * napc            # number of atoms per block
-    qmol = qt.initialize(qmol) #bottleneck
+    napb        = opts.getInt('napb', 3) # number of atoms per block
+    qmol        = qt.initialize(qmol) #bottleneck
     t           = pt.getWallTime(t0=t0,str='PyQuante initialization')  
     if sync: 
         pt.sync()
@@ -979,17 +1029,18 @@ def runMINDO3(qmol,s=None,xyz=None,opts=None):
     if serial:
         qt.runSCF(qmol, scfthresh=scfthresh, maxiter=maxiter)
         return 
-    Eref    = qt.getEref(qmol)
-    nat     = len(qmol)
-    ncluster = nat / napc
-    nbf     = qt.getNBF(qmol)    
-    nel     = qt.getNVE(qmol)
-    nocc    = nel/2
-    basis   = qt.getBasis(qmol, nbf)
-    maxdist2= maxdist * maxdist
-    atomids = qt.getAtomIDs(basis)
+    Eref      = qt.getEref(qmol)
+    nat       = len(qmol)
+    ncluster  = nat / napc
+    nblock    = nat / napb
+    nbf       = qt.getNBF(qmol)    
+    nel       = qt.getNVE(qmol)
+    nocc      = nel/2
+    basis     = qt.getBasis(qmol, nbf)
+    maxdist2  = maxdist * maxdist
+    atomids   = qt.getAtomIDs(basis)
     worldcomm = pt.getComm()
-    nrank = worldcomm.size
+    nrank     = worldcomm.size
     if sync:
         pt.sync()
         t            = pt.getWallTime(t0=t,str='Barrier - options')
@@ -999,39 +1050,13 @@ def runMINDO3(qmol,s=None,xyz=None,opts=None):
     pt.write("Number of clusters: {0}".format(ncluster))
     pt.write("Number of occupied orbitals: {0} = Number of required eigenvalues".format(nocc))
     t           = pt.getWallTime(t0=t,str='Basis set')
-    D0 = None
     if xyz is None:
         bxyz = qt.getXYZFromBasis(qmol,basis)
     else:
         nbfs = xt.getNBFsFromS(s)
-        bxyz = xt.getExtendedArray(nbfs,xyz)  
-    if guess == 1:
-        pt.write("Reading density matrix from file")
-        stage, t = pt.getStageTime(newstage='D0', oldstage=stage ,t0=t)
-        D0 = getD0FromFile(worldcomm, guessfile)
-        if D0:
-            stage, t = pt.getStageTime(newstage='T', oldstage=stage,t0=t0)
-            nnz, Enuc, T            = getTFromGuess(worldcomm, D0, basis)
-    elif guess == 2:
-        if nat % napc != 0 or nbf % napc:
-            pt.write("Change number of atoms per cluster: {0}".format(napc))
-        elif ncluster < nrank:
-            pt.write("Number of clusters, {0}, is less than number of ranks!".format(ncluster))   
-        else:
-            nblock = nat / napb
-            pt.write("Number of blocks, {0}".format(nblock))
-            stage, t = pt.getStageTime(newstage='T', oldstage=stage,t0=t0)
-            nbfpc    = nbf / ncluster 
-            cstart, cend = pt.distributeN(worldcomm,ncluster)
-            rstart, rend = cstart * nbfpc, cend * nbfpc
-            nnzinfo = pt.getLocalNnzInfo(bxyz,maxdist2,(rstart,rend))
-            t = pt.getWallTime(t0=t,str='Count nnz')
-            nnz, Enuc, T            = getT(worldcomm,bxyz,basis,maxdist,nnzinfo,rrange=(rstart,rend))
-            stage, t = pt.getStageTime(newstage='D0', oldstage=stage ,t0=t)
-            pt.write("Generating block-diagonal density matrix")
-            D0 = getD0Blocked(qmol,cstart,cend, napc, nbfpc, T) 
-            t = pt.getWallTime(t0=t,str='D0 generated in')
-    if guess == 0 or D0 is None:   
+        bxyz = xt.getExtendedArray(nbfs,xyz)
+    pt.write("Guess density matrix option: {0}".format(guess))    
+    if guess < 2:   
         stage, t = pt.getStageTime(newstage='T', oldstage=stage,t0=t0)
         rstart, rend = pt.distributeN(worldcomm, nbf)
         nnzinfo = pt.getLocalNnzInfo(bxyz,maxdist2,(rstart,rend))
@@ -1039,9 +1064,46 @@ def runMINDO3(qmol,s=None,xyz=None,opts=None):
         nnz, Enuc, T            = getT(worldcomm,bxyz,basis, maxdist,nnzinfo,rrange=(rstart,rend))
         stage, t = pt.getStageTime(newstage='D0', oldstage=stage ,t0=t)
         pt.write("Generating diagonal density matrix")
-        bnbfs = xt.getExtendedArray(nbfs,nbfs)      
-        D0     = getDiagonalD0(T,basis[rstart:rend],bnbfs[rstart:rend]) 
+        bnbfs = xt.getExtendedArray(nbfs,nbfs)
+        if  guess == 0:      
+            D0     = getDiagonalD0(T,basis[rstart:rend],bnbfs[rstart:rend]) 
+        elif guess == 1:
+            D0     = getD0ScaledT(T,basis[rstart:rend],bnbfs[rstart:rend],tscale)
+        t = pt.getWallTime(t0=t,str='D0 generated in')          
+    elif guess == 2 or guess == 3:
+        pt.write("Number of blocks, {0}".format(nblock))
+        pt.write("Use -sort 3")
+        if nat % napb != 0 :
+            pt.write("Incompetible number of atoms per block: {0}".format(napc))
+            return
+        elif nblock < nrank:
+            pt.write("Number of blocks, {0}, is less than number of ranks!".format(ncluster))   
+        else:
+            stage, t = pt.getStageTime(newstage='T', oldstage=stage,t0=t0)
+            nbfpb    = nbf / nblock 
+            bstart, bend = pt.distributeN(worldcomm,nblock)
+            rstart, rend = bstart * nbfpb, bend * nbfpb
+            nnzinfo = pt.getLocalNnzInfo(bxyz,maxdist2,(rstart,rend))
+            t = pt.getWallTime(t0=t,str='Count nnz')
+            nnz, Enuc, T            = getT(worldcomm,bxyz,basis,maxdist,nnzinfo,rrange=(rstart,rend))
+            stage, t = pt.getStageTime(newstage='D0', oldstage=stage ,t0=t)
+            pt.write("Generating block-diagonal density matrix")
+            if guess == 3:
+                D0 = getD0Blocked(qmol,bstart,bend, napb, nbfpb, T)
+            elif guess == 2:
+                D0 = getD0BlockedFast(qmol,bstart,bend, napb, nbfpb, T)     
+            t = pt.getWallTime(t0=t,str='D0 generated in')        
+    elif guess == 4:
+        pt.write("Reading density matrix from file")
+        stage, t = pt.getStageTime(newstage='D0', oldstage=stage ,t0=t)
+        D0 = getD0FromFile(worldcomm, guessfile)
         t = pt.getWallTime(t0=t,str='D0 generated in')
+        if D0:
+            stage, t = pt.getStageTime(newstage='T', oldstage=stage,t0=t0)
+            nnz, Enuc, T            = getTFromGuess(worldcomm, D0, basis)
+    else:
+        pt.write("Not implemented guess option".format(guess))
+        return        
     dennnz = (100. * nnz) / (nbf*nbf) 
     pt.write("Nonzero density percent : {0:6.3f}".format(dennnz))
     if nuke:
