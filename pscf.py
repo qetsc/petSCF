@@ -76,7 +76,7 @@ def main():
     ncluster    = opts.getInt('ncluster', 0)
     pivot       = opts.getReal('pivot', 0.)
     method      = opts.getString('method','mindo3').lower()
-    writeXYZ    = opts.getBool('writeXYZ',False)
+    writeXYZ    = opts.getBool('writexyz',False)
     sync        = opts.getBool('sync',False)
     test        = opts.getBool('test',False)
     if sync: 
@@ -111,6 +111,7 @@ def main():
         xyz = comm.bcast(xyz,root=0)     
         s   = comm.bcast(s,root=0)
         pt.getWallTime(t,str='Bcast xyz in')
+        pt.write("Sorting method: {0}".format(sort))
         if sort == 1:
             pt.write("Sorting atoms...")     
             s, xyz = xt.getSortedSXYZ(s,xyz,pivot)
@@ -124,7 +125,7 @@ def main():
             s, xyz = xt.sortWaterClusters(s, xyz, pivot)
             t = pt.getWallTime(t,str='Sorted xyz in')  
         if writeXYZ: 
-            sortedfile  = xt.writeXYZ(xyz)
+            sortedfile  = xt.writeSXYZ(s,xyz)
             pt.write('sorted xyz file:{0}'.format(sortedfile))
         qmol        = qt.sxyz2PyQuanteMol(s,xyz)    
     else:

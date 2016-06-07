@@ -473,7 +473,7 @@ def getD0ScaledT(T,basis,nbfs,tscale=0.001):
     and the number of basis functions
     to satisfy Tr(D) = sum(nves)
     Off-diagonal nonzeros are nonzeros of T scaled
-    by a given scale
+    by a given scale.
     Notes
     -----
   
