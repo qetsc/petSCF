@@ -638,8 +638,7 @@ def getF(atomids,T,D,GH1,GH2):
              Length of array should be equal to size 
              of the matrix.
     T,D,
-    GH1,GH2: Petsc aij mat of same size and 
-             same nnz pattern.
+    GH1,GH2: Petsc mat of the same nnz pattern.
     GH1 =        G - 0.5 * H
     GH2 = -0.5 * G + 1.5 * H
     TODO:
@@ -660,7 +659,7 @@ def getF(atomids,T,D,GH1,GH2):
         valsGH1      = GH1.getRow(i)[1]
         valsGH2      = GH2.getRow(i)[1] 
         valsF        = np.zeros_like(valsT)
-        tmpii        = diag[i-rstart] # 0.5 * diagD[i] * G[i,i] # Since g[i,i]=h[i,i]
+        tmpii        = diag[i-rstart] # 0.5 * diagD[i] * G[i,i] # Note G[i,i]=H[i,i]
         for k,j in enumerate(cols):
             if i != j:
                 Djj   = diagD[j] # D[j,j]
@@ -900,9 +899,6 @@ def scf(nocc,atomids,D,F0,T,G,H):
             Tloc  = pt.getRedundantMat( T, nbin, matcomm, out=Tloc)
             Gloc  = pt.getRedundantMat( G, nbin, matcomm, out=Gloc)
             Hloc  = pt.getRedundantMat( H, nbin, matcomm, out=Hloc)
-        elif  npmat < nrank:
-            stage, t = pt.getStageTime(newstage='Seq D', oldstage=stage, t0=t)   
-            D = pt.getSeqMat(D)
         if saveall:
             ft.saveall(opts,k,Floc,D,eigs)
         t = pt.getWallTime(t0,str='Iteration')
