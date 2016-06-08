@@ -550,7 +550,8 @@ def getD0Blocked(qmol,bstart,bend,napb,nbfpb,T):
 
 def getG(comm, basis, T=None):
     """
-    Returns the matrix for one-electron Coulomb term, (mu mu | nu nu) where mu and nu orbitals are centered on the same atom.
+    Returns the matrix for one-electron Coulomb term, (mu mu | nu nu)
+     where mu and nu orbitals are centered on the same atom.
     Block diagonal matrix with 1x1 (Hydrogens) or 4x4 blocks.
     If T is given, assumes the nonzero pattern of T.
     """
@@ -581,46 +582,112 @@ def getG(comm, basis, T=None):
     A.assemble()
     return A
 
-def getH(basis, T=None,comm=None):
+def getH(basis, G=None,comm=None):
     """
-    Returns the matrix for one-electron exchange term, (mu nu | mu nu) where mu and nu orbitals are centered on the same atom. 
+    Returns the matrix for one-electron exchange term, (mu nu | mu nu) 
+    where mu and nu orbitals are centered on the same atom. 
     Block diagonal matrix with 1x1 (Hydrogens) or 4x4 blocks.
     If T is given, assumes the nonzero pattern of T.
     """
     nbf             = len(basis)
-    if T:
-        A = T.duplicate( )
+    if G:
+        A = G.duplicate(copy=True)
+        rstart, rend = A.getOwnershipRange()
+        for i in xrange(rstart,rend):
+            basisi  = basis[i]
+            atomi   = basisi.atom
+            nbfi    = atomi.nbf
+            if atomi.atno > 1:
+                minj = max(0,i-nbfi)
+                maxj = min(nbf,i+nbfi) 
+                for j in xrange(minj,maxj):
+                    basisj = basis[j]
+                    atomj   = basisj.atom
+                    if atomi.atid == atomj.atid and i != j:
+                        A[i,j] = qt.getHij(basisi,basisj)
     else:        
         maxnnzperrow    = 4
         A               = pt.createMat(comm=comm)
         A.setType('aij') #'sbaij'
         A.setSizes([nbf,nbf]) 
         A.setPreallocationNNZ(maxnnzperrow) 
-    A.setUp()
-    rstart, rend = A.getOwnershipRange()
-    for i in xrange(rstart,rend):
-        basisi  = basis[i]
-        atomi   = basisi.atom
-        nbfi    = atomi.nbf
-        A[i,i] = qt.getGij(basisi,basisi)
-        if atomi.atno > 1:
-            minj = max(0,i-nbfi)
-            maxj = min(nbf,i+nbfi) 
-            for j in xrange(minj,maxj):
-                basisj = basis[j]
-                atomj   = basisj.atom
-                if atomi.atid == atomj.atid and i != j:
-                    A[i,j] = qt.getHij(basisi,basisj)
+        A.setUp()
+        rstart, rend = A.getOwnershipRange()
+        for i in xrange(rstart,rend):
+            basisi  = basis[i]
+            atomi   = basisi.atom
+            nbfi    = atomi.nbf
+            A[i,i] = qt.getGij(basisi,basisi)
+            if atomi.atno > 1:
+                minj = max(0,i-nbfi)
+                maxj = min(nbf,i+nbfi) 
+                for j in xrange(minj,maxj):
+                    basisj = basis[j]
+                    atomj   = basisj.atom
+                    if atomi.atid == atomj.atid and i != j:
+                        A[i,j] = qt.getHij(basisi,basisj)
     A.assemble()
     return A
 
-def getF(atomids, D, F0, T, G, H):
+def getF(atomids,T,D,GH1,GH2):
+    """
+    Returns density matrix dependent terms of the Fock matrix.
+    Parameters
+    ----------
+    atomids: 1D int array
+             Length of array should be equal to size 
+             of the matrix.
+    T,D,
+    GH1,GH2: Petsc aij mat of same size and 
+             same nnz pattern.
+    GH1 =        G - 0.5 * H
+    GH2 = -0.5 * G + 1.5 * H
+    TODO:
+    cython
+    """
+    t       = pt.getWallTime()
+    diagD   = D.getDiagonal()
+    diagGH1 = GH1.getDiagonal()
+    diag    = diagGH1.array_r * diagD.array_r
+    diagD   = pt.convert2SeqVec(diagD) 
+    t       = pt.getWallTime(t0=t,str='AllGather Diag')
+    A       = T.duplicate( )
+    rstart, rend = A.getOwnershipRange()
+    for i in xrange(rstart,rend):
+        atomidi      = atomids[i]
+        cols, valsT  = T.getRow(i)
+        valsD        = D.getRow(i)[1] 
+        valsGH1      = GH1.getRow(i)[1]
+        valsGH2      = GH2.getRow(i)[1] 
+        valsF        = np.zeros_like(valsT)
+        tmpii        = diag[i-rstart] # 0.5 * diagD[i] * G[i,i] # Since g[i,i]=h[i,i]
+        for k,j in enumerate(cols):
+            if i != j:
+                Djj   = diagD[j] # D[j,j]
+                Dij   = valsD[k]
+                Tij   = valsT[k]
+                if atomids[j]  == atomidi:
+                    tmpii += Djj * valsGH1[k] # Ref1 and PyQuante, In Ref2, Ref3, when i==j, g=h
+                    tmpij  = Dij * valsGH2[k]  # Ref3, PyQuante, I think this term is an improvement to MINDO3 (it is in MNDO) so not found in Ref1 and Ref2  
+                else:
+                    tmpii += Tij * Djj     # Ref1, Ref2, Ref3
+                    tmpij  = -0.5 * Tij * Dij   # Ref1, Ref2, Ref3  
+                valsF[k] = tmpij
+            else:
+                kdiag = k    
+        valsF[kdiag] = tmpii
+        A.setValues(i,cols,valsF,addv=pt.INSERT)        
+    t = pt.getWallTime(t0=t,str='For loop')        
+    A.assemble()
+    t = pt.getWallTime(t0=t,str='Mat assemble')    
+    return A
+
+def getFold(atomids,T,D,G,H):
     """
     Density matrix dependent terms of the Fock matrix
     """
     t            = pt.getWallTime()
     diagD = D.getDiagonal()
-#    diagD = pt.getSeqArr(diagD) 
     diagD = pt.convert2SeqVec(diagD) 
     t = pt.getWallTime(t0=t,str='AllGather Diag')
     A     = T.duplicate( )
@@ -639,10 +706,7 @@ def getF(atomids, D, F0, T, G, H):
             atomj=atomids[j]
             if i != j:
                 Djj   = diagD[j] # D[j,j]
-                if len(valsD)>1:
-                    Dij    = valsD[k]
-                else:
-                    Dij    = 0.
+                Dij   = valsD[k]
                 Tij   = valsT[k]
                 if atomj  == atomi:
                     Gij    = valsG[k]
@@ -662,7 +726,7 @@ def getF(atomids, D, F0, T, G, H):
     t = pt.getWallTime(t0=t,str='Mat assemble')    
     return A
 
-def getFold(atomids, D, F0, T, G, H):
+def getFolder(atomids, D, F0, T, G, H):
     """
     Density matrix dependent terms of the Fock matrix
     """
@@ -771,7 +835,7 @@ def scf(nocc,atomids,D,F0,T,G,H):
         t0 = pt.getWallTime()
         if k==1:
             stage, t = pt.getStageTime(newstage='F', t0=t0)
-            Ftmp = getF(atomids, D, F0, T, G, H)
+            Ftmp = getF(atomids,T,D,G,H)
             Ftmp = F0 + Ftmp
             F = Ftmp.copy(F,None)
             Eold = Eel
@@ -785,13 +849,13 @@ def scf(nocc,atomids,D,F0,T,G,H):
             Eold = Eel
             stage, t = pt.getStageTime(newstage='F',oldstage=stage, t0=t)
             if local:
-                Ftmp = getF(atomids, D, F0loc, Tloc, Gloc, Hloc)
+                Ftmp = getF(atomids,Tloc,D,Gloc,Hloc)
                 Ftmp = F0loc + Ftmp
                 Floc = Ftmp.copy(Floc,None)
                 stage, t = pt.getStageTime(newstage='Trace',oldstage=stage, t0=t)            
                 Eel  = 0.5 * pt.getTraceProductAIJ(D, F0loc+Floc)
             else:
-                Ftmp = getF(atomids, D, F0, T, G, H)
+                Ftmp = getF(atomids,T,D,G,H)
                 Ftmp = F0 + Ftmp
                 F = Ftmp.copy(F,None)
                 stage, t = pt.getStageTime(newstage='Trace',oldstage=stage, t0=t)            
@@ -906,7 +970,7 @@ def scfwithaccelerators(opts,nocc,atomids,D,F0,T,G,H,stage):
         pt.write("{0:*^60s}".format("Iteration "+str(k)))
         t0 = pt.getWallTime()
         stage = pt.getStage(stagename='F',oldstage=stage)
-        F    = getF(atomids, D, F0, T, G, H)
+        F    = getF(atomids,T,D,G,H)
         F    = F0 + F 
 #        F.axpy(1.0,F0,structure=F.Structure.SAME_NONZERO_PATTERN) # same as above, addidtional symbolic factorizations
         if scfacc == 3:
@@ -1113,15 +1177,16 @@ def runMINDO3(qmol,s=None,xyz=None,opts=None):
     writeEnergies(Eref, unit='ev', enstr='Eref')
     writeEnergies(Enuc, unit='ev', enstr='Enuc')
     stage, t = pt.getStageTime(newstage='F0', oldstage=stage, t0=t)
-    F0    = getF0(qmol, basis, T)
-    stage, t = pt.getStageTime(newstage='G', oldstage=stage, t0=t)
+    F0    = getF0(qmol,basis,T)
+    stage, t = pt.getStageTime(newstage='G & H', oldstage=stage, t0=t)
     G     = getG(worldcomm,basis,T)    
-    stage, t = pt.getStageTime(newstage='H', oldstage=stage, t0=t)
-    H     = getH(basis,T)
+    H     = getH(basis,G)
+    GH1   =        G - 0.5 * H
+    GH2   = -0.5 * G + 1.5 * H 
     pt.getStageTime(oldstage=stage, t0=t)
     pt.getWallTime(t0,str="Pre-SCF")
     t0          = pt.getWallTime()
-    converged, Eelec, homo, lumo, D = scf(nocc,atomids,D0,F0,T,G,H)
+    converged, Eelec, homo, lumo, D = scf(nocc,atomids,D0,F0,T,GH1,GH2)
     if nuke:
         Etotfull   = Eelec + Enukefull
         Efinalfull = Etotfull*ut.ev2kcal+Eref
