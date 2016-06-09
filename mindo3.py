@@ -796,6 +796,7 @@ def scf(nocc,atomids,D,F0,T,G,H):
     local         = opts.getBool('local',True)
     nbin          = opts.getInt('eps_krylovschur_partitions',1)
     sync          = opts.getBool('sync',False)
+    solve         = opts.getBool('solve',True)
     saveall       = opts.getBool('saveall',False)
     wcomm = pt.worldcomm
     nrank    = wcomm.size # total number of ranks
@@ -840,7 +841,7 @@ def scf(nocc,atomids,D,F0,T,G,H):
             Eold = Eel
             stage, t = pt.getStageTime(newstage='Trace',oldstage=stage, t0=t)
             Eel  = 0.5 * pt.getTraceProductAIJ(D, F0+F)
-            if maxiter < 2:
+            if not solve:
                 break
             stage, t = pt.getStageTime(newstage='SetupEPS',oldstage=stage, t0=t)  
             eps = st.setupEPS(F, B=None,binedges=binedges)  
@@ -866,7 +867,7 @@ def scf(nocc,atomids,D,F0,T,G,H):
                 eps = st.updateEPS(eps,Floc,binedges=binedges,local=local)
             else:
                 eps = st.updateEPS(eps,F,binedges=binedges,local=local)                
-        stage,t = pt.getStageTime(newstage='SolveEPS',oldstage=stage, t0=t)
+        stage,t = pt.getStageTime(newstage='SolveEPS'+str(k),oldstage=stage, t0=t)
         eps = st.solveEPS(eps)
         t1 = pt.getWallTime(t0=t, str='Solve')
         nconv = st.getNumberOfConvergedEigenvalues(eps)
