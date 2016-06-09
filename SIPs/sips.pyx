@@ -3,7 +3,7 @@ from slepc4py.SLEPc cimport EPS, SlepcEPS
 from petsc4py.PETSc import Error
 
 cimport petsc4py
-from petsc4psc import PETSc
+from petsc4py import PETSc
 import numpy as np
 cimport numpy as np
 cimport cython
@@ -27,13 +27,15 @@ def getFc(atomids,Mat T,Mat D, Mat GH1, Mat GH2):
     if ierr != 0: raise Error(ierr)
     return F    
 
-DTYPE = np.int
+DTYPE_INT  = np.int
+DTYPE_FLOAT  = np.float32
 # "ctypedef" assigns a corresponding compile-time type to DTYPE_t. For
 # every type in the numpy module there's a corresponding compile-time
 # type with a _t-suffix. MK: From cython.org
-ctypedef np.int_t DTYPE_t
+ctypedef np.int_t DTYPE_INT_t
+ctypedef np.float32_t DTYPE_FLOAT_t
 @cython.boundscheck(False)
-def getFCython(np.ndarray[DTYPE_t, ndim=1] atomids, Mat T,Mat D, Mat GH1, Mat GH2):
+def getFCython(np.ndarray[DTYPE_INT_t, ndim=1] atomids, Mat T,Mat D, Mat GH1, Mat GH2):
     """
     Returns density matrix dependent terms of the Fock matrix.
     Parameters
@@ -52,7 +54,10 @@ def getFCython(np.ndarray[DTYPE_t, ndim=1] atomids, Mat T,Mat D, Mat GH1, Mat GH
     """
     cdef int i,j,k,kdiag,rstart,rend,atomidi
     cdef double tmpii,tmpij,Dij,Djj,Tij
-    cdef Vec localdiagD,localdiagGH1,diagD,cols,valsT,valdD,valsGH1,valsGH2,valsF
+    cdef np.ndarray[int, ndim=1] cols
+    cdef np.ndarray[double, ndim=1] diag,valsT,valsD,valsGH1,valsGH2
+#    cdef np.ndarray[DTYPE_FLOAT_t,ndim=1] localdiagD,localdiagGH1,diagD,valsT,valsD,valsGH1,valsGH2
+    cdef Vec localdiagD,localdiagGH1,diagD
     cdef Mat A
     localdiagD   = D.getDiagonal()
     localdiagGH1 = GH1.getDiagonal()
@@ -62,15 +67,16 @@ def getFCython(np.ndarray[DTYPE_t, ndim=1] atomids, Mat T,Mat D, Mat GH1, Mat GH
     rstart, rend = A.getOwnershipRange()
     for i in xrange(rstart,rend):
         atomidi      = atomids[i]
-        cols, valsT  = T.getRow(i)
-        valsD        = D.getRow(i)[1] 
+        cols         = T.getRow(i)[0]
+        valsT        = T.getRow(i)[1]
+        valsD        = D.getRow(i)[1]
         valsGH1      = GH1.getRow(i)[1]
-        valsGH2      = GH2.getRow(i)[1] 
+        valsGH2      = GH2.getRow(i)[1]
         valsF        = np.zeros_like(valsT)
         tmpii        = diag[i-rstart] # 0.5 * diagD[i] * G[i,i] # Note G[i,i]=H[i,i]
         for k,j in enumerate(cols):
             if i != j:
-                Djj   = diagD[j] # D[j,j]
+                Djj   = diagD.array_r[j] # D[j,j]
                 Dij   = valsD[k]
                 Tij   = valsT[k]
                 if atomids[j]  == atomidi:
