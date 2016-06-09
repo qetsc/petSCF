@@ -796,6 +796,7 @@ def scf(nocc,atomids,D,F0,T,G,H):
     local         = opts.getBool('local',True)
     nbin          = opts.getInt('eps_krylovschur_partitions',1)
     sync          = opts.getBool('sync',False)
+    getfcython     = opts.getBool('getfcython',True)
     solve         = opts.getBool('solve',True)
     saveall       = opts.getBool('saveall',False)
     wcomm = pt.worldcomm
@@ -835,7 +836,10 @@ def scf(nocc,atomids,D,F0,T,G,H):
         t0 = pt.getWallTime()
         if k==1:
             stage, t = pt.getStageTime(newstage='F', t0=t0)
-            Ftmp = getF(atomids,T,D,G,H)
+            if getfcython:
+                Ftmp = sips.getFCython(atomids,T,D,G,H)
+            else:
+                Ftmp = getF(atomids,T,D,G,H)
             Ftmp = F0 + Ftmp
             F = Ftmp.copy(F,None)
             Eold = Eel
@@ -849,7 +853,10 @@ def scf(nocc,atomids,D,F0,T,G,H):
             Eold = Eel
             stage, t = pt.getStageTime(newstage='F',oldstage=stage, t0=t)
             if local:
-                Ftmp = getF(atomids,Tloc,D,Gloc,Hloc)
+                if getfcython:
+                    Ftmp = sips.getFCython(atomids,Tloc,D,Gloc,Hloc)
+                else:
+                    Ftmp = getF(atomids,Tloc,D,Gloc,Hloc)
                 Ftmp = F0loc + Ftmp
                 Floc = Ftmp.copy(Floc,None)
                 stage, t = pt.getStageTime(newstage='Trace',oldstage=stage, t0=t)            
