@@ -55,7 +55,7 @@ def getFCython(np.ndarray[DTYPE_INT_t, ndim=1] atomids, Mat T,Mat D, Mat GH1, Ma
     cdef int i,j,k,kdiag,rstart,rend,atomidi
     cdef double tmpii,tmpij,Dij,Djj,Tij
     cdef np.ndarray[int, ndim=1] cols
-    cdef np.ndarray[double, ndim=1] diag,valsT,valsD,valsGH1,valsGH2
+    cdef np.ndarray[double, ndim=1] diag,valsT,valsD,valsGH1,valsGH2, valsF
 #    cdef np.ndarray[DTYPE_FLOAT_t,ndim=1] localdiagD,localdiagGH1,diagD,valsT,valsD,valsGH1,valsGH2
     cdef Vec localdiagD,localdiagGH1,diagD
     cdef Mat A

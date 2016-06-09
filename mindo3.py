@@ -796,7 +796,7 @@ def scf(nocc,atomids,D,F0,T,G,H):
     local         = opts.getBool('local',True)
     nbin          = opts.getInt('eps_krylovschur_partitions',1)
     sync          = opts.getBool('sync',False)
-    getfcython     = opts.getBool('getfcython',True)
+    getfcython    = opts.getBool('getfcython',True)
     solve         = opts.getBool('solve',True)
     saveall       = opts.getBool('saveall',False)
     wcomm = pt.worldcomm
