@@ -149,9 +149,8 @@ def getT(comm,pos,basis,maxdist,nnzinfo=None,rrange=None):
                 gammaij = e2 / np.sqrt(distij2 + 0.25 * (rhoi + rhoj)*(rhoi + rhoj))
                 R       = np.sqrt(distij2)
                 vals[n] = gammaij
-                atnoj   = atomj.atno
                 Enuc  +=  ( ( atomi.Z * atomj.Z * gammaij 
-                              + abs(atomi.Z * atomj.Z * (e2/R-gammaij) * qt.getScaleij(atnoi, atnoj, R)) ) 
+                              + abs(atomi.Z * atomj.Z * (e2/R-gammaij) * qt.getScaleij(atnoi, atomj.atno, R)) ) 
                            / (atomi.nbf * atomj.nbf) )
         A.setValues(i,cols,vals,addv=pt.INSERT)
     t = pt.getWallTime(t0=t,str='For loop')
@@ -162,6 +161,64 @@ def getT(comm,pos,basis,maxdist,nnzinfo=None,rrange=None):
     nnz =  pt.getCommSum(comm, nnz, integer=True) 
     t = pt.getWallTime(t0=t,str='Reductions')
     return  nnz,Enuc, A
+
+def getTDense(comm,pos,basis,rrange=None):
+    """
+    Computes a matrix for the two-center two-electron integrals.
+    Assumes spherical symmetry, no dependence on basis function, only atom types.
+    Parametrized for pairs of atoms. (Two-atom parameters)
+    Nuclear repulsion energy is also computed.
+    TODO:
+    Vectorize inner loop,
+    Use matsetvaluesblocked
+    Nuclear energy better be removed from here.    
+    Values are indeed based on atoms, not basis functions, so computations can be
+    reduced by nbf/natom, but not sure how to vectorize.
+    Use SBAIJ instead of AIJ
+    Cythonize
+    """
+    t            = pt.getWallTime()
+    nbf          = len(basis)
+    e2           = ut.e2
+    if rrange is None:
+        rrange   = pt.distributeN(comm, nbf)
+    rstart, rend = rrange    
+    localsize    = rend - rstart
+    Enuc         = 0.
+    A            = pt.createDenseMat([(localsize,nbf),(localsize,nbf)],comm)
+    vals         = np.zeros(nbf)
+    cols         = np.arange(nbf)
+    t = pt.getWallTime(t0=t,str='Create Mat')
+    for i in range(rstart,rend):
+        atomi   = basis[i].atom
+        atnoi   = atomi.atno
+        rhoi    = atomi.rho
+        gammaii = qt.f03[atnoi]
+        disti   = pos - pos[i]
+        dists2  = np.sum(disti * disti,axis=1)
+        dists   = np.sqrt(dists2)
+        vals    = 0.
+        for j in cols:
+            atomj = basis[j].atom
+            if atomi.atid == atomj.atid:
+                vals[j] = gammaii
+            else:                        
+                rhoj    = atomj.rho 
+                gammaij = e2 / np.sqrt(dists2[j] + 0.25 * (rhoi + rhoj)*(rhoi + rhoj))
+                R       = dists[j]
+                vals[j] = gammaij
+                atnoj   = atomj.atno
+                Enuc  +=  ( ( atomi.Z * atomj.Z * gammaij 
+                              + abs(atomi.Z * atomj.Z * (e2/R-gammaij) * qt.getScaleij(atnoi, atnoj, R)) ) 
+                           / (atomi.nbf * atomj.nbf) )
+        A.setValues(i,cols,vals)
+    t = pt.getWallTime(t0=t,str='For loop')
+    A.assemblyBegin()
+    A.assemblyEnd()
+    t = pt.getWallTime(t0=t,str='Assemble mat')
+    Enuc = 0.5 * pt.getCommSum(comm, Enuc)
+    t = pt.getWallTime(t0=t,str='Reductions')
+    return  Enuc, A
 
 def getTold(comm,basis,maxdist,nnzinfo=None,rrange=None):
     """
@@ -252,78 +309,6 @@ def getTold(comm,basis,maxdist,nnzinfo=None,rrange=None):
     B = B + A.transpose() 
     t = pt.getWallTime(t0=t,str='Add transpose')
     return  nnz,Enuc, B
-
-def getTDense(comm,basis):
-    """
-    Computes a matrix for the two-center two-electron integrals.
-    Matrix is symmetric, and upper-triangular is computed.
-    Diagonals assumes half of the real value since
-    at the end transpose of the matrix is added to make it symmetric.
-    Assumes spherical symmetry, no dependence on basis function, only atom types.
-    Parametrized for pairs of atoms. (Two-atom parameters)
-    This matrix also determines the nonzero structure of the Fock matrix.
-    Nuclear repulsion energy is also computed.
-    TODO:
-    Values are indeed based on atoms, not basis functions, so possible to improve performance by nbf/natom.
-    Use SBAIJ instead of AIJ
-    Cythonize
-    """
-    t            = pt.getWallTime()
-    nbf          = len(basis)
-    bohr2ang2    = ut.bohr2ang**2.
-    e2           = ut.e2
-    rstart, rend = pt.distributeN(comm, nbf)
-    localsize    = rend - rstart
-    Enuc         = 0.
-    k            = 0   
-    t            = pt.getWallTime(t0=t,str='Initialize')
-    pt.sync()
-    t            = pt.getWallTime(t0=t,str='Barrier - distribute')
-    A            = pt.createDenseMat([(localsize,nbf),(localsize,nbf)],comm=comm)
-    t = pt.getWallTime(t0=t,str='Create Dense Mat')
-    for i in xrange(rstart,rend):
-        atomi   = basis[i].atom
-        atnoi   = atomi.atno
-        rhoi    = atomi.rho
-        gammaii = qt.f03[atnoi]
-        cols    = np.zeros(nbf, dtype=np.int32)
-        vals    = np.zeros(nbf, dtype=np.int32)
-        cols[0] = i
-        vals[0] = gammaii / 2.
-        n       = 1
-        for j in xrange(i):
-            atomj = basis[j].atom
-            if atomi.atid == atomj.atid:
-                cols[n] = j
-                vals[n] = gammaii
-            else:                        
-                distij2 = atomi.dist2(atomj) # (in bohr squared) * bohr2ang2
-                rhoj    = atomj.rho 
-                distij2 = distij2 * bohr2ang2
-                gammaij = e2 / np.sqrt(distij2 + 0.25 * (rhoi + rhoj)**2.)
-                R       = np.sqrt(distij2)
-                cols[n] = j
-                vals[n] = gammaij
-                atnoj   = atomj.atno
-                Enuc  +=  ( ( atomi.Z * atomj.Z * gammaij 
-                              + abs(atomi.Z * atomj.Z * 
-                                    (ut.e2/R-gammaij) * 
-                                    qt.getScaleij(atnoi, atnoj, R) ) ) 
-                           / (atomi.nbf * atomj.nbf) )
-            n += 1
-        A.setValues(i,cols[0:n],vals[0:n],addv=pt.INSERT)
-        k += 1            
-    t = pt.getWallTime(t0=t,str='For loop')
-    A.assemblyBegin()
-    A.assemblyEnd()
-    t = pt.getWallTime(t0=t,str='Assemble mat')
-    Enuc = pt.getCommSum(comm, Enuc)
-    t = pt.getWallTime(t0=t,str='Reductions')
-    B = A.duplicate(copy=True)
-    B = B + A.transpose() 
-    t = pt.getWallTime(t0=t,str='Add transpose')
-    A.destroy()
-    return  Enuc, B
 
 def getTFromGuess(comm,guessmat,basis):
     """
@@ -791,6 +776,7 @@ def scf(nocc,atomids,D,F0,T,G,H):
     scfthresh     = opts.getReal('scfthresh',1.e-3)
     a, b          = opts.getReal('a',-50.) , opts.getReal('b', -10.)
     bintype       = opts.getInt('bintype',1)
+    neig          = opts.getInt('neig',0)
     rangebuffer   = opts.getReal('rangebuffer',0.25)
     eigsfile      = opts.getString('eigsfile','eigs.txt')
     local         = opts.getBool('local',True)
@@ -801,18 +787,26 @@ def scf(nocc,atomids,D,F0,T,G,H):
     saveall       = opts.getBool('saveall',False)
     wcomm = pt.worldcomm
     nrank    = wcomm.size # total number of ranks
-    npmat = nrank / nbin # number of ranks for each slice       
+    npmat = nrank / nbin # number of ranks for each slice
+    nbf       = len(atomids)      
     Eel       = 0.
     gap       = 0.
     homo      = 0
     lumo      = 0
     converged = False 
-    eps       = None   
+    eps       = None
+    if neig == 0:
+        neig = nocc
+    elif neig > 0:
+        neig = nocc + neig
+    else:
+        neig = nbf                   
     pt.write("{0:*^60s}".format("SELF-CONSISTENT-FIELD ITERATIONS"))
     pt.write("SCF threshold: {0:5.3e}".format(scfthresh))
     pt.write("Maximum number of SCF iterations: {0}".format(maxiter))
     pt.write("Number of bins: {0}".format(nbin))
     pt.write("Number of ranks per bin: {0}".format(npmat))
+    pt.write("Number of eigenvalues required: {0}".format(neig))
     if sync:
         pt.sync()
         t            = pt.getWallTime(t0=t,str='Barrier - SCF options')           
@@ -880,11 +874,11 @@ def scf(nocc,atomids,D,F0,T,G,H):
         nconv = st.getNumberOfConvergedEigenvalues(eps)
         t1 = pt.getWallTime(t0=t1, str='Get no of eigs')
         pt.write("Number of converged eigenvalues: {0}".format(nconv))
-        if nconv < nocc: 
+        if nconv < neig: 
             pt.write("Error! Missing eigenvalues.")
-            pt.write("Number of required eigenvalues: {0}".format(nocc))
+            pt.write("Number of required eigenvalues: {0}".format(neig))
             break
-        eigs = st.getNEigenvalues(eps,nocc)
+        eigs = st.getNEigenvalues(eps,neig)
         pt.write("Eigenvalue range: {0:5.3f}, {1:5.3f}".format(min(eigs),max(eigs)))
         t1 = pt.getWallTime(t0=t1, str='Get eigs')
         if (len(eigs)>nocc):
@@ -1113,10 +1107,10 @@ def runMINDO3(qmol,s=None,xyz=None,opts=None):
         pt.sync()
         t            = pt.getWallTime(t0=t,str='Barrier - options')
     pt.write("Distance cutoff: {0:5.3f}".format(maxdist))
-    pt.write("Number of basis functions  : {0} = Matrix size".format(nbf))
+    pt.write("Number of basis functions  : {0}".format(nbf))
     pt.write("Number of valance electrons: {0}".format(nel))
     pt.write("Number of clusters: {0}".format(ncluster))
-    pt.write("Number of occupied orbitals: {0} = Number of required eigenvalues".format(nocc))
+    pt.write("Number of occupied orbitals: {0}".format(nocc))
     t           = pt.getWallTime(t0=t,str='Basis set')
     if xyz is None:
         bxyz = qt.getXYZFromBasis(qmol,basis)
@@ -1143,7 +1137,6 @@ def runMINDO3(qmol,s=None,xyz=None,opts=None):
         pt.write("Use -sort 3")
         if nat % napb != 0 :
             pt.write("Incompetible number of atoms per block: {0}".format(napc))
-            return
         elif nblock < nrank:
             pt.write("Number of blocks, {0}, is less than number of ranks!".format(ncluster))   
         else:
