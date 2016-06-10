@@ -1,8 +1,15 @@
 from petsc4py import PETSc
 from slepc4py import SLEPc
 import numpy as np
-
 Print = PETSc.Sys.Print
+try: 
+    from sklearn.cluster import KMeans
+except:
+    Print("sklearn.cluster not found.")
+    Print("-bintype 3, can not be used")
+        
+
+
 
 def getNumberOfSubIntervals(eps):
     return eps.getKrylovSchurPartitions()
@@ -97,7 +104,36 @@ def getBinEdges2(x,nbin,binbuffer=0.001):
     else:
         for i in range(1,nbin):
             b[i] = clusters[i] - binbuffer
-    return b                    
+    return b
+
+def getBinEdges3(x,nbin,binbuffer=0.001):
+    """
+    Given an array of numbers (x) and number
+    of bins (nbins), returns bin edges,
+    based on k-means clustering algorithm.
+    Parameters
+    ----------
+    x       - numpy array (dtype='float64')
+    nbin    - int
+    Returns:
+            - numpy array (dtype='float64', len = nbin+1)
+    Notes
+    -----
+    Requires scikit package.
+    Using k-means for 1d arrays is considered to be an overkill.
+    However, it seems to me as a practical solution for the binning problem.
+    """
+    n = len(x)
+    b = np.zeros(nbin+1)
+    # random_state is used to fix the seed, to avoid random results
+    # clusterids is an integer array (with len(x)) returning an index for clusters found.
+    clusterids = KMeans(n_clusters=nbin,random_state=17).fit_predict(x.reshape(-1,1))
+    assert n == len(clusterids), "Kmeans failed, missing clusters"
+    b[0]       = x[0] - binbuffer
+    uniqueids  = np.array([clusterids[i+1]-clusterids[i]!=0 for i in range(n-1)],dtype=bool)
+    b[1:-1]    = x[1:][uniqueids] - binbuffer
+    b[-1]      = x[-1] + binbuffer
+    return b                     
             
 def getBinEdges(x, nbin,interval=[0],bintype=2,binbuffer=0.001,rangebuffer=0.1):
     """
@@ -110,6 +146,8 @@ def getBinEdges(x, nbin,interval=[0],bintype=2,binbuffer=0.001,rangebuffer=0.1):
         Bin edges are adjusted to contain uniform number of values.
     bintype = 2 :
         Bin edges are adjusted to minimize distance from left edge.
+    bintype = 3 :
+        Bin edges are adjusted based on k-means clustering.    
     Input:
     x       - numpy array (dtype='float64')
     nbin    - int
@@ -129,9 +167,12 @@ def getBinEdges(x, nbin,interval=[0],bintype=2,binbuffer=0.001,rangebuffer=0.1):
     elif bintype == 1:
         Print("Adjust bin edges to have a uniform number of eigenvalues in each bin")
         b = getBinEdges1(x,nbin)[0]   
-    else:
+    elif bintype == 2:
         Print("Adjust bin edges to minimize distance of values from the left edge of each bin")
-        b = getBinEdges2(x,nbin,binbuffer=binbuffer)           
+        b = getBinEdges2(x,nbin,binbuffer=binbuffer) 
+    else:
+        Print("Adjust bin edges based on k-means clustering of eigenvalues")
+        b = getBinEdges3(x,nbin,binbuffer=binbuffer)                      
     if len(interval) == 2:
         Print("Using given left and right bin edges: [{0},{1}]".format(interval[0],interval[1]))
         b[0]  = interval[0]
