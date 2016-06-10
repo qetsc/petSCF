@@ -8,8 +8,71 @@ except:
     Print("sklearn.cluster not found.")
     Print("-bintype 3, can not be used")
         
+def getDensityOfStates(eigs,width=0.1,npoint=200):
+    """
+    Computes density of states (dos) by representing
+    `eigs` (eigenvalues) as gaussians of given `width`. 
+    Parameters
+    ----------
+    eigs   : Array of floats
+             Eigenvalues required to generate dos
+    width  : Width of the gaussian function centered
+             at eigenvalues
+             eigs and width have the same units.
+    npoint : Int
+             Number of energy points to compute dos.
+    Returns
+    -------
+    energies : Array of floats
+               Energies for which DOS is computed.     
+    dos      : Array of floats
+               len(dos) = len(energies) = npoints 
+               Density of states computed at energies.
+               dos has the inverse of the units of energies.
+    Notes
+    -----
+    The mathematical definition of density of states is:
+    $D(x) = \frac{1}{N}\sum\limits_n \delta(x-x_n)$,
+    where $x_n$ is the $n$th eigenvalue and $N$ is 
+    the total number of eigenvalues.
+    Here, delta function is represented by a gaussian,i.e.
+    $\delta(x) = \frac{1}{a\sqrt{\pi}}\exp(-\frac{x^2}{a^2})$
+    """
+    b = width * 5.
+    energies = np.linspace(min(eigs)-b,max(eigs)+b,num=npoint)
+    N = len(eigs)
+    w2 = width * width
+    tmp = np.zeros(len(energies))
+    for eig in eigs:
+        tmp += np.exp(-(energies-eig)**2 / w2)
+    dos = tmp / (np.sqrt(np.pi) * width * N)    
+    return energies, dos
 
-
+def plotDensityOfStates(energies,dos,units='ev',title='DOS',filename='dos.png'):
+    """
+    Plots density of states.
+    Parameters
+    ---------
+    energies : Array of floats
+               Energies for which DOS is computed.     
+    dos      : Array of floats
+               len(dos) = len(energies) 
+               Density of states computed at energies.
+               dos has the inverse of the units of energies
+    """
+    try:
+        import matplotlib.pyplot as plt
+    except: 
+        Print("Requires matplotlib")
+        return    
+    assert len(energies) == len(dos), "energies and dos should have the same length"
+    plt.figure()
+    plt.plot(energies,dos)
+    plt.xlabel('Energies ({0})'.format(units))
+    plt.ylabel('DOS 1/({0})'.format(units))
+    plt.title(title)
+    plt.savefig(filename)
+    return
 
 def getNumberOfSubIntervals(eps):
     return eps.getKrylovSchurPartitions()
