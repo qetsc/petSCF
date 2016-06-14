@@ -785,6 +785,7 @@ def scf(nocc,atomids,D,F0,T,G,H):
     getfcython    = opts.getBool('getfcython',True)
     solve         = opts.getBool('solve',True)
     saveall       = opts.getBool('saveall',False)
+    usesips       = opts.getBool('usesips',True)
     wcomm = pt.worldcomm
     nrank    = wcomm.size # total number of ranks
     npmat = nrank / nbin # number of ranks for each slice
@@ -819,18 +820,13 @@ def scf(nocc,atomids,D,F0,T,G,H):
         eigs = wcomm.bcast(eigs,root=0)    
     binedges = st.getBinEdges(eigs, nbin,bintype=bintype,rangebuffer=rangebuffer,interval=[a,b])
     F = None
-    F0loc = None
-    Floc  = None
-    Tloc  = None
-    Gloc  = None
-    Hloc  = None
 
     for k in xrange(1,maxiter+1):
         pt.write("{0:*^60s}".format("Iteration "+str(k)))
         t0 = pt.getWallTime()
         if k==1:
             stage, t = pt.getStageTime(newstage='F', t0=t0)
-            if getfcython:
+            if getfcython and usesips:
                 Ftmp = sips.getFCython(atomids,T,D,G,H)
             else:
                 Ftmp = getF(atomids,T,D,G,H)
@@ -847,14 +843,14 @@ def scf(nocc,atomids,D,F0,T,G,H):
             Eold = Eel
             stage, t = pt.getStageTime(newstage='F',oldstage=stage, t0=t)
             if local:
-                if getfcython:
-                    Ftmp = sips.getFCython(atomids,Tloc,D,Gloc,Hloc)
+                if getfcython and usesips:
+                    Ftmp = sips.getFCython(atomids,T,D,G,H)
                 else:
-                    Ftmp = getF(atomids,Tloc,D,Gloc,Hloc)
-                Ftmp = F0loc + Ftmp
-                Floc = Ftmp.copy(Floc,None)
+                    Ftmp = getF(atomids,T,D,G,H)
+                Ftmp = F0 + Ftmp
+                F = Ftmp.copy(F,None)
                 stage, t = pt.getStageTime(newstage='Trace',oldstage=stage, t0=t)            
-                Eel  = 0.5 * pt.getTraceProductAIJ(D, F0loc+Floc)
+                Eel  = 0.5 * pt.getTraceProductAIJ(D, F0+F)
             else:
                 Ftmp = getF(atomids,T,D,G,H)
                 Ftmp = F0 + Ftmp
@@ -864,10 +860,7 @@ def scf(nocc,atomids,D,F0,T,G,H):
             writeEnergies(Eel, unit='ev', enstr='Eel')
             stage, t = pt.getStageTime(newstage='UpdateEPS',oldstage=stage, t0=t) 
             binedges = st.getBinEdges(eigs, nbin,bintype=bintype,rangebuffer=rangebuffer,interval=[a,b])           
-            if local:
-                eps = st.updateEPS(eps,Floc,binedges=binedges,local=local)
-            else:
-                eps = st.updateEPS(eps,F,binedges=binedges,local=local)                
+            eps = st.updateEPS(eps,F,binedges=binedges,local=local)             
         stage,t = pt.getStageTime(newstage='SolveEPS'+str(k),oldstage=stage, t0=t)
         eps = st.solveEPS(eps)
         t1 = pt.getWallTime(t0=t, str='Solve')
@@ -889,20 +882,22 @@ def scf(nocc,atomids,D,F0,T,G,H):
             writeEnergies(lumo,unit='ev',enstr='LUMO')
             writeEnergies(gap,unit='ev',enstr='Gap')
         stage, t = pt.getStageTime(newstage='Density', oldstage=stage, t0=t)
-        if usesips:
-            D = sips.getDensityMat(eps,0,nocc)
+        if usesips and local:
+            D = sips.getDensityMat(eps,0,nocc) 
+            matcomm = D.getComm()
         else:    
-            D = st.getDensityMatrix(eps,T,nocc)
+            D, matcomm = st.getDensityMatrix(eps,T,nocc)
         if k==1 and local: 
             stage, t = pt.getStageTime(newstage='Redundant mat', oldstage=stage, t0=t)
-            matcomm = D.getComm()
-            F0loc = pt.getRedundantMat(F0, nbin, matcomm, out=F0loc)
-            Floc  = pt.getRedundantMat( F, nbin, matcomm, out=Floc)
-            Tloc  = pt.getRedundantMat( T, nbin, matcomm, out=Tloc)
-            Gloc  = pt.getRedundantMat( G, nbin, matcomm, out=Gloc)
-            Hloc  = pt.getRedundantMat( H, nbin, matcomm, out=Hloc)
+            F0 = pt.getRedundantMat(F0, nbin, matcomm)
+            F  = pt.getRedundantMat( F, nbin, matcomm)
+            T  = pt.getRedundantMat( T, nbin, matcomm)
+            G  = pt.getRedundantMat( G, nbin, matcomm)
+            H  = pt.getRedundantMat( H, nbin, matcomm)            
+            if not usesips: 
+                D = pt.getRedundantMat(D, nbin, matcomm)            
         if saveall:
-            ft.saveall(opts,k,Floc,D,eigs)
+            ft.saveall(opts,k,F,D,eigs)
         t = pt.getWallTime(t0,str='Iteration')
         if abs(Eel-Eold) < scfthresh and nconv >= nocc:
             pt.write("Converged at iteration {0}".format(k))
@@ -1138,7 +1133,7 @@ def runMINDO3(qmol,s=None,xyz=None,opts=None):
         if nat % napb != 0 :
             pt.write("Incompetible number of atoms per block: {0}".format(napc))
         elif nblock < nrank:
-            pt.write("Number of blocks, {0}, is less than number of ranks!".format(ncluster))   
+            pt.write("Number of blocks, {0}, is less than number of ranks!".format(nblock))   
         else:
             stage, t = pt.getStageTime(newstage='T', oldstage=stage,t0=t0)
             nbfpb    = nbf / nblock 

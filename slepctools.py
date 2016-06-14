@@ -268,9 +268,16 @@ def getBinningScore(b,x):
             scores[i]= xloc[0]-b[i] + tmp #3
         else:
             nempty += 1
-    return max(scores), nempty       
+    return max(scores), nempty
 
-def getDensityMatrix(eps,T,nocc):
+def getSubcomm(eps):
+    """
+    Returns the subcommunicator for eps.
+    """
+    vec = eps.getKrylovSchurSubcommInfo()[2]
+    return vec.getComm()       
+
+def getDensityMatrix(eps,T,nocc,checkerror=False):
     """
     nocc  = Number of occupied orbitals = N_e / 2 = Number of electrons / 2
     D = One-electron density matrix. The sparsity pattern is the same as T.
@@ -279,32 +286,30 @@ def getDensityMatrix(eps,T,nocc):
     x_i is the i'th eigenvector (ordered by eigenvalues from smallest to largest) Only first N_o is required
     Returns D, and eigarray
     """
+    subcomm = getSubcomm(eps)
+    A       = eps.getOperators()[0]
     D       = T.duplicate()
-    xr,tmp  = T.getVecs()
-    xi,tmp  = T.getVecs()
+    xr      = A.getVecs()[0]
     xr_size = xr.getSize()
-   # eigarray = np.zeros(nocc)
     seqx = PETSc.Vec()
     seqx.createSeq(xr_size,comm=PETSc.COMM_SELF)
     fromIS = PETSc.IS().createGeneral(range(xr_size),comm=PETSc.COMM_SELF)
     toIS = PETSc.IS().createGeneral(range(xr_size),comm=PETSc.COMM_SELF)
     for m in xrange(nocc):
-        k = eps.getEigenpair(m, xr, xi)
-     #   eigarray[m] = k.real
+        eps.getEigenvector(m, xr)
         sctr=PETSc.Scatter().create(xr,fromIS,seqx,toIS)
         sctr.begin(xr,seqx,addv=PETSc.InsertMode.INSERT,mode=PETSc.ScatterMode.FORWARD)
         sctr.end(xr,seqx,addv=PETSc.InsertMode.INSERT,mode=PETSc.ScatterMode.FORWARD)
         Istart, Iend = D.getOwnershipRange()
         for i in xrange(Istart,Iend):
             cols = T.getRow(i)[0] 
-            values = [ 2.0 * seqx[i] * seqx[j] for j in cols]
+            values = 2.0 * seqx[i] * seqx[cols]
             D.setValues(i,cols,values,addv=PETSc.InsertMode.ADD_VALUES)
-        D.assemble()
-        error = eps.computeError(m)
-        if error > 1.e-6: Print("Error: %12g" % ( error)) 
-    if k.imag != 0.0:
-          Print("Complex eigenvalue dedected: %9f%+9f j  %12g" % (k.real, k.imag, error))
-    return D #,eigarray
+        if checkerror:
+            error = eps.computeError(m)
+            if error > 1.e-6: Print("Error: %12g" % ( error)) 
+    D.assemble()
+    return D, subcomm
 
 def getSIPsDensityMatrix(eps,nocc):
     """
