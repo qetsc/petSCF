@@ -976,7 +976,7 @@ def convertCSR2AIJ(Acsr,comm=PETSc.COMM_WORLD):
     return A.createAIJ(size=Acsr.shape[0],csr=(Acsr.indptr[rstart:rend+1] - Acsr.indptr[rstart],
                                                       Acsr.indices[Acsr.indptr[rstart]:Acsr.indptr[rend]],
                                                       Acsr.data[Acsr.indptr[rstart]:Acsr.indptr[rend]]),comm=comm) 
-def convert2SeqVec(xr):
+def getSeqVec(xr):
     xr_size = xr.getSize()
     seqx = PETSc.Vec()
     seqx.createSeq(xr_size,comm=PETSc.COMM_SELF)

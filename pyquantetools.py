@@ -6,6 +6,7 @@ import unittools as ut
 from PyQuante.CGBF import CGBF
 from Bunch import Bunch # Generic object to hold basis functions
 from PyQuante.cints import overlap
+from numba import jit, float32, void
 # PyQuante functions/files are included here for convenience.
 # Below is MINDO3_Parameters.py from PyQuante
 # TODO: Check if this violates any license agreements.
@@ -284,7 +285,7 @@ def getOverlap(a,b):
         Sij = 0.
         for ipbf in a.prims:
             for jpbf in b.prims:
-                Sij = Sij + (ipbf.coef*
+                Sij += (ipbf.coef*
                              jpbf.coef*
                              ipbf.norm*
                              jpbf.norm*
