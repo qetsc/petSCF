@@ -16,7 +16,7 @@ except:
             
 def writeEnergies(en,unit='', enstr=''):
     Ekcal, Eev, Ehart = ut.convertEnergy(en, unit)
-    pt.write("{0: <24s} = {1:20.10f} kcal/mol = {2:20.10f} ev = {3:20.10f} Hartree".format(enstr,Ekcal, Eev, Ehart))
+    pt.write("{0: <24s} = {1:10.8e} kcal/mol = {2:10.8e} ev = {3:10.8e} Hartree".format(enstr,Ekcal, Eev, Ehart))
     return 0
 
 def getNuclearEnergySerial(nat,atoms,maxdist):
@@ -633,7 +633,7 @@ def getF(atomids,T,D,GH1,GH2):
     diagD   = D.getDiagonal()
     diagGH1 = GH1.getDiagonal()
     diag    = diagGH1.array_r * diagD.array_r
-    diagD   = pt.convert2SeqVec(diagD) 
+    diagD   = pt.getSeqVec(diagD) 
     t       = pt.getWallTime(t0=t,str='AllGather Diag')
     A       = T.duplicate( )
     rstart, rend = A.getOwnershipRange()
@@ -672,7 +672,7 @@ def getFold(atomids,T,D,G,H):
     """
     t            = pt.getWallTime()
     diagD = D.getDiagonal()
-    diagD = pt.convert2SeqVec(diagD) 
+    diagD = pt.getSeqVec(diagD) 
     t = pt.getWallTime(t0=t,str='AllGather Diag')
     A     = T.duplicate( )
     A.setUp()
@@ -717,7 +717,7 @@ def getFolder(atomids, D, F0, T, G, H):
     t            = pt.getWallTime()
     diagD = D.getDiagonal()
 #    diagD = pt.getSeqArr(diagD) 
-    diagD = pt.convert2SeqVec(diagD) 
+    diagD = pt.getSeqVec(diagD) 
     t = pt.getWallTime(t0=t,str='AllGather Diag')
     A     = T.duplicate( )
     A.setUp()
@@ -774,10 +774,11 @@ def scf(nocc,atomids,D,F0,T,G,H):
     opts          = pt.options
     maxiter       = opts.getInt('maxiter', 30)
     scfthresh     = opts.getReal('scfthresh',1.e-3)
-    a, b          = opts.getReal('a',-50.) , opts.getReal('b', -10.)
+    rangevals     = (opts.getReal('a',-1000.) , opts.getReal('b', 100.))
+    rangetype     = opts.getInt('rangetype',4)
+    rangebuffer   = opts.getReal('rangebuffer',10)
     bintype       = opts.getInt('bintype',1)
     neig          = opts.getInt('neig',0)
-    rangebuffer   = opts.getReal('rangebuffer',0.25)
     eigsfile      = opts.getString('eigsfile','eigs.txt')
     local         = opts.getBool('local',True)
     nbin          = opts.getInt('eps_krylovschur_partitions',1)
@@ -786,10 +787,10 @@ def scf(nocc,atomids,D,F0,T,G,H):
     solve         = opts.getBool('solve',True)
     saveall       = opts.getBool('saveall',False)
     usesips       = opts.getBool('usesips',True)
-    wcomm = pt.worldcomm
-    nrank    = wcomm.size # total number of ranks
-    npmat = nrank / nbin # number of ranks for each slice
-    nbf       = len(atomids)      
+    wcomm         = pt.worldcomm
+    nrank         = wcomm.size # total number of ranks
+    npmat         = nrank / nbin # number of ranks for each slice
+    nbf           = len(atomids)      
     Eel       = 0.
     gap       = 0.
     homo      = 0
@@ -814,11 +815,10 @@ def scf(nocc,atomids,D,F0,T,G,H):
 
     eigs  = []
     if os.path.isfile(eigsfile) and bintype > 0: 
-        if not pt.rank:
+        if pt.rank == 0:
             eigs = np.loadtxt(eigsfile)
             print("{0} eigenvalues read from file {1}".format(len(eigs),eigsfile))
         eigs = wcomm.bcast(eigs,root=0)    
-    binedges = st.getBinEdges(eigs, nbin,bintype=bintype,rangebuffer=rangebuffer,interval=[a,b])
     F = None
 
     for k in xrange(1,maxiter+1):
@@ -837,7 +837,11 @@ def scf(nocc,atomids,D,F0,T,G,H):
             Eel  = 0.5 * pt.getTraceProductAIJ(D, F0+F)
             if not solve:
                 break
-            stage, t = pt.getStageTime(newstage='SetupEPS',oldstage=stage, t0=t)  
+            stage, t = pt.getStageTime(newstage='SetupEPS',oldstage=stage, t0=t)
+            binedges = st.getBinEdges(eigs, nbin,bintype=bintype,
+                                      rangebuffer=rangebuffer,rangetype=rangetype,
+                                      interval=rangevals,A=F)
+            t1 = pt.getWallTime(t0=t, str='Interval computation')
             eps = st.setupEPS(F, B=None,binedges=binedges)  
         else:
             Eold = Eel
@@ -859,7 +863,9 @@ def scf(nocc,atomids,D,F0,T,G,H):
                 Eel  = 0.5 * pt.getTraceProductAIJ(D, F0+F)
             writeEnergies(Eel, unit='ev', enstr='Eel')
             stage, t = pt.getStageTime(newstage='UpdateEPS',oldstage=stage, t0=t) 
-            binedges = st.getBinEdges(eigs, nbin,bintype=bintype,rangebuffer=rangebuffer,interval=[a,b])           
+            binedges = st.getBinEdges(eigs, nbin,bintype=bintype,
+                                      rangebuffer=rangebuffer,rangetype=rangetype,
+                                      interval=rangevals,A=F)
             eps = st.updateEPS(eps,F,binedges=binedges,local=local)             
         stage,t = pt.getStageTime(newstage='SolveEPS'+str(k),oldstage=stage, t0=t)
         eps = st.solveEPS(eps)
@@ -868,8 +874,9 @@ def scf(nocc,atomids,D,F0,T,G,H):
         t1 = pt.getWallTime(t0=t1, str='Get no of eigs')
         pt.write("Number of converged eigenvalues: {0}".format(nconv))
         if nconv < neig: 
-            pt.write("Error! Missing eigenvalues.")
+            pt.write("Missing eigenvalues.")
             pt.write("Number of required eigenvalues: {0}".format(neig))
+            pt.write("Try enlarging interval and/or rangebuffer")
             break
         eigs = st.getNEigenvalues(eps,neig)
         pt.write("Eigenvalue range: {0:5.3f}, {1:5.3f}".format(min(eigs),max(eigs)))

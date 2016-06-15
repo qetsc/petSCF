@@ -198,7 +198,7 @@ def getBinEdges3(x,nbin,binbuffer=0.001):
     b[-1]      = x[-1] + binbuffer
     return b                     
             
-def getBinEdges(x, nbin,interval=[0],bintype=2,binbuffer=0.001,rangebuffer=0.1):
+def getBinEdges(x, nbin,bintype=2,binbuffer=0.001,rangebuffer=0.1,rangetype=0,A=None,interval=[0]):
     """
     Given an array of numbers (x) and number
     of bins (nbins), returns bin edges,
@@ -220,31 +220,54 @@ def getBinEdges(x, nbin,interval=[0],bintype=2,binbuffer=0.001,rangebuffer=0.1):
     Bisection type algorithms can be used to obtain optimum bin edges.
     Binning score can be used for better optimization of bin edges
     """
-    if len(x) > 1:
+    if len(interval)==2:
+        a, b = interval[0], interval[1]
+    else: 
+        Print("A tuple or list of two values is required to define the interval")
+        return interval 
+    
+    nx = len(x)
+    if nx > 1:
         dx   = x[1:] - x[:-1]
-        Print("Min seperation of eigenvalues: {0}".format(min(dx)))
-        Print("Max seperation of eigenvalues: {0}".format(max(dx)))
-    if (len(x) < nbin or bintype == 0) and len(interval) == 2:
-        Print("Fixed uniform bins will be used within [{0},{1}]".format(interval[0],interval[1]))
-        return interval
+        Print("Min seperation of eigenvalues: {0:5.3e}".format(min(dx)))
+        Print("Max seperation of eigenvalues: {0:5.3f}".format(max(dx)))
+         
+    if (nx < nbin or bintype == 0):
+        Print("Uniform bins")
+        bins = np.array([a,b])
     elif bintype == 1:
         Print("Adjust bin edges to have a uniform number of eigenvalues in each bin")
-        b = getBinEdges1(x,nbin)[0]   
+        bins = getBinEdges1(x,nbin)[0]   
     elif bintype == 2:
         Print("Adjust bin edges to minimize distance of values from the left edge of each bin")
-        b = getBinEdges2(x,nbin,binbuffer=binbuffer) 
-    else:
+        bins = getBinEdges2(x,nbin,binbuffer=binbuffer) 
+    elif bintype == 3:
         Print("Adjust bin edges based on k-means clustering of eigenvalues")
-        b = getBinEdges3(x,nbin,binbuffer=binbuffer)                      
-    if len(interval) == 2:
-        Print("Using given left and right bin edges: [{0},{1}]".format(interval[0],interval[1]))
-        b[0]  = interval[0]
-        b[-1] = interval[1]
-    else:
-        Print("Using optimized  left and right bin edges: [{0},{1}] with buffer {3}".format(interval[0],interval[1], rangebuffer))    
-        b[0]  = x[0]  - rangebuffer
-        b[-1] = x[-1] + rangebuffer
-    return sorted(b)
+        bins = getBinEdges3(x,nbin,binbuffer=binbuffer)  
+                            
+    if rangetype == 0:
+        Print("Interval is set to: {0:5.3f}, {1:5.3f}".format(a,b))
+    elif rangetype == 1 and nx > 1:
+        Print("Interval is set to min & max of prior evals: {0:5.3f},{1:5.3f}".format(a,b))
+        a = x[0]  - rangebuffer
+        b = x[-1] + rangebuffer
+    elif rangetype == 2: 
+        diag   = A.getDiagonal()
+        a = diag.min()[1]  - rangebuffer
+        b = diag.max()[1]  + rangebuffer
+        Print("Interval based on min & max of F diagonal: {0:5.3f},{1:5.3f}".format(a,b))
+    elif rangetype == 3:
+        diag   = A.getDiagonal()
+        a = getLowerBound(A)                                                                                                        
+        b = diag.max()[1]      + rangebuffer 
+        Print("Interval based on min eval & max F diagonal: {0:5.3f},{1:5.3f}".format(a,b)) 
+    elif rangetype == 4:
+        a = getLowerBound(A)  
+        b = getUpperBound(A)
+        Print("Interval based on min & max evals: {0:5.3f},{1:5.3f}".format(a,b))    
+    bins[0]  = a
+    bins[-1] = b           
+    return np.sort(bins)
 
 def getBinningScore(b,x):
     """
@@ -359,6 +382,59 @@ def getDensityMatrixLocal(eps,T,nocc):
           Print("Complex eigenvalue dedected: %9f%+9f j  %12g" % (k.real, k.imag, error))
     return D,eigarray
 
+def getLowerBound(A,B=None,comm=None,epstol=1.e-2):
+    """
+    Computes the smallest eigenvalue with a 
+    very loose threshold to approximate the lower bound
+    for eps interval.
+    Suggested by Jose.
+    """
+    if comm is None:
+        comm = A.getComm()
+    eps = SLEPc.EPS().create(comm)
+    eps.setOperators(A,B)
+    eps.setTolerances(epstol,100)
+    eps.setWhichEigenpairs(SLEPc.EPS.Which.SMALLEST_REAL)
+    eps.solve()
+    if eps.getConverged()==0:
+        val = -100000
+    else:
+        val = eps.getEigenvalue(0).real * (1+epstol)
+    eps.destroy()
+    return val
+
+def getUpperBound(A,B=None,comm=None,epstol=1.e-2):
+    if comm is None:
+        comm = A.getComm()
+    eps = SLEPc.EPS().create(comm)
+    eps.setOperators(A,B)
+    eps.setTolerances(epstol,100)
+    eps.setWhichEigenpairs(SLEPc.EPS.Which.LARGEST_REAL)
+    eps.solve()
+    if eps.getConverged()==0:
+        val = 100000
+    else:
+        val = eps.getEigenvalue(0).real
+    eps.destroy()
+    return val
+
+def computeRange(F,rangetype,rangebuffer):
+    if rangetype == 2: 
+        Fdiag   = F.getDiagonal()
+        a = Fdiag.min()[1]
+        b = Fdiag.max()[1]
+        Print("Interval based on min & max of F diagonal: {0:5.3f},{1:5.3f}".format(a,b))
+    elif rangetype == 3:
+        a = getLowerBound(F)
+        b = getUpperBound(F) 
+        Print("Interval based on min & max evals: {0:5.3f},{1:5.3f}".format(a,b))
+    elif rangetype == 4:
+        a = getLowerBound(F)
+        Fdiag   = F.getDiagonal()
+        b = Fdiag.max()[1]
+        Print("Interval based on min eval & max F diagonal: {0:5.3f},{1:5.3f}".format(a,b))     
+    return (a-rangebuffer,b+rangebuffer)
+    
 def setupEPS(A,B=None,binedges=[0]):
     """
     Returns SLEPc eps object for given operators, and options.
@@ -385,7 +461,7 @@ def setupEPS(A,B=None,binedges=[0]):
     PETSc.Options().setValue('mat_mumps_cntl_3',1.e-12)
     if len(binedges) > 1:
         eps.setInterval(binedges[0],binedges[-1])
-        Print("Solution interval: {0:5.3f}, {1:5.3f}".format(binedges[0], binedges[-1]))
+        Print("EPS interval set to: {0:5.3f}, {1:5.3f}".format(binedges[0], binedges[-1]))
         if len(binedges)>2:
             eps.setKrylovSchurPartitions(len(binedges)-1)
             eps.setKrylovSchurSubintervals(binedges)
@@ -394,7 +470,7 @@ def setupEPS(A,B=None,binedges=[0]):
     eps.setUp()
     return eps
 
-def updateEPS(eps,A,B=None,binedges=[0],local=True, globalupdate=False,):
+def updateEPS(eps,A,B=None,binedges=[0],local=True, globalupdate=False):
     """
     Updates eps object for a new matrix with the same nnz structure
     as the previous one.
@@ -543,4 +619,3 @@ def solveEPSdepreceated(eps,printinfo=False,returnoption=0,checkerror=False,nreq
                 error = eps.computeError(i)
                 if error > 1.e-6: Print("Eigenvalue {0} has error {1}".format(k,error)) 
         return eps, nconv, eigarray,eigmat
-    
