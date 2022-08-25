@@ -22,10 +22,10 @@ def writeEnergies(en,unit='', enstr=''):
 def getNuclearEnergySerial(nat,atoms,maxdist):
     maxdist2 = maxdist * maxdist * ut.ang2bohr * ut.ang2bohr
     Enuc=0.0
-    for i in xrange(nat):
+    for i in range(nat):
         atomi=atoms[i]
     #    for j in xrange(i+1,nat): # same as below
-        for j in xrange(i):
+        for j in range(i):
             atomj=atoms[j]
             distij2 = atomi.dist2(atomj) # (in bohr squared) * bohr2ang2
             if distij2 < maxdist2:
@@ -44,16 +44,16 @@ def getNuclearEnergy(comm,atoms,maxdist=1.E9):
     remainder=Na%Np
     maxdist2 = maxdist * maxdist * ut.ang2bohr * ut.ang2bohr
     Enuc = 0
-    for i in xrange(Nc):
+    for i in range(Nc):
         atomi = atoms[rank*Nc+i]
-        for j in xrange(rank*Nc+i):
+        for j in range(rank*Nc+i):
             atomj = atoms[j]
             distij2 = atomi.dist2(atomj) # (in bohr squared) * bohr2ang2
             if distij2 < maxdist2:
                 Enuc += qt.getEnukeij(atomi, atomj, distij2)   
     if remainder - rank > 0:
         atomi = atoms[Na-rank-1]
-        for j in xrange(Na-rank-1):
+        for j in range(Na-rank-1):
             atomj = atoms[j]
             distij2 = atomi.dist2(atomj) # (in bohr squared) * bohr2ang2
             if distij2 < maxdist2:
@@ -77,15 +77,15 @@ def getNuclearEnergyFull(comm,atoms):
     Nc=Na/Np
     remainder=Na%Np
     Enuc = 0
-    for i in xrange(Nc):
+    for i in range(Nc):
         atomi = atoms[rank*Nc+i]
-        for j in xrange(rank*Nc+i):
+        for j in range(rank*Nc+i):
             atomj = atoms[j]
             distij2 = atomi.dist2(atomj) # (in bohr squared) * bohr2ang2
             Enuc += qt.getEnukeij(atomi, atomj, distij2)   
     if remainder - rank > 0:
         atomi = atoms[Na-rank-1]
-        for j in xrange(Na-rank-1):
+        for j in range(Na-rank-1):
             atomj = atoms[j]
             distij2 = atomi.dist2(atomj) # (in bohr squared) * bohr2ang2
             Enuc += qt.getEnukeij(atomi, atomj, distij2)   
@@ -262,7 +262,7 @@ def getTold(comm,basis,maxdist,nnzinfo=None,rrange=None):
     else: 
         A.setPreallocationNNZ((0,0))
     t = pt.getWallTime(t0=t,str='Preallocate')
-    for i in xrange(rstart,rend):
+    for i in range(rstart,rend):
         atomi   = basis[i].atom
         atnoi   = atomi.atno
         rhoi    = atomi.rho
@@ -274,7 +274,7 @@ def getTold(comm,basis,maxdist,nnzinfo=None,rrange=None):
         cols[0] = i
         vals[0] = gammaii / 2.
         n       = 1
-        for j in xrange(i+1,jmax[k]+1):
+        for j in range(i+1,jmax[k]+1):
             atomj = basis[j].atom
             if atomi.atid == atomj.atid:
                 #A[i,j] = gammaii
@@ -328,7 +328,7 @@ def getTFromGuess(comm,guessmat,basis):
     rstart, rend = A.getOwnershipRange()
     nnz = 0
     Enuc         = 0.
-    for i in xrange(rstart,rend):
+    for i in range(rstart,rend):
         cols, vals    = guessmat.getRow(i)
         nnz    += len(cols)
         atomi   = basis[i].atom
@@ -375,7 +375,7 @@ def getF0(atoms,basis,T):
     A = T.duplicate( )
     A.setUp()
     rstart, rend = A.getOwnershipRange()
-    for i in xrange(rstart,rend):
+    for i in range(rstart,rend):
         basisi      = basis[i]
         cgbfi       = basisi.cgbf
         ipi         = basisi.ip
@@ -417,7 +417,7 @@ def getD0Diagonal(comm,basis):
     A.setPreallocationNNZ(1) 
     A.setUp()
     rstart, rend = A.getOwnershipRange() 
-    for i in xrange(rstart,rend):
+    for i in range(rstart,rend):
         atomi=basis[i].atom
         if atomi.atno == 1: 
             A[i,i] = atomi.Z/1.
@@ -502,10 +502,10 @@ def getD0BlockedFast(qmol,bstart,bend,napb,nbfpb,T):
         aend    = astart + napb
         rstart  = b * nbfpb
         rend    = rstart  + nbfpb
-        cqmols  = qmol.subsystem(str(b),indices=(range(astart,aend)))
+        cqmols  = qmol.subsystem(str(b),indices=(list(range(astart,aend))))
         Dc      = qt.runSCF(cqmols)[3]    
         try:
-            A.setValuesBlocked(range(rstart,rend),range(rstart,rend),Dc[:,:])
+            A.setValuesBlocked(list(range(rstart,rend)),list(range(rstart,rend)),Dc[:,:])
         except:
             pt.write("New nonzero in rows {0}:{1}".format(rstart,rend))
             import sys
@@ -524,7 +524,7 @@ def getD0Blocked(qmol,bstart,bend,napb,nbfpb,T):
         aend    = astart + napb
         rstart  = b * nbfpb
         rend    = rstart  + nbfpb
-        cqmols  = qmol.subsystem(str(b),indices=(range(astart,aend)))
+        cqmols  = qmol.subsystem(str(b),indices=(list(range(astart,aend))))
         Dc      = qt.runSCF(cqmols)[3]
         for i in range(rstart,rend):
             cols = T.getRow(i)[0]
@@ -551,7 +551,7 @@ def getG(comm, basis, T=None):
         A.setPreallocationNNZ(maxnnzperrow) 
     A.setUp()
     rstart, rend = A.getOwnershipRange()
-    for i in xrange(rstart,rend):
+    for i in range(rstart,rend):
         basisi  = basis[i]
         atomi   = basisi.atom
         nbfi    = atomi.nbf
@@ -559,7 +559,7 @@ def getG(comm, basis, T=None):
         if atomi.atno > 1:
             minj = max(0,i-nbfi)
             maxj = min(nbf,i+nbfi) 
-            for j in xrange(minj,maxj):
+            for j in range(minj,maxj):
                 basisj = basis[j]
                 atomj   = basisj.atom
                 if atomi.atid == atomj.atid:
@@ -578,14 +578,14 @@ def getH(basis, G=None,comm=None):
     if G:
         A = G.duplicate(copy=True)
         rstart, rend = A.getOwnershipRange()
-        for i in xrange(rstart,rend):
+        for i in range(rstart,rend):
             basisi  = basis[i]
             atomi   = basisi.atom
             nbfi    = atomi.nbf
             if atomi.atno > 1:
                 minj = max(0,i-nbfi)
                 maxj = min(nbf,i+nbfi) 
-                for j in xrange(minj,maxj):
+                for j in range(minj,maxj):
                     basisj = basis[j]
                     atomj   = basisj.atom
                     if atomi.atid == atomj.atid and i != j:
@@ -598,7 +598,7 @@ def getH(basis, G=None,comm=None):
         A.setPreallocationNNZ(maxnnzperrow) 
         A.setUp()
         rstart, rend = A.getOwnershipRange()
-        for i in xrange(rstart,rend):
+        for i in range(rstart,rend):
             basisi  = basis[i]
             atomi   = basisi.atom
             nbfi    = atomi.nbf
@@ -606,7 +606,7 @@ def getH(basis, G=None,comm=None):
             if atomi.atno > 1:
                 minj = max(0,i-nbfi)
                 maxj = min(nbf,i+nbfi) 
-                for j in xrange(minj,maxj):
+                for j in range(minj,maxj):
                     basisj = basis[j]
                     atomj   = basisj.atom
                     if atomi.atid == atomj.atid and i != j:
@@ -637,7 +637,7 @@ def getF(atomids,T,D,GH1,GH2):
     t       = pt.getWallTime(t0=t,str='AllGather Diag')
     A       = T.duplicate( )
     rstart, rend = A.getOwnershipRange()
-    for i in xrange(rstart,rend):
+    for i in range(rstart,rend):
         atomidi      = atomids[i]
         cols, valsT  = T.getRow(i)
         valsD        = D.getRow(i)[1] 
@@ -678,7 +678,7 @@ def getFold(atomids,T,D,G,H):
     A.setUp()
     rstart, rend = A.getOwnershipRange()
     t = pt.getWallTime(t0=t,str='Mat ops')    
-    for i in xrange(rstart,rend):
+    for i in range(rstart,rend):
         atomi        = atomids[i]
         cols, valsT  = T.getRow(i)
         valsG        = G.getRow(i)[1]
@@ -723,7 +723,7 @@ def getFolder(atomids, D, F0, T, G, H):
     A.setUp()
     rstart, rend = A.getOwnershipRange()
     t = pt.getWallTime(t0=t,str='Mat ops')    
-    for i in xrange(rstart,rend):
+    for i in range(rstart,rend):
         atomi        = atomids[i]
         colsT, valsT = T.getRow(i)
         colsG, valsG = G.getRow(i)
@@ -817,11 +817,11 @@ def scf(nocc,atomids,D,F0,T,G,H):
     if os.path.isfile(eigsfile) and bintype > 0: 
         if pt.rank == 0:
             eigs = np.loadtxt(eigsfile)
-            print("{0} eigenvalues read from file {1}".format(len(eigs),eigsfile))
+            print(("{0} eigenvalues read from file {1}".format(len(eigs),eigsfile)))
         eigs = wcomm.bcast(eigs,root=0)    
     F = None
 
-    for k in xrange(1,maxiter+1):
+    for k in range(1,maxiter+1):
         pt.write("{0:*^60s}".format("Iteration "+str(k)))
         t0 = pt.getWallTime()
         if k==1:
@@ -966,7 +966,7 @@ def scfwithaccelerators(opts,nocc,atomids,D,F0,T,G,H,stage):
         pt.write("Aitken 3-point extrapolation for D")
         Dlist = [D] * 3
         
-    for k in xrange(1,maxiter+1):
+    for k in range(1,maxiter+1):
         pt.write("{0:*^60s}".format("Iteration "+str(k)))
         t0 = pt.getWallTime()
         stage = pt.getStage(stagename='F',oldstage=stage)

@@ -44,17 +44,17 @@ def printGitHash():
     import subprocess
 #    githash = subprocess.check_output(["git", "describe", "--always"]) # short hash or tag
     githash = subprocess.check_output(["git", "rev-parse", "HEAD"])  #long hasg
-    print("Git hash: {0}".format(githash.strip()))
+    print(("Git hash: {0}".format(githash.strip())))
     return
 
 def printHostName():
     from socket import gethostname
-    print("Running on host {0}".format(gethostname()))
+    print(("Running on host {0}".format(gethostname())))
     return 
 
 def printDateTime():
     from time import strftime
-    print(strftime("%Y-%m-%d %H:%M"))
+    print((strftime("%Y-%m-%d %H:%M")))
     return
 
 def main():
@@ -62,10 +62,10 @@ def main():
     nrank = comm.size
     rank  = comm.rank
     if not rank:
-        print("{0:*^72s}".format("  PSCF  "))
+        print(("{0:*^72s}".format("  PSCF  ")))
         printDateTime()
         printHostName()
-        print("Number of MPI ranks: {0}".format(nrank))
+        print(("Number of MPI ranks: {0}".format(nrank)))
     stage, t0   = pt.getStageTime(newstage='Read input')
     pt.sync()
     t = pt.getWallTime(t0=t0,str='Sync')  

@@ -37,5 +37,5 @@ def convertEnergy(en,unit,unit2=None,option=1):
         Eev   = en * hartree2ev
         Ehart = en
     else:
-        print 'not imlemented unit', unit    
+        print(('not imlemented unit', unit))    
     return Ekcal, Eev, Ehart    

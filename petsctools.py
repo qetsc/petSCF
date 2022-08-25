@@ -212,7 +212,7 @@ def getMaxAbsAIJ(A):
     comm = A.getComm().tompi4py()
     rstart, rend = A.getOwnershipRange()
     maxval=0.0
-    for i in xrange(rstart,rend):
+    for i in range(rstart,rend):
         cols,vals = A.getRow(i)
         tmpmax = max(np.absolute(vals))
         if tmpmax > maxval:
@@ -231,7 +231,7 @@ def getLocalNNZ(A):
     """
     rstart, rend = A.getOwnershipRange()
     nnz = 0
-    for i in xrange(rstart,rend):
+    for i in range(rstart,rend):
         cols, vals = A.getRow(i)
         nnz += len(cols)
     return nnz    
@@ -251,7 +251,7 @@ def getLocalNonZeroArray(A):
     nnz = getLocalNNZ(A)
     tmp = np.zeros(nnz)
     rstart, rend = A.getOwnershipRange()
-    for i in xrange(rstart,rend):
+    for i in range(rstart,rend):
         cols,vals = A.getRow(i)
         nnzend += len(cols)
         tmp[nnzstart:nnzend] = vals
@@ -270,11 +270,11 @@ def printAIJ(A,text=''):
     """
     rank         = A.getComm().rank
     rstart, rend = A.getOwnershipRange()
-    for i in xrange(rstart,rend):
+    for i in range(rstart,rend):
         cols,vals = A.getRow(i)
         k=0
         for j in cols:
-            print rank,':',text,i,j,vals[k]
+            print(("Rank {}: {} {} {} {}".format(rank,text,i,j,vals[k])))
             k += 1
     return 0
 
@@ -309,8 +309,8 @@ def writeMat(A,filename='mat.bin'):
 def printVec(V,text=''):
     rank         = MPI.COMM_WORLD.rank
     rstart, rend = V.getOwnershipRange()
-    for i in xrange(rstart,rend):
-        print rank,':',text,V[i]
+    for i in range(rstart,rend):
+        print(("Rank {}: {} {}".format(rank,text,V[i])))
     return 0
 
 def createVec(comm):
@@ -353,13 +353,13 @@ def getLocalNnzPerRow(basis,rstart,rend,maxdist2):
     dnnz=np.ones(rend-rstart)
     onnz=np.zeros(rend-rstart)
     
-    for i in xrange(rstart,rend):
+    for i in range(rstart,rend):
         atomi=basis[i].atom
-        for j in xrange(i,rend):
+        for j in range(i,rend):
             distij2=atomi.dist2(basis[j].atom)
             if distij2 < maxdist2: 
                 dnnz[i] += 2
-        for j in xrange(rend,nbf):
+        for j in range(rend,nbf):
             distij2=atomi.dist2(basis[j].atom)
             if distij2 < maxdist2: 
                 onnz[i] += 2
@@ -376,13 +376,13 @@ def getLocalNnzInfoSym(basis,rstart,rend,maxdist2):
     dnnz=np.ones(rend-rstart,dtype='int32')
     onnz=np.zeros(rend-rstart,dtype='int32')
     
-    for i in xrange(rstart,rend):
+    for i in range(rstart,rend):
         atomi=basis[i].atom
-        for j in xrange(i+1,rend):
+        for j in range(i+1,rend):
             distij2=atomi.dist2(basis[j].atom)
             if distij2 < maxdist2: 
                 dnnz[i] += 1
-        for j in xrange(rend,nbf):
+        for j in range(rend,nbf):
             distij2=atomi.dist2(basis[j].atom)
             if distij2 < maxdist2: 
                 onnz[i] += 1
@@ -550,10 +550,10 @@ def getNnzVec(basis,maxdist):
     maxdist2 = maxdist * maxdist
     Vnnz        = PETSc.Vec().createMPI((None,nbf),comm=PETSc.COMM_WORLD)
     rstart, rend = Vnnz.getOwnershipRange()
-    for i in xrange(rstart,rend):
+    for i in range(rstart,rend):
         atomi=basis[i].atom
         nnz=1
-        for j in xrange(i):
+        for j in range(i):
             distij2=atomi.dist2(basis[j].atom)
             if distij2 < maxdist2: 
                 nnz += 1
@@ -575,10 +575,10 @@ def getMaxNnzPerRow(mol,nat,maxdist):
     maxdist2 = maxdist * maxdist
     Vnnz        = PETSc.Vec().createMPI((None,nat),comm=MPI.COMM_WORLD)
     rstart, rend = Vnnz.getOwnershipRange()
-    for i in xrange(rstart,rend):
+    for i in range(rstart,rend):
         atomi=mol[i]
         nnz=0
-        for j in xrange(i):
+        for j in range(i):
             distij2=atomi.dist2(mol[j])
             if distij2 < maxdist2: 
                 band  = i - j 
@@ -616,9 +616,9 @@ def getNnzInfo(basis,maxdist):
     maxdist2 = maxdist * maxdist * const.ang2bohr**2.
     nnzarray=np.ones(nbf,dtype='int32')
     bwarray=np.zeros(nbf,dtype='int32')
-    for i in xrange(nbf):
+    for i in range(nbf):
         atomi=basis[i].atom
-        for j in xrange(i+1,nbf):
+        for j in range(i+1,nbf):
             distij2=atomi.dist2(basis[j].atom)
             if distij2 < maxdist2: 
                 nnzarray[i] += 1
@@ -658,7 +658,7 @@ def allReduceAIJ(A,op=MPI.SUM):
     """
     B=A.duplicate()
     rstart, rend = A.getOwnershipRange()
-    for i in xrange(rstart,rend):
+    for i in range(rstart,rend):
         cols,vals = A.getRow(i)
         sendbuf=np.zeros(len(cols),dtype='d')
         recvbuf=np.zeros(len(cols),dtype='d')
@@ -737,8 +737,8 @@ def getMatComm(n,comm=MPI.COMM_WORLD,debug=False):
     if    n > size: write("Comm problem, %d < %d:" % (size,n))
     pn         = size / n
     firstrank  = rank - rank%pn
-    matgroupranks = xrange(firstrank, firstrank+pn)
-    if debug: print rank, matgroupranks
+    matgroupranks = list(range(firstrank, firstrank+pn))
+    if debug: print((rank, matgroupranks_))
     matgroup   = orig_group.Incl(matgroupranks)
     matcomm    = MPI.COMM_WORLD.Create(matgroup)
     return matcomm
@@ -752,7 +752,7 @@ def getMatFromFile(filename,comm=PETSc.COMM_WORLD):
     return A
 
 def getWorldSize():
-    return PETSc.COMM_WORLD.size
+    return int(PETSc.COMM_WORLD.size)
 
 def getTraceProduct(A,B):
     """
@@ -778,8 +778,8 @@ def getTraceProductSlowN2(A,B):
     assert A.shape == B.shape
     N=A.shape[0]
     temp=0.0
-    for i in xrange(N):
-        for j in xrange(N):
+    for i in range(N):
+        for j in range(N):
             temp += A[i,j]*B[j,i]
     return temp
 
@@ -798,15 +798,15 @@ def getTraceProductCSR(A,B):
     nnzB=B.nnz
     tmp=0.
     if nnzA==nnzB:
-        for i in xrange(nnzB):
+        for i in range(nnzB):
             tmp+=A.data[i]*B.data[i]
     elif nnzB < nnzA:
         B=B.tocoo()
-        for i in xrange(nnzB):
+        for i in range(nnzB):
             tmp+= B.data[i]*A[B.row[i],B.col[i]]
     else:
         A=A.tocoo()
-        for i in xrange(nnzA):
+        for i in range(nnzA):
             tmp+= A.data[i]*B[A.row[i],A.col[i]]
     return tmp
 
@@ -834,7 +834,7 @@ def getTraceProductAIJ(A,B):
     if len(a) != len(b):
         return getTraceProductDiag(A,B)
     temp = a.dot(b)
-    for i in xrange(rstart+1,rend):
+    for i in range(rstart+1,rend):
         a = A.getRow(i)[1]
         b = B.getRow(i)[1]
         temp += a.dot(b)
@@ -849,9 +849,9 @@ def getTraceProductAIJslow(A,B):
     N=A.getSize()[0]
     temp=0.0
     rstart, rend = A.getOwnershipRange()
-    for i in xrange(rstart,rend):
+    for i in range(rstart,rend):
         temp += A[i,i] * B[i,i]
-        for j in xrange(i+1,N):
+        for j in range(i+1,N):
            #A and B are symmetric
             temp += 2 * A[i,j]*B[i,j]
     return MPI.COMM_WORLD.allreduce(temp,op=MPI.SUM)
@@ -864,7 +864,7 @@ def getTrace(A):
     """
     temp=0.0
     rstart, rend = A.getOwnershipRange() 
-    for i in xrange(rstart,rend):
+    for i in range(rstart,rend):
         temp += A[i,i]
     return MPI.COMM_WORLD.allreduce(temp,op=MPI.SUM)
 
@@ -896,7 +896,7 @@ def getSeqAIJ(A):
     B.setSizes(N)
     B.setUp()
     rstart, rend = A.getOwnershipRange()
-    for i in xrange(rstart,rend):
+    for i in range(rstart,rend):
         cols,vals = A.getRow(i) #maybe restore later
         ncols = len(cols)
         sendbuf=[i,cols,vals]
@@ -910,8 +910,8 @@ def convertAIJ2CSR(A):
     N=A.getSize()[0]
     B=np.zeros((N,N))
 
-    for i in xrange(N):
-        for j in xrange(N):
+    for i in range(N):
+        for j in range(N):
             B[i,j]=A[i,j]
     return scipy.sparse.csr_matrix(B)
 
@@ -925,11 +925,11 @@ def compareAIJB(Aij,B,N,thresh=1.e-5,comment='Comparison'):
     rank = PETSc.COMM_WORLD.rank
     rstart, rend = Aij.getOwnershipRange()
     k=0
-    for i in xrange(rstart,rend):
-        for j in xrange(i,N):
+    for i in range(rstart,rend):
+        for j in range(i,N):
             if abs(Aij[i,j]-B[i,j]) > thresh: 
                 k += 1
-                print('{0}, Rank: {1},!!!!!!!!Differs in {2} {3}: {4} vs {5}'.format(comment,rank,i,j, Aij[i,j],B[i,j]))
+                print(('{0}, Rank: {1},!!!!!!!!Differs in {2} {3}: {4} vs {5}'.format(comment,rank,i,j, Aij[i,j],B[i,j])))
                 return False
     if k==0: write("{0} ok  within {1}".format(comment,thresh))
     return True
@@ -940,8 +940,8 @@ def compareAB(A,B,N,thresh=1.e-5):
     Matrices can be of any sequential type (numpy, csr, SEQAIJ).
     """
     k=0
-    for i in xrange(N):
-        for j in xrange(N):
+    for i in range(N):
+        for j in range(N):
             if abs(A[i,j]-B[i,j]) > thresh: 
                 k += 1
                 write('!!!!!!!!Differs in %i,%i,%i,%i' % (i,j, A[i,j],B[i,j]))
@@ -969,8 +969,10 @@ def convertCSR2AIJ(Acsr,comm=PETSc.COMM_WORLD):
     """
     Given a scipy csr matrix converts to PETSC AIJ matrix
     """
+    import scipy
+    Acsr = scipy.sparse.csr_matrix(Acsr)
     A = PETSc.Mat().createAIJ(Acsr.shape[0])
-    print 'size',A.getSize()
+    print(('size',A.getSize()))
     A.setUp()
     rstart, rend = A.getOwnershipRange()
     return A.createAIJ(size=Acsr.shape[0],csr=(Acsr.indptr[rstart:rend+1] - Acsr.indptr[rstart],
@@ -982,8 +984,8 @@ def getSeqVec(xr):
     seqx.createSeq(xr_size,comm=PETSc.COMM_SELF)
     seqx.setFromOptions()
    # seqx.set(0.0)
-    fromIS = PETSc.IS().createGeneral(range(xr_size),comm=PETSc.COMM_SELF)
-    toIS = PETSc.IS().createGeneral(range(xr_size),comm=PETSc.COMM_SELF)
+    fromIS = PETSc.IS().createGeneral(list(range(xr_size)),comm=PETSc.COMM_SELF)
+    toIS = PETSc.IS().createGeneral(list(range(xr_size)),comm=PETSc.COMM_SELF)
     sctr=PETSc.Scatter().create(xr,fromIS,seqx,toIS)
     sctr.begin(xr,seqx,addv=PETSc.InsertMode.INSERT,mode=PETSc.ScatterMode.FORWARD)
     sctr.end(xr,seqx,addv=PETSc.InsertMode.INSERT,mode=PETSc.ScatterMode.FORWARD)
@@ -1027,21 +1029,21 @@ def main():
     """
     """
     A=np.zeros((N,N))
-    for i in xrange(N):
+    for i in range(N):
         A[i,:]=np.arange(N)+i
-    for i in xrange(N):
-        for j in xrange(N):
+    for i in range(N):
+        for j in range(N):
             write(' %i,%i:%f' % (i,j, A[i,j]) )
     x = PETSc.Vec()
     x.create(comm=PETSc.COMM_WORLD)
     x.setSizes((rank+1,None))
     x.setFromOptions()
     x.set(1.0)
-    for i in xrange(N-rank):
+    for i in range(N-rank):
         x.setValues(i,1,addv=PETSc.InsertMode.ADD_VALUES)
     x.assemble()
     y=convert2seqVec(x) 
-    for i in xrange(N*(N+1)/2):
+    for i in range(N*(N+1)/2):
         write(y[i])      
     Acsr = convert2csr(A)
     Aij = convert2Aij(Acsr)

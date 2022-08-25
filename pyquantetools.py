@@ -247,7 +247,7 @@ def initialize(atoms):
         atom.gppp = gppp[atom.atno]
         atom.hsp = hsp[atom.atno]
         atom.hppp = hppp[atom.atno]
-        for i in xrange(atom.nbf):
+        for i in range(atom.nbf):
             bfunc = Bunch()
             atom.basis.append(bfunc)
             bfunc.index = ibf # pointer to overall basis function index
@@ -265,7 +265,7 @@ def initialize(atoms):
                 zeta = zetas[atom.atno]
                 bfunc.u = Uss[atom.atno]
                 bfunc.ip = IPs[atom.atno]
-            for j in xrange(len(zi)):
+            for j in range(len(zi)):
                 bfunc.cgbf.add_primitive(zi[j]*zeta*zeta,ci[j])
             bfunc.cgbf.normalize()
     return atoms
@@ -305,8 +305,8 @@ def xyz2PyQuanteMolOld(xyz):
     Convert xyz data to PyQuante molecule object
     """
     N=len(xyz)
-    atoms = [('',(0,0,0)) for i in xrange(N)]
-    for i in xrange(N):
+    atoms = [('',(0,0,0)) for i in range(N)]
+    for i in range(N):
         atoms[i] = (xyz[i][0],
                     (xyz[i][1] * ut.ang2bohr,
                      xyz[i][2] * ut.ang2bohr,
@@ -342,11 +342,11 @@ def xyzFile2PyQuanteMol(xyzfile):
         line = f.readline()
         N=int(line.split()[0])
         title = f.readline()
-        atoms = [('',(0,0,0)) for i in xrange(N)]
-        for i in xrange(N):
+        atoms = [('',(0,0,0)) for i in range(N)]
+        for i in range(N):
             line = f.readline() 
             chunks = line.split()
-            x,y,z = map(float,chunks[1:])
+            x,y,z = list(map(float,chunks[1:]))
             atoms[i] = (chunks[0],(x*ut.ang2bohr,y*ut.ang2bohr,z*ut.ang2bohr))
     return Molecule(title,atoms,units='Bohr') 
 
@@ -424,7 +424,7 @@ def getGuessD(atoms,basis=None, opt=0):
     nbf = len(basis)
     D = np.zeros((nbf,nbf))
     if opt == 0 : 
-        for i in xrange(nbf):
+        for i in range(nbf):
             atomi=basis[i].atom
             if atomi.atno == 1: 
                 D[i,i] = atomi.Z/1.
@@ -467,7 +467,7 @@ def runSCF(atoms,basis=None,F0=None,D=None,scfthresh=1.E-3,maxiter=40):
         D = getGuessD(atoms)
     nclosed, nopen = getNClosedNOpen(atoms)
     if nopen:
-        print "Not implemented: Open shell system"
+        print("Not implemented: Open shell system")
         return    
     eold = 0.            
     for i in range(maxiter):
@@ -543,7 +543,7 @@ def getAtomIDs(basis):
     """
     nbf=len(basis)
     tmp = np.zeros(nbf,dtype=np.int)
-    for i in xrange(nbf):
+    for i in range(nbf):
         tmp[i]=basis[i].atom.atid
     return tmp
 
@@ -555,27 +555,27 @@ def getF0(atoms,basis=None):
     nat = len(atoms)
     F0 = np.zeros((nbf,nbf))
     # U term 
-    for i in xrange(nbf):
+    for i in range(nbf):
         F0[i,i] = basis[i].u
 
     # Nuclear attraction
     ibf = 0 # bf number of the first bfn on iat
-    for iat in xrange(nat):
+    for iat in range(nat):
         atomi = atoms[iat]
-        for jat in xrange(nat):
+        for jat in range(nat):
             atomj = atoms[jat]
             if iat == jat: continue
             gammaij = getPQGammaij(atomi,atomj)
-            for i in xrange(atomi.nbf):
+            for i in range(atomi.nbf):
                 F0[ibf+i,ibf+i] -= gammaij*atomj.Z
         ibf += atomi.nbf
 
     # Off-diagonal 
-    for ibf in xrange(nbf):
+    for ibf in range(nbf):
         bfi = basis[ibf]
         ati = bfi.atom
         atnoi = ati.atno
-        for jbf in xrange(ibf):
+        for jbf in range(ibf):
             bfj = basis[jbf]
             atj = bfj.atom
             atnoj = atj.atno
@@ -594,15 +594,15 @@ def getF1(atoms,D,basis=None):
     F1 = np.zeros((nbf,nbf))
 
     ibf = 0 # bf number of the first bfn on iat
-    for iat in xrange(nat):
+    for iat in range(nat):
         atomi = atoms[iat]
-        for i in xrange(atomi.nbf):
+        for i in range(atomi.nbf):
             bfi = atomi.basis[i]
             gii = getGij(bfi,bfi)
             qi =  D[ibf+i,ibf+i]
             F1[ibf+i,ibf+i] = 0.5*qi*gii
             
-            for j in xrange(atomi.nbf):  # ij on same atom
+            for j in range(atomi.nbf):  # ij on same atom
                 if j != i:
                     bfj = atomi.basis[j]
                     qj = D[ibf+j,ibf+j]
@@ -625,17 +625,17 @@ def getF2(atoms,D,basis=None):
     F2 = np.zeros((nbf,nbf))
 
     ibf = 0 # bf number of the first bfn on iat
-    for iat in xrange(nat):
+    for iat in range(nat):
         atomi = atoms[iat]
         jbf = 0
-        for jat in xrange(nat):
+        for jat in range(nat):
             atomj = atoms[jat]
             if iat != jat:
                 gammaij = getPQGammaij(atomi,atomj)
-                for i in xrange(atomi.nbf):
+                for i in range(atomi.nbf):
                     qi = D[ibf+i,ibf+i]
                     qj = 0
-                    for j in xrange(atomj.nbf):
+                    for j in range(atomj.nbf):
                         pij = D[ibf+i,jbf+j]
                         F2[ibf+i,jbf+j] -= 0.25*pij*gammaij #MK off
                         F2[jbf+j,ibf+i] = F2[ibf+i,jbf+j]

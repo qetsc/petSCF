@@ -39,10 +39,10 @@ def getNuclearEnergy(Na,mol,maxdist_au):
     Nc=Na/Np
     remainder=Na%Np
     enuke = 0
-    for i in xrange(Nc):
+    for i in range(Nc):
         atomi = mol[rank*Nc+i]
         Zi    = atomi.get_nuke_chg()
-        for j in xrange(rank*Nc+i):
+        for j in range(rank*Nc+i):
             atomj = mol[j]
             rij_au = atomi.dist(atomj) 
             if rij_au < maxdist_au:
@@ -50,7 +50,7 @@ def getNuclearEnergy(Na,mol,maxdist_au):
                 enuke += getNuclearRepulsionij(Zi,Zj,rij_au)   
     if remainder - rank > 0:
         atomi = mol[Na-rank-1]
-        for j in xrange(Na-rank-1):
+        for j in range(Na-rank-1):
             atomj = mol[j]
             rij_au = atomi.dist(atomj) # (in bohr squared) * bohr2ang2
             if rij_au < maxdist_au:
@@ -80,7 +80,7 @@ def getDterm(basisi,basisj,basis,D):
     """
     rstart, rend = D.getOwnershipRange()
     tmp=0.
-    for m in xrange(rstart,rend):
+    for m in range(rstart,rend):
         basism=basis[m]
         colsD,valsD = D.getRow(m)
         for n in colsD: 
@@ -124,12 +124,12 @@ def getS(mol,basis,maxdist,maxnnz=[0],bandwidth=[0],comm=PETSc.COMM_SELF):
         if len(bandwidth)==1: bandwidth=np.array([bandwidth]*nbf)
     else:
         bandwidth=np.array([nbf]*nbf)      
-    for i in xrange(rstart,rend):
+    for i in range(rstart,rend):
         basisi  = basis[i]
         atidi   = basisi.atid
         atomi   = mol[atidi]
         Vdiag[i] = 1.0
-        for j in xrange(i+1,min(i+bandwidth[i],nbf)):
+        for j in range(i+1,min(i+bandwidth[i],nbf)):
             basisj = basis[j]
             atidj  = basisj.atid
             if atidi == atidj:
@@ -161,7 +161,7 @@ def getF0(mol,basis,T):
     A = T.duplicate()
     A.setUp()
     rstart, rend = A.getOwnershipRange()
-    for i in xrange(rstart,rend):
+    for i in range(rstart,rend):
         basisi=basis[i]
         cols,vals = T.getRow(i)
         for j in cols:
@@ -180,7 +180,7 @@ def getF(basis, D, T=None):
     A = T.duplicate()
     A.setUp()
     rstart, rend = A.getOwnershipRange()
-    for i in xrange(rstart,rend):
+    for i in range(rstart,rend):
         basisi=basis[i]
         cols,vals = T.getRow(i)
         for j in cols: 
@@ -219,7 +219,7 @@ def rhf(opts,nocc,basis,S,F0):
         except:
             Print("SIPs not found")
             usesips = False
-    for k in xrange(1,maxiter+1):
+    for k in range(1,maxiter+1):
         Print("{0:*^60s}".format("Iteration "+str(k)))
         t0 = pt.getWallTime()
         Eold = Eel

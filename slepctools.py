@@ -118,7 +118,7 @@ def getBinEdges1(x, nbin, rangebuffer=0.1,interval=[0],cthresh=1.e-6):
     isbuffer = erange * rangebuffer
     b = np.zeros(nbin + 1)
     b[0] = x[0] - isbuffer
-    for i in xrange(1, nbin):
+    for i in range(1, nbin):
         b[i] = (x[mean * i] + x[mean * i - 1]) / 2.
         if remainder > 0 and i > 1:
             b[i] = (x[mean * i + 1] + x[mean * i]) / 2.
@@ -316,15 +316,15 @@ def getDensityMatrix(eps,T,nocc,checkerror=False):
     xr_size = xr.getSize()
     seqx = PETSc.Vec()
     seqx.createSeq(xr_size,comm=PETSc.COMM_SELF)
-    fromIS = PETSc.IS().createGeneral(range(xr_size),comm=PETSc.COMM_SELF)
-    toIS = PETSc.IS().createGeneral(range(xr_size),comm=PETSc.COMM_SELF)
-    for m in xrange(nocc):
+    fromIS = PETSc.IS().createGeneral(list(range(xr_size)),comm=PETSc.COMM_SELF)
+    toIS = PETSc.IS().createGeneral(list(range(xr_size)),comm=PETSc.COMM_SELF)
+    for m in range(nocc):
         eps.getEigenvector(m, xr)
         sctr=PETSc.Scatter().create(xr,fromIS,seqx,toIS)
         sctr.begin(xr,seqx,addv=PETSc.InsertMode.INSERT,mode=PETSc.ScatterMode.FORWARD)
         sctr.end(xr,seqx,addv=PETSc.InsertMode.INSERT,mode=PETSc.ScatterMode.FORWARD)
         Istart, Iend = D.getOwnershipRange()
-        for i in xrange(Istart,Iend):
+        for i in range(Istart,Iend):
             cols = T.getRow(i)[0] 
             values = 2.0 * seqx[i] * seqx[cols]
             D.setValues(i,cols,values,addv=PETSc.InsertMode.ADD_VALUES)
@@ -361,16 +361,16 @@ def getDensityMatrixLocal(eps,T,nocc):
     eigarray = np.zeros(nocc)
     seqx = PETSc.Vec()
     seqx.createSeq(xr_size,comm=PETSc.COMM_SELF)
-    fromIS = PETSc.IS().createGeneral(range(xr_size),comm=PETSc.COMM_SELF)
-    toIS = PETSc.IS().createGeneral(range(xr_size),comm=PETSc.COMM_SELF)
-    for m in xrange(nocc):
+    fromIS = PETSc.IS().createGeneral(list(range(xr_size)),comm=PETSc.COMM_SELF)
+    toIS = PETSc.IS().createGeneral(list(range(xr_size)),comm=PETSc.COMM_SELF)
+    for m in range(nocc):
         k = eps.getEigenpair(m, xr, xi)
         eigarray[m] = k.real
         sctr=PETSc.Scatter().create(xr,fromIS,seqx,toIS)
         sctr.begin(xr,seqx,addv=PETSc.InsertMode.INSERT,mode=PETSc.ScatterMode.FORWARD)
         sctr.end(xr,seqx,addv=PETSc.InsertMode.INSERT,mode=PETSc.ScatterMode.FORWARD)
         Istart, Iend = D.getOwnershipRange()
-        for i in xrange(Istart,Iend):
+        for i in range(Istart,Iend):
             cols = D.getRow(i)[0] 
             ncols = len(cols)
             values = [ 2.0 * seqx[i] * seqx[j] for j in cols]

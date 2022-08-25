@@ -35,7 +35,7 @@ def extrapolate3c(A0,A1,A2):
     """
     A = A0.duplicate()
     rstart, rend = A.getOwnershipRange()
-    for i in xrange(rstart,rend):
+    for i in range(rstart,rend):
         cols,vals0 = A0.getRow(i) 
         cols,vals1 = A1.getRow(i) 
         cols,vals2 = A2.getRow(i) 
@@ -56,7 +56,7 @@ def extrapolate3b(A0,A1,A2):
     """
     A = A0.duplicate()
     rstart, rend = A.getOwnershipRange()
-    for i in xrange(rstart,rend):
+    for i in range(rstart,rend):
         cols,vals0 = A0.getRow(i) 
         cols,vals1 = A1.getRow(i) 
         cols,vals2 = A2.getRow(i) 
@@ -89,7 +89,7 @@ def extrapolate3(A0,A1,A2):
     """
     A = A0.duplicate()
     rstart, rend = A.getOwnershipRange()
-    for i in xrange(rstart,rend):
+    for i in range(rstart,rend):
         cols,vals0 = A0.getRow(i) 
         cols,vals1 = A1.getRow(i) 
         cols,vals2 = A2.getRow(i) 
@@ -125,10 +125,10 @@ def getDIISSolution(n, errs):
     """
     a = np.zeros((n+1,n+1),'d')
     b = np.zeros(n+1,'d')
-    for i in xrange(n):
-        for j in xrange(i+1):
+    for i in range(n):
+        for j in range(i+1):
             a[i,j] = a[j,i] = pt.getTraceProductAIJ(errs[i],errs[j])
-    for i in xrange(n):
+    for i in range(n):
         a[n,i] = a[i,n] = -1.0
         b[i] = 0.
     a[n,n] = 0.
