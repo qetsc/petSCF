@@ -991,6 +991,31 @@ def getSeqVec(xr):
     sctr.end(xr,seqx,addv=PETSc.InsertMode.INSERT,mode=PETSc.ScatterMode.FORWARD)
     return seqx
 
+def shiftDiagonal(A,delta,nocc):
+    """
+    Returns a petsc mat with a shifted diagonal
+    Parameters
+    ----------
+    A: Petsc mat
+    delta : float
+    nocc  : index to start shifting
+    Returns
+    A with shifted diagonal
+    Notes
+    -----
+    This is used for SCF convergence and
+    it is generrally known as level shifting.
+    """
+    diag = A.getVecLeft()
+    rstart,rend = A.getOwnershipRange()
+    rows = np.arange(rstart,rend,dtype='int32')
+    virrows = rows[rows>=nocc]
+    diag.setValues(virrows,[delta]*len(virrows))
+    diag.assemble()
+    A.setDiagonal(diag,addv=PETSc.InsertMode.ADD)
+    A.assemble()
+    return A
+
 def main():
     rank = MPI.COMM_WORLD.rank
     size = MPI.COMM_WORLD.size
