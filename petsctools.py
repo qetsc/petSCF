@@ -965,7 +965,7 @@ def convertA2CSR(A,spfilter=0):
     return Acsr
 
 
-def convertCSR2AIJ(Acsr,comm=PETSc.COMM_WORLD):
+def convertCSR2AIJ(Acsr, comm=PETSc.COMM_WORLD):
     """
     Given a scipy csr matrix converts to PETSC AIJ matrix
     """
@@ -977,7 +977,23 @@ def convertCSR2AIJ(Acsr,comm=PETSc.COMM_WORLD):
     rstart, rend = A.getOwnershipRange()
     return A.createAIJ(size=Acsr.shape[0],csr=(Acsr.indptr[rstart:rend+1] - Acsr.indptr[rstart],
                                                       Acsr.indices[Acsr.indptr[rstart]:Acsr.indptr[rend]],
-                                                      Acsr.data[Acsr.indptr[rstart]:Acsr.indptr[rend]]),comm=comm) 
+                                                      Acsr.data[Acsr.indptr[rstart]:Acsr.indptr[rend]]),comm=comm)
+
+def convertCSR2SBAIJ(Acsr, block_size=1, comm=PETSc.COMM_WORLD):
+    """
+    Given a scipy csr matrix converts to PETSC SBAIJ matrix
+    """
+    import scipy
+    Acsr = scipy.sparse.csr_matrix(Acsr)
+    A = PETSc.Mat().createSBAIJ(Acsr.shape[0], block_size)
+    print(('size',A.getSize()))
+    A.setType(PETSc.Mat.Type.SEQSBAIJ)
+    A.setUp()
+    rstart, rend = A.getOwnershipRange()
+    return A.createSBAIJ(Acsr.shape[0], block_size, csr=(Acsr.indptr[rstart:rend+1] - Acsr.indptr[rstart],
+                                                      Acsr.indices[Acsr.indptr[rstart]:Acsr.indptr[rend]],
+                                                      Acsr.data[Acsr.indptr[rstart]:Acsr.indptr[rend]]),comm=comm)
+
 def getSeqVec(xr):
     xr_size = xr.getSize()
     seqx = PETSc.Vec()
@@ -1015,6 +1031,35 @@ def shiftDiagonal(A,delta,nocc):
     A.setDiagonal(diag,addv=PETSc.InsertMode.ADD)
     A.assemble()
     return A
+
+def get_number_of_eigenvalues(A, sigma, verbose=False):
+    """
+    Returns the number of eigenvalues of A smaller than sigma
+    Parameters
+    ----------
+    A: Petsc mat, should be SBAIJ type
+    sigma : float
+    Returns
+    A scalar, the number of eigenvalues smaller than sigma
+    Notes
+    -----
+    This method uses Cholesky factorization and can fail if
+    sigma is equal to an eigenvalue.
+    """
+    A.shift(-sigma)
+    r, c = A.getOrdering("natural")
+    if verbose:
+        info = A.getInfo()
+        print(f'Matrix info before factorization: \n {info}')
+    A.factorCholesky(r)
+    nn, nz, np = A.getInertia()
+    if nz > 0:
+        print(f"sigma={sigma} is probably an eigenvalue, provide a different value")
+    if verbose:
+        info = A.getInfo()
+        print(f'Matrix info after factorization: \n {info}')
+        print(f'Number of eigenvalues smaller than {sigma} is {nn}.')
+    return nn 
 
 def main():
     rank = MPI.COMM_WORLD.rank
